@@ -19,4 +19,8 @@ build/
 
 # 系统文件
 .DS_Store
+
+# Web 前端
+web/node_modules/
+web/dist/
 .env.example

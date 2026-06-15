@@ -121,6 +121,55 @@ research-agent-cli
 
 ---
 
+## Web 前端
+
+基于 Vite + React 的浏览器聊天界面，支持 **Markdown 渲染** 与 **可折叠思考过程**。
+
+### 环境要求
+
+WSL 内需使用 **Linux 版 Node.js**（不要用 Windows 的 `npm` 访问 WSL 路径，会报 UNC 错误）：
+
+```bash
+sudo apt install nodejs npm   # 或 nvm install 20
+node --version   # 应显示 Linux 路径，如 /usr/bin/node
+```
+
+### 开发模式（热更新，推荐）
+
+需要 **两个终端**：一个跑 API，一个跑前端。
+
+```bash
+# 终端 1 — API（项目根目录）
+source .venv/bin/activate
+uvicorn server.main:app --reload --host 0.0.0.0 --port 8000
+
+# 终端 2 — 前端
+cd web
+npm install
+npm run dev    # → http://localhost:5173
+```
+
+Vite 会将 `/v1`、`/health` 代理到 `localhost:8000`。
+
+### 生产模式（单端口）
+
+```bash
+cd web && npm install && npm run build
+cd .. && uvicorn server.main:app --host 0.0.0.0 --port 8000
+# 浏览器访问 http://127.0.0.1:8000/
+```
+
+### 功能
+
+| 功能 | 说明 |
+|------|------|
+| 流式对话 | 对接 `POST /v1/chat/stream` |
+| 思考过程 | `<details>` 折叠面板，流式时自动展开 |
+| Markdown | GFM 表格/代码块 + LaTeX 公式 |
+| 会话 | session_id 存 localStorage，支持清空 |
+
+---
+
 ## API 参考
 
 ### GET /health

@@ -22,14 +22,20 @@ from __future__ import annotations
 import logging
 from contextlib import asynccontextmanager
 from collections.abc import AsyncIterator
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from server.api.chat import router as chat_router
 from server.config import get_settings, setup_logging
 
 logger = logging.getLogger(__name__)
+
+# 前端构建产物目录（npm run build 后生成）
+WEB_DIST = Path(__file__).resolve().parent.parent / "web" / "dist"
 
 
 @asynccontextmanager
@@ -77,6 +83,17 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(chat_router)
+
+    # 生产模式：托管 web/dist 静态资源（开发时用 Vite :5173 + proxy）
+    if WEB_DIST.exists():
+        assets_dir = WEB_DIST / "assets"
+        if assets_dir.exists():
+            app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
+        @app.get("/")
+        async def serve_index() -> FileResponse:
+            return FileResponse(WEB_DIST / "index.html")
+
     return app
 
 
