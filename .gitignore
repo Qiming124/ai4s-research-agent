@@ -23,3 +23,5 @@ build/
 # Web 前端
 web/node_modules/
 web/dist/
+.env.example
+.env.example
