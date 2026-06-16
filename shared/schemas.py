@@ -44,6 +44,7 @@ class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, description="用户输入的消息内容")
     session_id: str | None = Field(default=None, description="会话 ID，用于多轮对话上下文")
     system_prompt: str | None = Field(default=None, description="可选：覆盖默认 system prompt")
+    mode: Literal["chat", "math"] = Field(default="chat", description="对话模式：chat=通用，math=数学推导")
 
 
 class ChatResponse(BaseModel):

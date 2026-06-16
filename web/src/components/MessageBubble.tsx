@@ -4,9 +4,10 @@ import { ReasoningPanel } from "./ReasoningPanel";
 
 interface MessageBubbleProps {
   message: ChatMessage;
+  showReasoning?: boolean;
 }
 
-export function MessageBubble({ message }: MessageBubbleProps) {
+export function MessageBubble({ message, showReasoning = true }: MessageBubbleProps) {
   const isUser = message.role === "user";
 
   return (
@@ -20,10 +21,12 @@ export function MessageBubble({ message }: MessageBubbleProps) {
             {message.error && (
               <div className="message-error">错误：{message.error}</div>
             )}
-            <ReasoningPanel
-              reasoning={message.reasoning ?? ""}
-              isStreaming={!!message.streaming}
-            />
+            {showReasoning && (
+              <ReasoningPanel
+                reasoning={message.reasoning ?? ""}
+                isStreaming={!!message.streaming}
+              />
+            )}
             <MarkdownContent content={message.content} />
             {message.streaming && message.content && (
               <span className="cursor-blink">▍</span>

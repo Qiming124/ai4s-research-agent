@@ -1,4 +1,5 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { ChatMode } from "../utils/preferences";
 import { getSessionId, setSessionId } from "../utils/session";
 
 export interface ChatMessage {
@@ -16,6 +17,21 @@ interface SseEvent {
   content?: string;
   session_id?: string;
   usage?: Record<string, unknown>;
+}
+
+interface ServerMessage {
+  role: string;
+  content: string;
+}
+
+function mapServerMessages(raw: ServerMessage[]): ChatMessage[] {
+  return raw
+    .filter((m) => m.role === "user" || m.role === "assistant")
+    .map((m) => ({
+      id: crypto.randomUUID(),
+      role: m.role as "user" | "assistant",
+      content: m.content,
+    }));
 }
 
 /** 从 buffer 中解析完整的 SSE data 事件，返回未完成的尾部 */
@@ -38,11 +54,62 @@ function parseSseBuffer(buffer: string): { events: SseEvent[]; rest: string } {
   return { events, rest };
 }
 
-export function useChatStream() {
+export function useChatStream(chatMode: ChatMode) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [sessionId, setSessionIdState] = useState(getSessionId);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+
+  const finishStreaming = useCallback(() => {
+    setIsStreaming(false);
+    setMessages((prev) =>
+      prev.map((m) => (m.streaming ? { ...m, streaming: false } : m)),
+    );
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadHistory() {
+      setIsLoadingHistory(true);
+      setHistoryError(null);
+      try {
+        const res = await fetch(`/v1/sessions/${sessionId}`);
+        if (res.status === 404) {
+          if (!cancelled) setMessages([]);
+          return;
+        }
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+        }
+        const data = (await res.json()) as { messages: ServerMessage[] };
+        if (!cancelled) {
+          setMessages(mapServerMessages(data.messages));
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setHistoryError(err instanceof Error ? err.message : String(err));
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingHistory(false);
+        }
+      }
+    }
+
+    loadHistory();
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId]);
+
+  const stopGeneration = useCallback(() => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    finishStreaming();
+  }, [finishStreaming]);
 
   const sendMessage = useCallback(async (text: string) => {
     const trimmed = text.trim();
@@ -75,6 +142,7 @@ export function useChatStream() {
         body: JSON.stringify({
           message: trimmed,
           session_id: sessionId,
+          mode: chatMode,
         }),
         signal: controller.signal,
       });
@@ -143,7 +211,10 @@ export function useChatStream() {
         ),
       );
     } catch (err) {
-      if ((err as Error).name === "AbortError") return;
+      if ((err as Error).name === "AbortError") {
+        finishStreaming();
+        return;
+      }
       const msg = err instanceof Error ? err.message : String(err);
       setMessages((prev) =>
         prev.map((m) =>
@@ -154,18 +225,22 @@ export function useChatStream() {
       setIsStreaming(false);
       abortRef.current = null;
     }
-  }, [isStreaming, sessionId]);
+  }, [isStreaming, sessionId, chatMode, finishStreaming]);
 
   const clearSession = useCallback(async () => {
     await fetch(`/v1/sessions/${sessionId}`, { method: "DELETE" });
     setMessages([]);
+    setHistoryError(null);
   }, [sessionId]);
 
   return {
     messages,
     sessionId,
     isStreaming,
+    isLoadingHistory,
+    historyError,
     sendMessage,
+    stopGeneration,
     clearSession,
   };
 }

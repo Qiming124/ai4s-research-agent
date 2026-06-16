@@ -363,3 +363,70 @@ body {
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* ===== Phase 2A：历史加载 / 模式切换 / 停止 ===== */
+.history-loading {
+  text-align: center;
+  color: #64748b;
+  margin-top: 40px;
+  font-size: 0.9rem;
+}
+
+.history-error {
+  padding: 10px 20px;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-size: 0.85rem;
+  border-bottom: 1px solid #fecaca;
+}
+
+.mode-toggle {
+  display: inline-flex;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.mode-btn {
+  border: none;
+  background: #f8fafc;
+  color: #64748b;
+  padding: 4px 10px;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.mode-btn.active {
+  background: #3b82f6;
+  color: #fff;
+}
+
+.mode-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pref-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75rem;
+  color: #64748b;
+  cursor: pointer;
+  user-select: none;
+}
+
+.btn-stop {
+  border: none;
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  background: #ef4444;
+  color: #fff;
+}
+
+.btn-stop:hover {
+  background: #dc2626;
+}

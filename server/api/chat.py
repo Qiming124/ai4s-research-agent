@@ -67,7 +67,7 @@ async def chat(request: ChatRequest) -> ChatResponse:
     #
     # 参数 request — ChatRequest（必填 message，可选 session_id / system_prompt）
     # 返回 ChatResponse JSON（session_id / content / reasoning / usage）
-    agent = get_general_agent()
+    agent = get_general_agent(math_mode=(request.mode == "math"))
     try:
         session_id, content, reasoning, usage = await agent.run_sync(
             message=request.message,
@@ -102,7 +102,7 @@ async def _stream_generator(request: ChatRequest) -> AsyncIterator[str]:
     #     2. 发送 meta 事件（携带 session_id）
     #     3. 调用 Agent.run() 逐块产出 reasoning/content/done/error
     #     4. 每个 StreamChunk 转一条 SSE data 事件
-    agent = get_general_agent()
+    agent = get_general_agent(math_mode=(request.mode == "math"))
     session_store = get_session_store()
 
     session_id = session_store.get_or_create(request.session_id)
