@@ -83,7 +83,7 @@ class SessionStore:
     def clear_session(self, session_id: str) -> bool:
         # 清空指定会话的全部历史消息（保留 session_id 本身）。
         #
-        # 返回 True 若会话存在并被清空；False 若不存在。
+        # 若会话存在并被清空返回 True ；若不存在返回 False。
         #
         # 与 delete_session 区别：clear 只清空列表留 key，delete 直接删 key。
         if session_id not in self._sessions:
@@ -93,7 +93,7 @@ class SessionStore:
 
     def delete_session(self, session_id: str) -> bool:
         # 完全删除指定会话（从字典移除 key）。
-        # 返回 True 若会话存在并被删除；False 若不存在。
+        # 若会话存在且被删除返回 True ；若不存在返回 False。
         if session_id in self._sessions:
             del self._sessions[session_id]
             return True
