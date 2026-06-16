@@ -1,20 +1,17 @@
-"""
-系统提示词（System Prompt）定义。
+# =============================================================================
+# 系统提示词（System Prompt）定义。
+#
+# 职责：为各 Agent 提供默认的 "角色设定" 文本，放入每轮对话的 messages[0]（role=system）。
+#
+# 架构位置：
+#     - server/config.py       → DEFAULT_SYSTEM_PROMPT 作为 Settings 字段的默认值
+#     - server/agents/base.py  → GeneralAgent 构造时根据 math_mode 选择 prompt
+#
+# Phase 2 扩展：TheoryAgent / ExperimentAgent / LiteratureAgent 各自定义专用 prompt。
+# =============================================================================
 
-职责：
-    为 General Agent 提供默认 persona，引导模型以「深度学习损失函数极小值理论」
-    科研助手身份回答。
+# ── 通用科研助手提示词 ──────────────────────────────────────
 
-架构位置：
-    server/config.py 引用 DEFAULT_SYSTEM_PROMPT 作为默认值
-    server/agents/general.py 在构造 Agent 时使用
-
-Phase 2 扩展：
-    TheoryAgent / ExperimentAgent / LiteratureAgent 将各自定义专用 prompt，
-    通过 router 按用户意图选择。
-"""
-
-# 默认科研助手系统提示词
 DEFAULT_SYSTEM_PROMPT = """你是一位专注于「深度学习损失函数极小值理论」研究的 AI 科研助手。
 
 ## 你的能力边界（Phase 1）
@@ -34,7 +31,8 @@ DEFAULT_SYSTEM_PROMPT = """你是一位专注于「深度学习损失函数极�
 ## 语言
 默认使用中文回答；若用户用英文提问，可英文回复。"""
 
-# 数学模式提示词：温度更低、强调形式化推导（CLI --mode math 时使用）
+# ── 数学推导模式提示词（CLI --mode math 或前端切换时使用） ──
+
 MATH_MODE_SYSTEM_PROMPT = """你是一位数学推导助手，专注于深度学习损失函数与优化理论。
 
 ## 要求

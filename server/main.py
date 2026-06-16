@@ -1,21 +1,21 @@
-"""
-FastAPI 应用入口。
-
-职责：
-    - 创建 FastAPI app 实例
-    - 挂载路由、CORS
-    - 启动时加载配置并打印摘要（API Key 脱敏）
-
-启动方式：
-    uvicorn server.main:app --reload --host 0.0.0.0 --port 8000
-
-类比 C++：
-    类似 main() 中初始化 HTTP server、注册路由 handler、listen 端口。
-
-Debug：
-    - 启动报 ValidationError：.env 中 DEEPSEEK_API_KEY 未配置
-    - 端口占用：修改 .env 中 PORT 或 uvicorn --port 参数
-"""
+# =============================================================================
+# FastAPI 应用入口。
+#
+# 职责：
+#     1. 创建 FastAPI app 实例
+#     2. 挂载 chat_router（对话 API 路由）
+#     3. 配置 CORS 中间件（允许跨域访问）
+#     4. 生产模式托管 web/dist 静态文件
+#     5. 应用生命周期：启动加载配置/打印摘要，关闭记录日志
+#
+# 启动：
+#     uvicorn server.main:app --host 127.0.0.1 --port 8000       # 生产
+#     uvicorn server.main:app --reload --host 0.0.0.0 --port 8000 # 开发
+#
+# Debug：
+#     - ValidationError → .env 未配置 DEEPSEEK_API_KEY
+#     - Errno 98        → 端口被占用，换端口或先 kill 旧进程
+# =============================================================================
 
 from __future__ import annotations
 
@@ -40,15 +40,12 @@ WEB_DIST = Path(__file__).resolve().parent.parent / "web" / "dist"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """
-    应用生命周期钩子：启动时初始化，关闭时清理。
-
-    FastAPI 的 lifespan 类似 C++ 中 server 构造/析构或 init/shutdown 回调。
-    """
+    # 应用生命周期管理器。
+    # yield 前 → 启动时执行（加载配置、设置日志、打印摘要）
+    # yield 后 → 关闭时执行（记录日志）
     settings = get_settings()
     setup_logging(settings)
 
-    # 启动时打印配置摘要（API Key 脱敏，便于确认 .env 是否加载正确）
     logger.info("=" * 50)
     logger.info("AI4S Research Agent Server 启动")
     logger.info("  模型: %s", settings.model)
@@ -65,7 +62,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 def create_app() -> FastAPI:
-    """工厂函数：创建并配置 FastAPI 应用。"""
+    # 创建并配置 FastAPI 应用（工厂函数）。
+    # 返回完成以下配置的 app 实例：
+    #     1. 应用元信息
+    #     2. CORS 中间件（允许所有来源跨域）
+    #     3. 挂载 chat_router
+    #     4. 若 web/dist 存在则托管静态资源
     app = FastAPI(
         title="AI4S Research Agent",
         description="深度学习损失函数极小值理论 — 科研辅助多智能体系统 Phase 1",
@@ -73,7 +75,7 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # CORS：允许 CLI 或未来 Web 前端跨域访问
+    # CORS：Phase 1 不做精细鉴权，允许所有来源跨域访问 API
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
@@ -82,9 +84,11 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    # 挂载 API 路由（/health /v1/chat /v1/chat/stream /v1/sessions/*）
     app.include_router(chat_router)
 
-    # 生产模式：托管 web/dist 静态资源（开发时用 Vite :5173 + proxy）
+    # 生产模式：dist 存在时托管 web/dist 静态文件与首页。
+    # 开发模式 dist 不存在则跳过（用 Vite :5173 + proxy）
     if WEB_DIST.exists():
         assets_dir = WEB_DIST / "assets"
         if assets_dir.exists():
@@ -97,12 +101,12 @@ def create_app() -> FastAPI:
     return app
 
 
-# uvicorn 默认查找的 app 对象：uvicorn server.main:app
+# uvicorn 导入模块时自动查找名为 "app" 的变量
 app = create_app()
 
 
+# python -m server.main 开发启动
 if __name__ == "__main__":
-    # 支持 python -m server.main 直接启动（开发便捷）
     import uvicorn
 
     settings = get_settings()

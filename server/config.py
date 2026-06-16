@@ -1,21 +1,27 @@
-"""
-应用配置模块。
-
-职责：
-    从 .env 文件与环境变量加载所有运行时配置，并提供全局单例 settings。
-
-架构位置：
-    server/main.py 启动时加载
-    server/llm/client.py 读取 API 密钥与模型参数
-    server/api/chat.py 读取日志级别等
-
-主要依赖：
-    pydantic-settings — 类似 C++ 中从配置文件 + 环境变量构建 Config 单例
-
-Debug：
-    - 启动报 ValidationError：检查 .env 是否存在且 DEEPSEEK_API_KEY 已填写
-    - 模型无 reasoning 输出：确认 REASONING_EFFORT=max
-"""
+# =============================================================================
+# 应用配置模块。
+#
+# 职责：从项目根目录 .env 文件与环境变量加载所有运行时配置。
+#       通过 get_settings() 提供全局可访问的单例配置对象。
+#
+# 架构位置（被以下模块引用）：
+#     - server/main.py         → setup_logging + 打印配置摘要
+#     - server/llm/client.py   → 读取 API 密钥、模型名、max_tokens 等
+#     - server/api/chat.py     → 读出日志级别等
+#
+# 主要依赖：pydantic-settings — 字段名自动匹配 .env 变量名（忽略大小写）并转换类型。
+#
+# 加载顺序：
+#     1. 构造 Settings() 对象
+#     2. pydantic-settings 搜索当前目录 .env 文件
+#     3. 若找到，注入变量到对应字段；若未找到，使用 Field(default=...) 默认值
+#     4. 应用 field_validator 校验（如 API Key 不能是占位符）
+#
+# Debug：
+#     - 启动报 ValidationError: deepseek_api_key Field required → 根目录没有 .env
+#     - 启动报 ValueError → .env 中 DEEPSEEK_API_KEY 为空或仍是 sk-your-api-key-here
+#     - 模型无 reasoning 输出 → 检查 REASONING_EFFORT 是否为 max
+# =============================================================================
 
 from __future__ import annotations
 
@@ -29,47 +35,75 @@ from server.llm.prompts import DEFAULT_SYSTEM_PROMPT
 
 
 class Settings(BaseSettings):
-    """
-    全局配置类。字段名与环境变量一一对应（不区分大小写）。
+    # 全局配置类。属性名与 .env 变量名一一对应（不区分大小写）。
+    #
+    # 使用方式：
+    #     cfg = get_settings()
+    #     print(cfg.model)      # → deepseek-v4-pro
 
-    类比 C++：类似 struct AppConfig，在 main() 启动时 load 一次，全局只读访问。
-    """
-
+    # pydantic-settings 配置：从 .env 读取，大小写不敏感，忽略未定义的额外变量
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
-        # 允许 .env 中的变量名与字段名大小写不敏感匹配
-        case_sensitive=False,
-        extra="ignore",
+        case_sensitive=False,   # .env 中的 DEEPSEEK_API_KEY 匹配字段 deepseek_api_key
+        extra="ignore",         # .env 中有未定义变量不会导致启动失败
     )
 
-    # --- DeepSeek API ---
-    deepseek_api_key: str = Field(..., description="DeepSeek API 密钥")
+    # ── DeepSeek API 参数 ────────────────────────────────────
+
+    deepseek_api_key: str = Field(
+        ...,
+        description="DeepSeek API 密钥，从 platform.deepseek.com 获取",
+    )
     deepseek_base_url: str = Field(
         default="https://api.deepseek.com",
-        description="DeepSeek API 基础 URL（OpenAI 兼容端点）",
+        description="DeepSeek API 根地址，一般无需修改",
     )
-    model: str = Field(default="deepseek-v4-pro", description="模型 ID")
-    max_tokens: int = Field(default=384_000, description="最大输出 token 数")
-    reasoning_effort: str = Field(default="max", description="推理强度：high 或 max")
+    model: str = Field(
+        default="deepseek-v4-pro",
+        description="模型 ID。可选 deepseek-v4-flash（更快/更便宜）",
+    )
+    max_tokens: int = Field(
+        default=384_000,
+        description="单次请求最大输出 token 数。384000 为 V4 天花板，为 thinking max 留出预算",
+    )
+    reasoning_effort: str = Field(
+        default="max",
+        description="推理强度：high=一般推理，max=最强推理（消耗更多 token，响应更慢）",
+    )
 
-    # --- 服务 ---
-    host: str = Field(default="0.0.0.0", description="uvicorn 监听地址")
-    port: int = Field(default=8000, description="uvicorn 监听端口")
-    log_level: str = Field(default="INFO", description="日志级别：INFO 或 DEBUG")
+    # ── 服务监听参数 ─────────────────────────────────────────
 
-    # --- Agent ---
+    host: str = Field(
+        default="0.0.0.0",
+        description="uvicorn 监听地址。0.0.0.0 允许外部访问；Nginx 代理时改 127.0.0.1",
+    )
+    port: int = Field(
+        default=8000,
+        description="uvicorn 监听端口",
+    )
+    log_level: str = Field(
+        default="INFO",
+        description="日志级别：INFO=常规，DEBUG=打印 LLM 请求摘要",
+    )
+
+    # ── Agent 参数 ───────────────────────────────────────────
+
     default_system_prompt: str = Field(
         default=DEFAULT_SYSTEM_PROMPT,
-        description="默认 system prompt，可被请求体 system_prompt 覆盖",
+        description="默认 system prompt，可被客户端请求中的 system_prompt 字段覆盖",
     )
-    # Phase 2 预留：历史消息条数上限，0 表示不限制
-    max_history_messages: int = Field(default=0, description="会话历史条数上限，0=不限制")
+    max_history_messages: int = Field(
+        default=0,
+        description="每轮对话携带的历史消息条数上限。0 表示不限制（全量传入）",
+    )
+
+    # ── 校验器 ───────────────────────────────────────────────
 
     @field_validator("deepseek_api_key")
     @classmethod
     def validate_api_key(cls, value: str) -> str:
-        """启动时校验 API Key 非空且不是占位符。"""
+        # 启动时校验 API Key：不能是空字符串，不能是占位符。
         stripped = value.strip()
         if not stripped or stripped == "sk-your-api-key-here":
             raise ValueError(
@@ -81,18 +115,17 @@ class Settings(BaseSettings):
     @field_validator("reasoning_effort")
     @classmethod
     def validate_reasoning_effort(cls, value: str) -> str:
-        """只允许 high 或 max。"""
+        # 启动时校验推理强度：仅允许 high 或 max。
         normalized = value.strip().lower()
         if normalized not in ("high", "max"):
-            raise ValueError(f"REASONING_EFFORT 必须是 'high' 或 'max'，当前为: {value}")
+            raise ValueError(f"REASONING_EFFORT 必须是 high 或 max，当前为: {value}")
         return normalized
 
-    def masked_api_key(self) -> str:
-        """
-        返回脱敏后的 API Key，用于启动日志打印。
+    # ── 工具方法 ─────────────────────────────────────────────
 
-        示例：sk-abc...xyz9 → sk-***xyz9
-        """
+    def masked_api_key(self) -> str:
+        # 返回脱敏后的 API Key（只保留后 4 位），用于启动日志打印。
+        # 示例：sk-abc...xyz9 → sk-***xyz9
         key = self.deepseek_api_key
         if len(key) <= 8:
             return "sk-***"
@@ -101,21 +134,16 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    """
-    获取配置单例（带缓存）。
-
-    类比 C++：类似 Meyers Singleton，首次调用时构造，之后返回同一实例。
-    lru_cache 确保整个进程生命周期内只加载一次 .env。
-    """
+    # 获取全局配置单例（带缓存）。
+    # 首次调用时读取 .env 构建实例；后续返回缓存中的同一对象。
     return Settings()
 
 
 def setup_logging(settings: Settings | None = None) -> None:
-    """
-    根据 settings.log_level 配置根 logger。
-
-    设置 LOG_LEVEL=DEBUG 时，会打印 LLM 请求摘要，便于排查 API 问题。
-    """
+    # 按配置指定的日志级别初始化 Python 根 logger。
+    # 参数 settings 为 None 时自动调用 get_settings()。
+    #
+    # 调用方：server/main.py 在应用启动阶段调用。
     cfg = settings or get_settings()
     level = getattr(logging, cfg.log_level.upper(), logging.INFO)
     logging.basicConfig(

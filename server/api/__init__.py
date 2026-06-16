@@ -1,1 +1,1 @@
-"""server.api 包：HTTP 路由处理器。"""
+# 服务器 API 层：HTTP 路由定义。
