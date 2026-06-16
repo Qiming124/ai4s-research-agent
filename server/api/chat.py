@@ -73,6 +73,8 @@ async def chat(request: ChatRequest) -> ChatResponse:
             message=request.message,
             session_id=request.session_id,
             system_prompt_override=request.system_prompt,
+            max_history_messages=request.max_history_messages,
+            enable_history_summary=request.enable_history_summary,
         )
     except Exception as exc:
         logger.exception("非流式对话失败")
@@ -106,13 +108,19 @@ async def _stream_generator(request: ChatRequest) -> AsyncIterator[str]:
     session_store = get_session_store()
 
     session_id = session_store.get_or_create(request.session_id)
-    yield _sse_event({"type": "meta", "session_id": session_id})
+    yield _sse_event({
+        "type": "meta",
+        "session_id": session_id,
+        "agent_name": agent.name,
+    })
 
     try:
         async for chunk in agent.run(
             message=request.message,
             session_id=session_id,
             system_prompt_override=request.system_prompt,
+            max_history_messages=request.max_history_messages,
+            enable_history_summary=request.enable_history_summary,
         ):
             payload = chunk.model_dump()
             yield _sse_event(payload)

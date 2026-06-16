@@ -2,9 +2,15 @@ import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { useChatStream } from "../hooks/useChatStream";
 import {
   getChatMode,
+  getEnableHistorySummary,
+  getMaxHistoryMessages,
   getShowReasoning,
+  getUseServerHistoryDefault,
   setChatMode,
+  setEnableHistorySummary,
+  setMaxHistoryMessages,
   setShowReasoning,
+  setUseServerHistoryDefault,
   type ChatMode,
 } from "../utils/preferences";
 import { shortSessionId } from "../utils/session";
@@ -13,16 +19,27 @@ import { MessageBubble } from "./MessageBubble";
 export function ChatPage() {
   const [chatMode, setChatModeState] = useState<ChatMode>(getChatMode);
   const [showReasoning, setShowReasoningState] = useState(getShowReasoning);
+  const [useServerHistory, setUseServerHistoryState] = useState(getUseServerHistoryDefault);
+  const [maxHistoryMessages, setMaxHistoryMessagesState] = useState(getMaxHistoryMessages);
+  const [enableHistorySummary, setEnableHistorySummaryState] = useState(getEnableHistorySummary);
+
+  const historyPref = {
+    useServerDefault: useServerHistory,
+    maxHistoryMessages,
+    enableHistorySummary,
+  };
+
   const {
     messages,
     sessionId,
     isStreaming,
     isLoadingHistory,
     historyError,
+    activeAgentName,
     sendMessage,
     stopGeneration,
     clearSession,
-  } = useChatStream(chatMode);
+  } = useChatStream(chatMode, historyPref);
   const [input, setInput] = useState("");
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -53,6 +70,26 @@ export function ChatPage() {
     setShowReasoning(checked);
   };
 
+  const handleUseServerHistoryChange = (checked: boolean) => {
+    setUseServerHistoryState(checked);
+    setUseServerHistoryDefault(checked);
+  };
+
+  const handleMaxHistoryChange = (value: number) => {
+    const n = Math.max(0, value);
+    setMaxHistoryMessagesState(n);
+    setMaxHistoryMessages(n);
+    if (n === 0) {
+      setEnableHistorySummaryState(false);
+      setEnableHistorySummary(false);
+    }
+  };
+
+  const handleEnableSummaryChange = (checked: boolean) => {
+    setEnableHistorySummaryState(checked);
+    setEnableHistorySummary(checked);
+  };
+
   return (
     <div className="chat-app">
       <header className="chat-header">
@@ -62,6 +99,9 @@ export function ChatPage() {
         </div>
         <div className="header-actions">
           <span className="session-tag">Session: {shortSessionId(sessionId)}</span>
+          {activeAgentName && (
+            <span className="session-tag">Agent: {activeAgentName}</span>
+          )}
           <div className="mode-toggle" role="group" aria-label="对话模式">
             <button
               type="button"
@@ -98,6 +138,39 @@ export function ChatPage() {
           </button>
         </div>
       </header>
+
+      <div className="history-prefs-bar">
+        <label className="pref-toggle">
+          <input
+            type="checkbox"
+            checked={useServerHistory}
+            onChange={(e) => handleUseServerHistoryChange(e.target.checked)}
+            disabled={isStreaming}
+          />
+          历史策略：服务端默认
+        </label>
+        <label className="pref-inline">
+          保留条数
+          <input
+            type="number"
+            className="history-num-input"
+            min={0}
+            value={maxHistoryMessages}
+            disabled={isStreaming || useServerHistory}
+            onChange={(e) => handleMaxHistoryChange(Number(e.target.value))}
+            title="0 表示不截断；大于 0 时只向 LLM 发送最近 N 条"
+          />
+        </label>
+        <label className="pref-toggle">
+          <input
+            type="checkbox"
+            checked={enableHistorySummary}
+            disabled={isStreaming || useServerHistory || maxHistoryMessages === 0}
+            onChange={(e) => handleEnableSummaryChange(e.target.checked)}
+          />
+          LLM 摘要旧消息
+        </label>
+      </div>
 
       {historyError && (
         <div className="history-error">历史加载失败：{historyError}</div>

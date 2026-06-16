@@ -59,6 +59,24 @@ def test_session_store_get_messages_is_copy(
     assert len(store.get_messages(sid)) == 1
 
 
+def test_session_store_reasoning_content(
+    store: InMemorySessionStore | SQLiteSessionStore,
+) -> None:
+    """assistant 消息的 reasoning_content 可持久化往返。"""
+    sid = store.create_session_id()
+    store.append_message(
+        sid,
+        ChatMessage(
+            role="assistant",
+            content="answer",
+            reasoning_content="thinking process",
+        ),
+    )
+    messages = store.get_messages(sid)
+    assert len(messages) == 1
+    assert messages[0].reasoning_content == "thinking process"
+
+
 def test_session_store_delete_session(
     store: InMemorySessionStore | SQLiteSessionStore,
 ) -> None:

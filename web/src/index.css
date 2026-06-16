@@ -430,3 +430,34 @@ body {
 .btn-stop:hover {
   background: #dc2626;
 }
+
+.history-prefs-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 20px;
+  border-bottom: 1px solid #e8ecf1;
+  background: #fafbfc;
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.pref-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.history-num-input {
+  width: 64px;
+  padding: 4px 6px;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  font-size: 0.75rem;
+}
+
+.history-num-input:disabled {
+  background: #f1f5f9;
+  cursor: not-allowed;
+}

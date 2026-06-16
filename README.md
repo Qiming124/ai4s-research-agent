@@ -146,6 +146,30 @@ cp .env.example .env
 | `PORT` | `8000` | 监听端口 |
 | `SESSION_STORE_BACKEND` | `sqlite` | 会话存储：`sqlite`（持久化）或 `memory`（内存） |
 | `SESSION_DB_PATH` | `./data/sessions.db` | SQLite 数据库路径（仅 `sqlite` 后端生效） |
+| `MAX_HISTORY_MESSAGES` | `0` | L1 截断：保留最近 N 条历史；`0` 表示不限制 |
+| `ENABLE_HISTORY_SUMMARY` | `false` | 截断时对丢弃部分做 LLM 摘要（额外 API 调用） |
+| `HISTORY_SUMMARY_MAX_TOKENS` | `1024` | 历史摘要最大输出 token |
+
+---
+
+## Phase 2A 能力清单
+
+| 能力 | 说明 |
+|------|------|
+| L2 SQLite 持久化 | 重启后会话不丢失（`SESSION_STORE_BACKEND=sqlite`） |
+| L1 历史截断 | `MAX_HISTORY_MESSAGES>0` 时只向 LLM 发送最近 N 条 |
+| L1 可选 LLM 摘要 | `ENABLE_HISTORY_SUMMARY=true` 时压缩被截断的旧消息 |
+| reasoning 持久化 | assistant 思考过程写入 DB，Web 刷新后可恢复 |
+| Web 历史恢复 | 页面加载时 `GET /v1/sessions/{id}` 回填 |
+| Web/CLI Math 模式 | 请求 `mode=math` 使用数学推导 prompt |
+| Web/CLI L1 策略 | 客户端可覆盖 `max_history_messages` / `enable_history_summary` |
+| SSE agent_name | 流式 meta/done 事件携带 Agent 名称 |
+
+**L1 历史策略（客户端）**
+
+- 请求体字段 `max_history_messages`、`enable_history_summary` 为 `null`/省略时，使用服务端 `.env` 默认值
+- Web：顶栏下方「历史策略」区域；勾选「服务端默认」则不发送上述字段
+- CLI：`--max-history N`、`--history-summary on|off|default`
 
 ---
 
@@ -177,6 +201,11 @@ AI4S Research Agent Server 启动
 ```bash
 source .venv/bin/activate
 python -m client.cli
+python -m client.cli --mode math          # 数学推导模式
+python -m client.cli --max-history 20     # L1 保留最近 20 条（覆盖 .env）
+python -m client.cli --history-summary on # 截断时 LLM 摘要旧消息
+python -m client.cli --no-show-reasoning  # 隐藏思考过程
+python -m client.cli --session my-work    # 固定会话 ID
 # 或：research-agent-cli
 ```
 

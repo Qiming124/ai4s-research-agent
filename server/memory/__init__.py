@@ -5,9 +5,10 @@
 #     base.py        — BaseSessionStore 抽象基类
 #     session.py     — InMemorySessionStore + get_session_store() 工厂
 #     sqlite_store.py — SQLiteSessionStore 持久化（L2 Session Memory）
+#     working.py     — L1 历史截断与可选 LLM 摘要
+#     manager.py     — MemoryManager 统一入口
 #
-# Phase 2A 后续 / Phase 3-4：
-#     working.py     — L1 Working Memory 截断/摘要
+# Phase 3-4：
 #     semantic/      — L3 RAG 向量库
 #     structured/    — L4 结构化科研记忆
 # =============================================================================

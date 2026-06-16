@@ -57,7 +57,15 @@ class DeepSeekClient:
             base_url=self._settings.deepseek_base_url,
         )
 
-    def _build_create_kwargs(self, messages: list[dict[str, str]], *, stream: bool) -> dict[str, Any]:
+    def _build_create_kwargs(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        stream: bool,
+        reasoning_effort: str | None = None,
+        max_tokens: int | None = None,
+        enable_thinking: bool = True,
+    ) -> dict[str, Any]:
         # 构造 chat.completions.create() 的参数字典。
         #
         # 参数：
@@ -73,13 +81,20 @@ class DeepSeekClient:
         return {
             "model": self._settings.model,
             "messages": messages,
-            "max_tokens": self._settings.max_tokens,
+            "max_tokens": max_tokens if max_tokens is not None else self._settings.max_tokens,
             "stream": stream,
-            "reasoning_effort": self._settings.reasoning_effort,
-            "extra_body": {"thinking": {"type": "enabled"}},
+            "reasoning_effort": reasoning_effort or self._settings.reasoning_effort,
+            "extra_body": {"thinking": {"type": "enabled" if enable_thinking else "disabled"}},
         }
 
-    async def chat(self, messages: list[dict[str, str]]) -> tuple[str, str | None, dict[str, Any] | None]:
+    async def chat(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        reasoning_effort: str | None = None,
+        max_tokens: int | None = None,
+        enable_thinking: bool = True,
+    ) -> tuple[str, str | None, dict[str, Any] | None]:
         # 非流式对话：发送消息列表，阻塞等待完整响应后一次性返回。
         #
         # 参数：
@@ -96,7 +111,13 @@ class DeepSeekClient:
         #     APIStatusError      — DeepSeek 返回 4xx/5xx
         #
         # 使用场景：POST /v1/chat、curl 测试、脚本调用。
-        kwargs = self._build_create_kwargs(messages, stream=False)
+        kwargs = self._build_create_kwargs(
+            messages,
+            stream=False,
+            reasoning_effort=reasoning_effort,
+            max_tokens=max_tokens,
+            enable_thinking=enable_thinking,
+        )
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug(
                 "DeepSeek 非流式请求: model=%s, messages=%d 条, max_tokens=%d",

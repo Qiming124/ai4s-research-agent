@@ -63,12 +63,47 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--mode", choices=["chat", "math"], default="chat",
-        help="对话模式：chat=通用，math=数学推导 (预留)",
+        help="对话模式：chat=通用，math=数学推导",
+    )
+    parser.add_argument(
+        "--max-history",
+        type=int,
+        default=None,
+        metavar="N",
+        help="L1 保留最近 N 条历史；省略则使用服务端 .env 配置",
+    )
+    parser.add_argument(
+        "--history-summary",
+        choices=["on", "off", "default"],
+        default="default",
+        help="截断时是否 LLM 摘要旧消息：on/off/default(服务端配置)",
     )
     return parser.parse_args()
 
 
 # ── Server 通信 ─────────────────────────────────────────────
+
+def build_chat_payload(
+    message: str,
+    session_id: str,
+    *,
+    mode: str,
+    max_history: int | None,
+    history_summary: str,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "message": message,
+        "session_id": session_id,
+        "mode": mode,
+    }
+    if max_history is not None:
+        payload["max_history_messages"] = max_history
+    if history_summary == "on":
+        payload["enable_history_summary"] = True
+    elif history_summary == "off":
+        payload["enable_history_summary"] = False
+    return payload
+
 
 async def check_server_health(client: httpx.AsyncClient) -> dict[str, Any]:
     # 调用 GET /health 确认 server 可连。失败抛 httpx.ConnectError。
@@ -119,7 +154,14 @@ def build_display_text(reasoning: str, content: str, *, show_reasoning: bool) ->
 # ── SSE 流式对话 ─────────────────────────────────────────────
 
 async def stream_chat(
-    client: httpx.AsyncClient, session_id: str, message: str, *, show_reasoning: bool,
+    client: httpx.AsyncClient,
+    session_id: str,
+    message: str,
+    *,
+    show_reasoning: bool,
+    mode: str = "chat",
+    max_history: int | None = None,
+    history_summary: str = "default",
 ) -> tuple[str, str]:
     # 调用 POST /v1/chat/stream，消费 SSE 事件流并实时显示在终端。
     #
@@ -136,7 +178,13 @@ async def stream_chat(
     #     2. 逐行解析 SSE data 事件，区分 reasoning/content/done/error
     #     3. rich.Live 原地刷新终端区域
     #     4. 收到 done 后退出
-    payload = {"message": message, "session_id": session_id}
+    payload = build_chat_payload(
+        message,
+        session_id,
+        mode=mode,
+        max_history=max_history,
+        history_summary=history_summary,
+    )
     reasoning_parts: list[str] = []
     content_parts: list[str] = []
 
@@ -228,6 +276,9 @@ async def run_cli(args: argparse.Namespace) -> None:
         "[bold]AI4S 科研助手 CLI[/bold]\n"
         f"Server: {base_url}\n"
         f"Session: {session_id}\n"
+        f"Mode: {args.mode}\n"
+        f"Max history: {args.max_history if args.max_history is not None else 'server default'}\n"
+        f"History summary: {args.history_summary}\n"
         "命令: /clear 清空会话 | /history 查看历史 | exit/quit 退出",
         border_style="cyan",
     ))
@@ -281,7 +332,15 @@ async def run_cli(args: argparse.Namespace) -> None:
 
             console.print()
             try:
-                await stream_chat(client, session_id, user_input, show_reasoning=args.show_reasoning)
+                await stream_chat(
+                    client,
+                    session_id,
+                    user_input,
+                    show_reasoning=args.show_reasoning,
+                    mode=args.mode,
+                    max_history=args.max_history,
+                    history_summary=args.history_summary,
+                )
             except httpx.ConnectError:
                 console.print("[red]连接中断，请确认 Server 是否仍在运行[/red]")
             except httpx.HTTPStatusError as exc:

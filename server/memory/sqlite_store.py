@@ -63,6 +63,19 @@ class SQLiteSessionStore(BaseSessionStore):
         with self._lock:
             self._conn.executescript(_SCHEMA_SQL)
             self._conn.commit()
+            self._migrate()
+
+    def _migrate(self) -> None:
+        # Phase 2A：为已有数据库追加 reasoning_content 列。
+        cols = {
+            row[1]
+            for row in self._conn.execute("PRAGMA table_info(messages)").fetchall()
+        }
+        if "reasoning_content" not in cols:
+            self._conn.execute(
+                "ALTER TABLE messages ADD COLUMN reasoning_content TEXT"
+            )
+            self._conn.commit()
 
     def create_session_id(self) -> str:
         return str(uuid.uuid4())
@@ -82,13 +95,20 @@ class SQLiteSessionStore(BaseSessionStore):
         with self._lock:
             rows = self._conn.execute(
                 """
-                SELECT role, content FROM messages
+                SELECT role, content, reasoning_content FROM messages
                 WHERE session_id = ?
                 ORDER BY seq
                 """,
                 (session_id,),
             ).fetchall()
-        return [ChatMessage(role=row["role"], content=row["content"]) for row in rows]
+        return [
+            ChatMessage(
+                role=row["role"],
+                content=row["content"],
+                reasoning_content=row["reasoning_content"],
+            )
+            for row in rows
+        ]
 
     def append_message(self, session_id: str, message: ChatMessage) -> None:
         with self._lock:
@@ -103,10 +123,16 @@ class SQLiteSessionStore(BaseSessionStore):
             next_seq = int(row["max_seq"]) + 1
             self._conn.execute(
                 """
-                INSERT INTO messages (session_id, role, content, seq)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO messages (session_id, role, content, seq, reasoning_content)
+                VALUES (?, ?, ?, ?, ?)
                 """,
-                (session_id, message.role, message.content, next_seq),
+                (
+                    session_id,
+                    message.role,
+                    message.content,
+                    next_seq,
+                    message.reasoning_content,
+                ),
             )
             self._conn.execute(
                 "UPDATE sessions SET updated_at = datetime('now') WHERE session_id = ?",

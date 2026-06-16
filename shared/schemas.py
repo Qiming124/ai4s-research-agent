@@ -29,6 +29,10 @@ class ChatMessage(BaseModel):
 
     role: Literal["system", "user", "assistant"]
     content: str
+    reasoning_content: str | None = Field(
+        default=None,
+        description="assistant 消息的思考过程（Phase 2A 持久化）",
+    )
 
 
 class ChatRequest(BaseModel):
@@ -45,6 +49,15 @@ class ChatRequest(BaseModel):
     session_id: str | None = Field(default=None, description="会话 ID，用于多轮对话上下文")
     system_prompt: str | None = Field(default=None, description="可选：覆盖默认 system prompt")
     mode: Literal["chat", "math"] = Field(default="chat", description="对话模式：chat=通用，math=数学推导")
+    max_history_messages: int | None = Field(
+        default=None,
+        ge=0,
+        description="L1 保留最近 N 条历史；None 时使用服务端 .env 默认值",
+    )
+    enable_history_summary: bool | None = Field(
+        default=None,
+        description="截断时是否 LLM 摘要旧消息；None 时使用服务端 .env 默认值",
+    )
 
 
 class ChatResponse(BaseModel):
@@ -75,6 +88,9 @@ class StreamChunk(BaseModel):
     type: Literal["reasoning", "content", "done", "error"]
     content: str = ""
     usage: dict[str, Any] | None = None
+    agent_name: str | None = Field(default=None, description="产出该 chunk 的 Agent 名称")
+    tool_name: str | None = Field(default=None, description="MCP 工具名（Phase 2B 预留）")
+    a2a_task_id: str | None = Field(default=None, description="A2A 任务 ID（Phase 2C 预留）")
 
 
 class SessionResponse(BaseModel):

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ChatMode } from "../utils/preferences";
+import type { ChatMode, HistoryPreference } from "../utils/preferences";
+import { buildHistoryRequestFields } from "../utils/preferences";
 import { getSessionId, setSessionId } from "../utils/session";
 
 export interface ChatMessage {
@@ -16,12 +17,14 @@ interface SseEvent {
   type: string;
   content?: string;
   session_id?: string;
+  agent_name?: string;
   usage?: Record<string, unknown>;
 }
 
 interface ServerMessage {
   role: string;
   content: string;
+  reasoning_content?: string | null;
 }
 
 function mapServerMessages(raw: ServerMessage[]): ChatMessage[] {
@@ -31,6 +34,7 @@ function mapServerMessages(raw: ServerMessage[]): ChatMessage[] {
       id: crypto.randomUUID(),
       role: m.role as "user" | "assistant",
       content: m.content,
+      reasoning: m.reasoning_content ?? undefined,
     }));
 }
 
@@ -54,12 +58,13 @@ function parseSseBuffer(buffer: string): { events: SseEvent[]; rest: string } {
   return { events, rest };
 }
 
-export function useChatStream(chatMode: ChatMode) {
+export function useChatStream(chatMode: ChatMode, historyPref: HistoryPreference) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [sessionId, setSessionIdState] = useState(getSessionId);
   const [isStreaming, setIsStreaming] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [historyError, setHistoryError] = useState<string | null>(null);
+  const [activeAgentName, setActiveAgentName] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   const finishStreaming = useCallback(() => {
@@ -143,6 +148,7 @@ export function useChatStream(chatMode: ChatMode) {
           message: trimmed,
           session_id: sessionId,
           mode: chatMode,
+          ...buildHistoryRequestFields(historyPref),
         }),
         signal: controller.signal,
       });
@@ -166,9 +172,14 @@ export function useChatStream(chatMode: ChatMode) {
         buffer = rest;
 
         for (const ev of events) {
-          if (ev.type === "meta" && ev.session_id) {
-            setSessionId(ev.session_id);
-            setSessionIdState(ev.session_id);
+          if (ev.type === "meta") {
+            if (ev.session_id) {
+              setSessionId(ev.session_id);
+              setSessionIdState(ev.session_id);
+            }
+            if (ev.agent_name) {
+              setActiveAgentName(ev.agent_name);
+            }
           } else if (ev.type === "reasoning") {
             setMessages((prev) =>
               prev.map((m) =>
@@ -223,9 +234,10 @@ export function useChatStream(chatMode: ChatMode) {
       );
     } finally {
       setIsStreaming(false);
+      setActiveAgentName(null);
       abortRef.current = null;
     }
-  }, [isStreaming, sessionId, chatMode, finishStreaming]);
+  }, [isStreaming, sessionId, chatMode, historyPref, finishStreaming]);
 
   const clearSession = useCallback(async () => {
     await fetch(`/v1/sessions/${sessionId}`, { method: "DELETE" });
@@ -239,6 +251,7 @@ export function useChatStream(chatMode: ChatMode) {
     isStreaming,
     isLoadingHistory,
     historyError,
+    activeAgentName,
     sendMessage,
     stopGeneration,
     clearSession,

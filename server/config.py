@@ -108,6 +108,14 @@ class Settings(BaseSettings):
         default="./data/sessions.db",
         description="SQLite 数据库文件路径（仅 session_store_backend=sqlite 时生效）",
     )
+    enable_history_summary: bool = Field(
+        default=False,
+        description="历史截断时是否对丢弃部分做 LLM 摘要（需额外 API 调用）",
+    )
+    history_summary_max_tokens: int = Field(
+        default=1024,
+        description="历史摘要的最大输出 token 数",
+    )
 
     # ── 校验器 ───────────────────────────────────────────────
 
