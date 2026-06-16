@@ -23,5 +23,6 @@ build/
 # Web 前端
 web/node_modules/
 web/dist/
-.env.example
-.env.example
+
+# SQLite 会话数据库（Phase 2A）
+data/

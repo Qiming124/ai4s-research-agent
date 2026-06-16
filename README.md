@@ -144,6 +144,8 @@ cp .env.example .env
 | `LOG_LEVEL` | `INFO` | `DEBUG` 可打印 LLM 请求摘要 |
 | `HOST` | `0.0.0.0` | 监听地址（Nginx 代理时改 `127.0.0.1`） |
 | `PORT` | `8000` | 监听端口 |
+| `SESSION_STORE_BACKEND` | `sqlite` | 会话存储：`sqlite`（持久化）或 `memory`（内存） |
+| `SESSION_DB_PATH` | `./data/sessions.db` | SQLite 数据库路径（仅 `sqlite` 后端生效） |
 
 ---
 
@@ -296,7 +298,7 @@ python -m client.cli --no-show-reasoning      # 隐藏推理过程
 | CLI `Connection refused` | Server 未启动 | 先运行 uvicorn |
 | SSE 无输出后中断 | 网络/API 限流 | `LOG_LEVEL=DEBUG` 查日志 |
 | 多轮对话无上下文 | session_id 不一致 | CLI 用 `--session` 固定 |
-| 重启后会话丢失 | Phase 1 内存存储 | 正常行为，Phase 2 持久化 |
+| 重启后会话丢失 | `SESSION_STORE_BACKEND=memory` | 改为 `sqlite`（默认）；或确认 `data/sessions.db` 存在 |
 | reasoning 为空 | 配置问题 | 确认 `REASONING_EFFORT=max` |
 | 部署后访问白屏 | 浏览器缓存 | Ctrl+Shift+R 硬刷新 |
 | Nginx 访问 502 | 后端未启动 | `systemctl status ai4s-agent` |

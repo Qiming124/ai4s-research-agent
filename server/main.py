@@ -54,6 +54,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     logger.info("  API Key: %s", settings.masked_api_key())
     logger.info("  Base URL: %s", settings.deepseek_base_url)
     logger.info("  日志级别: %s", settings.log_level)
+    if settings.session_store_backend == "sqlite":
+        logger.info("  会话存储: sqlite (%s)", settings.session_db_path)
+    else:
+        logger.info("  会话存储: memory（重启后会话丢失）")
     logger.info("=" * 50)
 
     yield

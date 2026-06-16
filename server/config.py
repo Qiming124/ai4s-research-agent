@@ -98,6 +98,17 @@ class Settings(BaseSettings):
         description="每轮对话携带的历史消息条数上限。0 表示不限制（全量传入）",
     )
 
+    # ── 会话存储（Phase 2A） ─────────────────────────────────
+
+    session_store_backend: str = Field(
+        default="sqlite",
+        description="会话存储后端：memory（内存，重启丢失）或 sqlite（持久化）",
+    )
+    session_db_path: str = Field(
+        default="./data/sessions.db",
+        description="SQLite 数据库文件路径（仅 session_store_backend=sqlite 时生效）",
+    )
+
     # ── 校验器 ───────────────────────────────────────────────
 
     @field_validator("deepseek_api_key")
@@ -119,6 +130,17 @@ class Settings(BaseSettings):
         normalized = value.strip().lower()
         if normalized not in ("high", "max"):
             raise ValueError(f"REASONING_EFFORT 必须是 high 或 max，当前为: {value}")
+        return normalized
+
+    @field_validator("session_store_backend")
+    @classmethod
+    def validate_session_store_backend(cls, value: str) -> str:
+        # 启动时校验会话存储后端：仅允许 memory 或 sqlite。
+        normalized = value.strip().lower()
+        if normalized not in ("memory", "sqlite"):
+            raise ValueError(
+                f"SESSION_STORE_BACKEND 必须是 memory 或 sqlite，当前为: {value}"
+            )
         return normalized
 
     # ── 工具方法 ─────────────────────────────────────────────
