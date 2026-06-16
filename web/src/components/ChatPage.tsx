@@ -14,6 +14,7 @@ import {
   type ChatMode,
 } from "../utils/preferences";
 import { shortSessionId } from "../utils/session";
+import { HelpPanel } from "./HelpPanel";
 import { MessageBubble } from "./MessageBubble";
 
 export function ChatPage() {
@@ -41,6 +42,7 @@ export function ChatPage() {
     clearSession,
   } = useChatStream(chatMode, historyPref);
   const [input, setInput] = useState("");
+  const [helpOpen, setHelpOpen] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -133,11 +135,16 @@ export function ChatPage() {
               停止
             </button>
           )}
+          <button type="button" className="btn-secondary" onClick={() => setHelpOpen(true)}>
+            帮助
+          </button>
           <button type="button" className="btn-secondary" onClick={clearSession} disabled={isStreaming}>
             清空会话
           </button>
         </div>
       </header>
+
+      <HelpPanel open={helpOpen} onClose={() => setHelpOpen(false)} />
 
       <div className="history-prefs-bar">
         <label className="pref-toggle">
