@@ -30,7 +30,7 @@ export function ReasoningPanel({ reasoning, isStreaming }: ReasoningPanelProps) 
         </span>
       </summary>
       <div className="reasoning-body">
-        <MarkdownContent content={reasoning} className="reasoning-md" />
+        <MarkdownContent content={reasoning} className="reasoning-md" isStreaming={isStreaming} />
       </div>
     </details>
   );

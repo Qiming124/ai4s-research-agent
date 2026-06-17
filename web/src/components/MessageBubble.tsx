@@ -27,7 +27,7 @@ export function MessageBubble({ message, showReasoning = true }: MessageBubblePr
                 isStreaming={!!message.streaming}
               />
             )}
-            <MarkdownContent content={message.content} />
+            <MarkdownContent content={message.content} isStreaming={!!message.streaming} />
             {message.streaming && message.content && (
               <span className="cursor-blink">▍</span>
             )}
