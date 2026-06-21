@@ -75,6 +75,7 @@ async def chat(request: ChatRequest) -> ChatResponse:
             system_prompt_override=request.system_prompt,
             max_history_messages=request.max_history_messages,
             enable_history_summary=request.enable_history_summary,
+            enable_tools=request.enable_tools,
         )
     except Exception as exc:
         logger.exception("非流式对话失败")
@@ -121,6 +122,7 @@ async def _stream_generator(request: ChatRequest) -> AsyncIterator[str]:
             system_prompt_override=request.system_prompt,
             max_history_messages=request.max_history_messages,
             enable_history_summary=request.enable_history_summary,
+            enable_tools=request.enable_tools,
         ):
             payload = chunk.model_dump()
             yield _sse_event(payload)

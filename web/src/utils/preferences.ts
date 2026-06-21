@@ -3,6 +3,8 @@ const CHAT_MODE_KEY = "ai4s_chat_mode";
 const USE_SERVER_HISTORY_KEY = "ai4s_use_server_history";
 const MAX_HISTORY_MESSAGES_KEY = "ai4s_max_history_messages";
 const ENABLE_HISTORY_SUMMARY_KEY = "ai4s_enable_history_summary";
+const USE_SERVER_MCP_KEY = "ai4s_use_server_mcp";
+const ENABLE_MCP_KEY = "ai4s_enable_mcp";
 
 export type ChatMode = "chat" | "math";
 
@@ -56,6 +58,26 @@ export function setEnableHistorySummary(value: boolean): void {
   localStorage.setItem(ENABLE_HISTORY_SUMMARY_KEY, String(value));
 }
 
+export function getUseServerMcpDefault(): boolean {
+  const raw = localStorage.getItem(USE_SERVER_MCP_KEY);
+  if (raw === null) return true;
+  return raw === "true";
+}
+
+export function setUseServerMcpDefault(value: boolean): void {
+  localStorage.setItem(USE_SERVER_MCP_KEY, String(value));
+}
+
+export function getEnableMcp(): boolean {
+  const raw = localStorage.getItem(ENABLE_MCP_KEY);
+  if (raw === null) return false;
+  return raw === "true";
+}
+
+export function setEnableMcp(value: boolean): void {
+  localStorage.setItem(ENABLE_MCP_KEY, String(value));
+}
+
 export interface HistoryPreference {
   useServerDefault: boolean;
   maxHistoryMessages: number;
@@ -82,4 +104,26 @@ export function buildHistoryRequestFields(
     enable_history_summary: pref.enableHistorySummary,
   };
   return fields;
+}
+
+export interface McpPreference {
+  useServerDefault: boolean;
+  enableMcp: boolean;
+}
+
+export function getMcpPreference(): McpPreference {
+  return {
+    useServerDefault: getUseServerMcpDefault(),
+    enableMcp: getEnableMcp(),
+  };
+}
+
+/** 构造 ChatRequest 中的 MCP 字段；useServerDefault 时不发送（由服务端 .env 决定）。 */
+export function buildMcpRequestFields(
+  pref: McpPreference,
+): Record<string, boolean> {
+  if (pref.useServerDefault) {
+    return {};
+  }
+  return { enable_tools: pref.enableMcp };
 }

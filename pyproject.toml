@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ai4s-research-agent"
-version = "0.1.0"
-description = "AI4S 科研辅助多智能体系统 — Phase 1 DeepSeek 对话 Agent"
+version = "0.2.0"
+description = "AI4S 科研辅助多智能体系统 — Phase 2A/2B DeepSeek Agent + MCP"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -19,6 +19,7 @@ dependencies = [
     "rich>=13.9.0",
     "prompt-toolkit>=3.0.48",
     "python-dotenv>=1.0.1",
+    "mcp>=1.0",
 ]
 
 [project.optional-dependencies]

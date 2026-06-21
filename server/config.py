@@ -117,6 +117,25 @@ class Settings(BaseSettings):
         description="历史摘要的最大输出 token 数",
     )
 
+    # ── MCP 工具层（Phase 2B） ───────────────────────────────
+
+    enable_mcp: bool = Field(
+        default=False,
+        description="是否启用 MCP 工具调用",
+    )
+    mcp_config_path: str = Field(
+        default="./mcp_servers.json",
+        description="MCP Server 配置文件路径",
+    )
+    mcp_allowed_dirs: str = Field(
+        default="./data/mcp_files",
+        description="filesystem MCP 允许访问的目录（冒号分隔多个路径）",
+    )
+    mcp_max_tool_rounds: int = Field(
+        default=10,
+        description="单轮对话最多工具调用轮次",
+    )
+
     # ── 校验器 ───────────────────────────────────────────────
 
     @field_validator("deepseek_api_key")

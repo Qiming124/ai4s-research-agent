@@ -30,7 +30,9 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from server.api.chat import router as chat_router
+from server.api.mcp import router as mcp_router
 from server.config import get_settings, setup_logging
+from server.mcp.client import get_mcp_client, reset_mcp_client
 
 logger = logging.getLogger(__name__)
 
@@ -58,10 +60,25 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.info("  会话存储: sqlite (%s)", settings.session_db_path)
     else:
         logger.info("  会话存储: memory（重启后会话丢失）")
+    if settings.enable_mcp:
+        logger.info("  MCP: 已启用 (%s)", settings.mcp_config_path)
+        import os
+
+        if not os.environ.get("MCP_ALLOWED_DIRS"):
+            os.environ["MCP_ALLOWED_DIRS"] = settings.mcp_allowed_dirs
+        await get_mcp_client()
+    else:
+        logger.info("  MCP: 未启用")
     logger.info("=" * 50)
 
     yield
 
+    if settings.enable_mcp:
+        from server.mcp.client import _mcp_client
+
+        if _mcp_client is not None:
+            await _mcp_client.close()
+        reset_mcp_client()
     logger.info("Server 关闭")
 
 
@@ -74,8 +91,8 @@ def create_app() -> FastAPI:
     #     4. 若 web/dist 存在则托管静态资源
     app = FastAPI(
         title="AI4S Research Agent",
-        description="深度学习损失函数极小值理论 — 科研辅助多智能体系统 Phase 1",
-        version="0.1.0",
+        description="深度学习损失函数极小值理论 — 科研辅助多智能体系统 Phase 2A/2B",
+        version="0.2.0",
         lifespan=lifespan,
     )
 
@@ -90,6 +107,7 @@ def create_app() -> FastAPI:
 
     # 挂载 API 路由（/health /v1/chat /v1/chat/stream /v1/sessions/*）
     app.include_router(chat_router)
+    app.include_router(mcp_router)
 
     # 生产模式：dist 存在时托管 web/dist 静态文件与首页。
     # 开发模式 dist 不存在则跳过（用 Vite :5173 + proxy）

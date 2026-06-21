@@ -63,19 +63,28 @@ const HELP_SECTIONS: HelpSection[] = [
     ],
   },
   {
+    title: "Agent 设置侧边栏",
+    items: [
+      {
+        name: "打开方式",
+        desc: "点击顶栏「设置」打开右侧侧边栏，集中配置对话模式、思考过程显示、上下文策略与 MCP 工具。",
+      },
+      {
+        name: "MCP 工具",
+        desc: "侧边栏可查看已配置的 MCP Server 与工具列表，并选择是否启用工具调用。需在服务端 .env 设置 ENABLE_MCP=true 后工具才会真正可用。",
+      },
+    ],
+  },
+  {
     title: "顶栏选项",
     items: [
       {
-        name: "Chat 模式",
-        desc: "通用科研对话模式，适合概念解释、文献讨论、实验思路等问题。",
+        name: "设置",
+        desc: "打开 Agent 设置侧边栏：Chat/Math 模式、思考过程、历史截断与 MCP 开关。",
       },
       {
-        name: "Math 模式",
-        desc: "数学推导模式，使用专门的 system prompt，更适合公式推导、证明步骤与严格数学表述。",
-      },
-      {
-        name: "思考过程",
-        desc: "控制是否在消息气泡中展示模型的 reasoning（思考过程）。关闭后仅显示最终回答；历史中的思考内容仍保存在服务端，重新开启后可查看。",
+        name: "停止 / 清空 / 帮助",
+        desc: "生成中可停止；清空会删除当前 Session 全部历史；帮助面板提供详细说明。",
       },
     ],
   },
@@ -88,7 +97,7 @@ const HELP_SECTIONS: HelpSection[] = [
       },
       {
         name: "服务端默认",
-        desc: "勾选时使用服务端 .env 中的 MAX_HISTORY_MESSAGES 与 ENABLE_HISTORY_SUMMARY 配置；取消勾选后可在此页面单独设置。",
+        desc: "勾选时使用服务端 .env 中的 MAX_HISTORY_MESSAGES 与 ENABLE_HISTORY_SUMMARY 配置；取消勾选后可在设置侧边栏单独设置。",
       },
       {
         name: "保留条数",

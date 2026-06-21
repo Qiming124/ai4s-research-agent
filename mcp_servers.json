@@ -1,0 +1,20 @@
+{
+  "web_search": {
+    "command": "python",
+    "args": ["-m", "server.mcp.servers.web_search"],
+    "enabled": true
+  },
+  "arxiv": {
+    "command": "python",
+    "args": ["-m", "server.mcp.servers.arxiv"],
+    "enabled": true
+  },
+  "filesystem": {
+    "command": "python",
+    "args": ["-m", "server.mcp.servers.filesystem"],
+    "env": {
+      "MCP_ALLOWED_DIRS": "${MCP_ALLOWED_DIRS}"
+    },
+    "enabled": true
+  }
+}

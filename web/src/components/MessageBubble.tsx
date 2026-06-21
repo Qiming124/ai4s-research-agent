@@ -1,6 +1,7 @@
 import type { ChatMessage } from "../hooks/useChatStream";
 import { MarkdownContent } from "./MarkdownContent";
 import { ReasoningPanel } from "./ReasoningPanel";
+import { ToolCallPanel } from "./ToolCallPanel";
 
 interface MessageBubbleProps {
   message: ChatMessage;
@@ -20,6 +21,9 @@ export function MessageBubble({ message, showReasoning = true }: MessageBubblePr
           <>
             {message.error && (
               <div className="message-error">错误：{message.error}</div>
+            )}
+            {message.toolCalls && message.toolCalls.length > 0 && (
+              <ToolCallPanel events={message.toolCalls} />
             )}
             {showReasoning && (
               <ReasoningPanel

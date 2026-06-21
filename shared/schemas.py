@@ -58,6 +58,10 @@ class ChatRequest(BaseModel):
         default=None,
         description="截断时是否 LLM 摘要旧消息；None 时使用服务端 .env 默认值",
     )
+    enable_tools: bool | None = Field(
+        default=None,
+        description="是否启用 MCP 工具；None 时使用服务端 ENABLE_MCP 默认值",
+    )
 
 
 class ChatResponse(BaseModel):
@@ -80,16 +84,25 @@ class StreamChunk(BaseModel):
     # 每条 SSE 事件携带一个 StreamChunk 的 JSON，用 type 字段区分含义。
     #
     # 字段：
-    #     type    — "reasoning"（思考片段）/ "content"（回答片段）/
-    #               "done"（流结束）/ "error"（错误信息）
-    #     content — type="reasoning"/"content"/"error" 时有效
+    #     type    — "reasoning" / "content" / "done" / "error" /
+    #               "tool_call_start" / "tool_call_result" / "tool_call_error"
+    #     content — 文本片段、工具参数 JSON 或工具返回结果
     #     usage   — 仅 type="done" 时可能包含 token 统计
 
-    type: Literal["reasoning", "content", "done", "error"]
+    type: Literal[
+        "reasoning",
+        "content",
+        "done",
+        "error",
+        "tool_call_start",
+        "tool_call_result",
+        "tool_call_error",
+    ]
     content: str = ""
     usage: dict[str, Any] | None = None
     agent_name: str | None = Field(default=None, description="产出该 chunk 的 Agent 名称")
-    tool_name: str | None = Field(default=None, description="MCP 工具名（Phase 2B 预留）")
+    tool_name: str | None = Field(default=None, description="MCP 工具名")
+    tool_call_id: str | None = Field(default=None, description="工具调用 ID")
     a2a_task_id: str | None = Field(default=None, description="A2A 任务 ID（Phase 2C 预留）")
 
 
@@ -115,3 +128,22 @@ class HealthResponse(BaseModel):
     status: str
     model: str
     reasoning_effort: str
+
+
+class MCPToolInfo(BaseModel):
+    qualified_name: str
+    tool_name: str
+    description: str = ""
+
+
+class MCPServerInfo(BaseModel):
+    name: str
+    enabled: bool = True
+    connected: bool = False
+    tools: list[MCPToolInfo] = Field(default_factory=list)
+
+
+class MCPStatusResponse(BaseModel):
+    server_enabled: bool = Field(description="服务端 ENABLE_MCP 配置")
+    connected: bool = Field(description="MCP Client 是否已连接")
+    servers: list[MCPServerInfo] = Field(default_factory=list)

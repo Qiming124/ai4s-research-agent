@@ -21,8 +21,10 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from collections.abc import AsyncIterator
+from dataclasses import dataclass, field
 from typing import Any
 
 from openai import AsyncOpenAI, AuthenticationError, APIConnectionError, APIStatusError
@@ -31,6 +33,21 @@ from server.config import Settings, get_settings
 from shared.schemas import StreamChunk
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class ToolCallRequest:
+    id: str
+    name: str
+    arguments: dict[str, Any]
+
+
+@dataclass
+class ChatWithToolsResult:
+    content: str = ""
+    reasoning: str | None = None
+    tool_calls: list[ToolCallRequest] = field(default_factory=list)
+    usage: dict[str, Any] | None = None
 
 
 class DeepSeekClient:
@@ -59,12 +76,13 @@ class DeepSeekClient:
 
     def _build_create_kwargs(
         self,
-        messages: list[dict[str, str]],
+        messages: list[dict[str, Any]],
         *,
         stream: bool,
         reasoning_effort: str | None = None,
         max_tokens: int | None = None,
         enable_thinking: bool = True,
+        tools: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         # 构造 chat.completions.create() 的参数字典。
         #
@@ -78,7 +96,7 @@ class DeepSeekClient:
         #     reasoning_effort        — 控制 thinking 深度，取值 high 或 max
         #     extra_body.thinking     — {"thinking": {"type": "enabled"}} 显式启用 thinking
         #     max_tokens=384000       — 为 thinking max 留够输出预算
-        return {
+        kwargs: dict[str, Any] = {
             "model": self._settings.model,
             "messages": messages,
             "max_tokens": max_tokens if max_tokens is not None else self._settings.max_tokens,
@@ -86,6 +104,10 @@ class DeepSeekClient:
             "reasoning_effort": reasoning_effort or self._settings.reasoning_effort,
             "extra_body": {"thinking": {"type": "enabled" if enable_thinking else "disabled"}},
         }
+        if tools:
+            kwargs["tools"] = tools
+            kwargs["tool_choice"] = "auto"
+        return kwargs
 
     async def chat(
         self,
@@ -149,7 +171,63 @@ class DeepSeekClient:
 
         return content, reasoning, usage
 
-    async def stream_chat(self, messages: list[dict[str, str]]) -> AsyncIterator[StreamChunk]:
+    async def chat_with_tools(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]],
+        *,
+        reasoning_effort: str | None = None,
+        max_tokens: int | None = None,
+        enable_thinking: bool = True,
+    ) -> ChatWithToolsResult:
+        """非流式对话，支持 function calling；返回文本或 tool_calls。"""
+        kwargs = self._build_create_kwargs(
+            messages,
+            stream=False,
+            reasoning_effort=reasoning_effort,
+            max_tokens=max_tokens,
+            enable_thinking=enable_thinking,
+            tools=tools,
+        )
+
+        try:
+            response = await self._client.chat.completions.create(**kwargs)
+        except AuthenticationError as exc:
+            raise exc
+        except APIConnectionError as exc:
+            raise exc
+        except APIStatusError as exc:
+            raise exc
+
+        choice = response.choices[0]
+        message = choice.message
+        reasoning: str | None = getattr(message, "reasoning_content", None)
+        content: str = message.content or ""
+
+        tool_calls: list[ToolCallRequest] = []
+        if message.tool_calls:
+            for tc in message.tool_calls:
+                raw_args = tc.function.arguments or "{}"
+                try:
+                    args = json.loads(raw_args)
+                except json.JSONDecodeError:
+                    args = {"raw": raw_args}
+                tool_calls.append(
+                    ToolCallRequest(id=tc.id, name=tc.function.name, arguments=args)
+                )
+
+        usage: dict[str, Any] | None = None
+        if response.usage:
+            usage = response.usage.model_dump()
+
+        return ChatWithToolsResult(
+            content=content,
+            reasoning=reasoning,
+            tool_calls=tool_calls,
+            usage=usage,
+        )
+
+    async def stream_chat(self, messages: list[dict[str, Any]]) -> AsyncIterator[StreamChunk]:
         # 流式对话：发起流式请求，逐 chunk 产出推理过程与最终回答。
         #
         # 参数：

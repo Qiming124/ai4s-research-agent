@@ -1,0 +1,224 @@
+import type { ChatMode } from "../utils/preferences";
+import type { McpStatus } from "../hooks/useMcpStatus";
+
+interface AgentSettingsSidebarProps {
+  open: boolean;
+  onClose: () => void;
+  disabled?: boolean;
+  chatMode: ChatMode;
+  onChatModeChange: (mode: ChatMode) => void;
+  showReasoning: boolean;
+  onShowReasoningChange: (value: boolean) => void;
+  useServerHistory: boolean;
+  onUseServerHistoryChange: (value: boolean) => void;
+  maxHistoryMessages: number;
+  onMaxHistoryChange: (value: number) => void;
+  enableHistorySummary: boolean;
+  onEnableSummaryChange: (value: boolean) => void;
+  useServerMcp: boolean;
+  onUseServerMcpChange: (value: boolean) => void;
+  enableMcp: boolean;
+  onEnableMcpChange: (value: boolean) => void;
+  mcpStatus: McpStatus | null;
+  mcpLoading: boolean;
+  mcpError: string | null;
+  onRefreshMcp: () => void;
+}
+
+function serverStatusLabel(
+  server: McpStatus["servers"][number],
+  serverEnabled: boolean,
+): string {
+  if (!serverEnabled) return "服务端未启用";
+  if (!server.enabled) return "配置已禁用";
+  if (server.connected) return "已连接";
+  return "未连接";
+}
+
+export function AgentSettingsSidebar({
+  open,
+  onClose,
+  disabled = false,
+  chatMode,
+  onChatModeChange,
+  showReasoning,
+  onShowReasoningChange,
+  useServerHistory,
+  onUseServerHistoryChange,
+  maxHistoryMessages,
+  onMaxHistoryChange,
+  enableHistorySummary,
+  onEnableSummaryChange,
+  useServerMcp,
+  onUseServerMcpChange,
+  enableMcp,
+  onEnableMcpChange,
+  mcpStatus,
+  mcpLoading,
+  mcpError,
+  onRefreshMcp,
+}: AgentSettingsSidebarProps) {
+  if (!open) return null;
+
+  const serverEnabled = mcpStatus?.server_enabled ?? false;
+  const mcpToggleDisabled = disabled || useServerMcp || !serverEnabled;
+
+  return (
+    <div className="settings-overlay" onClick={onClose}>
+      <aside
+        className="settings-sidebar"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-label="Agent 设置"
+      >
+        <header className="settings-header">
+          <div>
+            <h2>Agent 设置</h2>
+            <p className="settings-subtitle">对话模式、上下文与 MCP 工具</p>
+          </div>
+          <button type="button" className="settings-close" onClick={onClose} aria-label="关闭">
+            ×
+          </button>
+        </header>
+
+        <div className="settings-body">
+          <section className="settings-section">
+            <h3>对话模式</h3>
+            <div className="mode-toggle settings-mode-toggle" role="group" aria-label="对话模式">
+              <button
+                type="button"
+                className={chatMode === "chat" ? "mode-btn active" : "mode-btn"}
+                onClick={() => onChatModeChange("chat")}
+                disabled={disabled}
+              >
+                Chat
+              </button>
+              <button
+                type="button"
+                className={chatMode === "math" ? "mode-btn active" : "mode-btn"}
+                onClick={() => onChatModeChange("math")}
+                disabled={disabled}
+              >
+                Math
+              </button>
+            </div>
+          </section>
+
+          <section className="settings-section">
+            <h3>显示</h3>
+            <label className="pref-toggle">
+              <input
+                type="checkbox"
+                checked={showReasoning}
+                onChange={(e) => onShowReasoningChange(e.target.checked)}
+                disabled={disabled}
+              />
+              显示思考过程
+            </label>
+          </section>
+
+          <section className="settings-section">
+            <h3>上下文（L1 工作记忆）</h3>
+            <label className="pref-toggle">
+              <input
+                type="checkbox"
+                checked={useServerHistory}
+                onChange={(e) => onUseServerHistoryChange(e.target.checked)}
+                disabled={disabled}
+              />
+              历史策略：服务端默认
+            </label>
+            <label className="pref-inline settings-field">
+              保留条数
+              <input
+                type="number"
+                className="history-num-input"
+                min={0}
+                value={maxHistoryMessages}
+                disabled={disabled || useServerHistory}
+                onChange={(e) => onMaxHistoryChange(Number(e.target.value))}
+                title="0 表示不截断；大于 0 时只向 LLM 发送最近 N 条"
+              />
+            </label>
+            <label className="pref-toggle">
+              <input
+                type="checkbox"
+                checked={enableHistorySummary}
+                disabled={disabled || useServerHistory || maxHistoryMessages === 0}
+                onChange={(e) => onEnableSummaryChange(e.target.checked)}
+              />
+              LLM 摘要旧消息
+            </label>
+          </section>
+
+          <section className="settings-section">
+            <div className="settings-section-head">
+              <h3>MCP 工具</h3>
+              <button
+                type="button"
+                className="btn-link"
+                onClick={onRefreshMcp}
+                disabled={mcpLoading}
+              >
+                {mcpLoading ? "刷新中…" : "刷新"}
+              </button>
+            </div>
+            <label className="pref-toggle">
+              <input
+                type="checkbox"
+                checked={useServerMcp}
+                onChange={(e) => onUseServerMcpChange(e.target.checked)}
+                disabled={disabled}
+              />
+              MCP：服务端默认
+            </label>
+            <label className="pref-toggle">
+              <input
+                type="checkbox"
+                checked={enableMcp}
+                onChange={(e) => onEnableMcpChange(e.target.checked)}
+                disabled={mcpToggleDisabled}
+              />
+              启用 MCP 工具
+            </label>
+            {!serverEnabled && (
+              <p className="settings-hint">
+                服务端未启用 MCP。请在 .env 设置 ENABLE_MCP=true 并重启后端。
+              </p>
+            )}
+            {mcpError && <p className="settings-error">加载失败：{mcpError}</p>}
+            <div className="mcp-server-list">
+              {(mcpStatus?.servers ?? []).map((server) => (
+                <details key={server.name} className="mcp-server-item" open>
+                  <summary className="mcp-server-summary">
+                    <span className="mcp-server-name">{server.name}</span>
+                    <span className={`mcp-server-badge mcp-badge-${server.connected ? "ok" : "off"}`}>
+                      {serverStatusLabel(server, serverEnabled)}
+                    </span>
+                  </summary>
+                  {server.tools.length === 0 ? (
+                    <p className="mcp-tool-empty">暂无工具信息</p>
+                  ) : (
+                    <ul className="mcp-tool-list">
+                      {server.tools.map((tool) => (
+                        <li key={tool.qualified_name} className="mcp-tool-item">
+                          <code className="mcp-tool-name">{tool.qualified_name}</code>
+                          {tool.description && (
+                            <span className="mcp-tool-desc">{tool.description}</span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </details>
+              ))}
+              {mcpStatus && mcpStatus.servers.length === 0 && !mcpLoading && (
+                <p className="settings-hint">未配置 MCP Server</p>
+              )}
+            </div>
+          </section>
+        </div>
+      </aside>
+    </div>
+  );
+}
