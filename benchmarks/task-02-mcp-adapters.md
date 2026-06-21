@@ -1,8 +1,8 @@
-# Task 02 — MCP MultiServerMCPClient Migration
+# Task 02 — MCP MultiServerMCPClient 迁移
 
-Verify MCP connects via `langchain-mcp-adapters` while preserving `mcp_servers.json`, `server__tool` names, and existing APIs.
+验证 MCP 通过 `langchain-mcp-adapters` 连接，同时保留 `mcp_servers.json`、`server__tool` 命名与现有 API。
 
-## Prerequisites
+## 前置条件
 
 ```bash
 cd /home/agent
@@ -10,20 +10,20 @@ source .venv/bin/activate
 pip install -e ".[dev]"
 ```
 
-Note: `langchain-mcp-adapters` is pinned to `<0.2` for compatibility with `langchain-core` 0.3.x.
+说明：`langchain-mcp-adapters` 固定为 `<0.2`，以兼容 `langchain-core` 0.3.x。
 
-## Automated tests
+## 自动化测试
 
 ```bash
 pytest tests/test_mcp.py tests/test_api.py -q
 pytest tests/ -q
 ```
 
-Expected: all tests pass (43+). MCP integration test connects 3 builtin servers and exercises filesystem read/write.
+预期：全部测试通过（43+）。MCP 集成测试连接 3 个内置 server 并演练 filesystem 读写。
 
-## Manual verification — MCP status API
+## 手动验证 — MCP 状态 API
 
-Start server with MCP enabled:
+启用 MCP 后启动服务：
 
 ```bash
 export DEEPSEEK_API_KEY=sk-your-key
@@ -31,19 +31,19 @@ export ENABLE_MCP=true
 uvicorn server.main:app --host 127.0.0.1 --port 8000
 ```
 
-In another terminal:
+在另一终端：
 
 ```bash
 curl -s http://127.0.0.1:8000/v1/mcp/status | python -m json.tool
 ```
 
-Expected:
+预期：
 - `server_enabled`: true
 - `connected`: true
-- Three servers: `web_search`, `arxiv`, `filesystem` with `connected: true`
-- Tools use qualified names like `arxiv__search_papers`, `filesystem__read_file`
+- 三个 server：`web_search`、`arxiv`、`filesystem`，均为 `connected: true`
+- 工具使用限定名，如 `arxiv__search_papers`、`filesystem__read_file`
 
-## Manual verification — Python REPL
+## 手动验证 — Python REPL
 
 ```bash
 python - <<'PY'
@@ -68,16 +68,16 @@ asyncio.run(main())
 PY
 ```
 
-Expected output includes `mcp-adapters-ok`.
+预期输出包含 `mcp-adapters-ok`。
 
-## Architecture notes
+## 架构说明
 
-- `server/langchain/mcp.py` bridges `mcp_servers.json` → `MultiServerMCPClient` stdio connections
-- `server/mcp/client.py` opens persistent sessions via `MultiServerMCPClient.session()` in app lifespan
-- `ToolRegistry` still emits `{server}__{tool}` for OpenAI function calling
-- `GeneralAgent` unchanged — still uses `get_mcp_client()` / `call_tool()`
+- `server/langchain/mcp.py` 将 `mcp_servers.json` 桥接为 `MultiServerMCPClient` stdio 连接
+- `server/mcp/client.py` 在应用 lifespan 中通过 `MultiServerMCPClient.session()` 建立持久会话
+- `ToolRegistry` 仍为 OpenAI function calling 输出 `{server}__{tool}`
+- `GeneralAgent` 未变 — 仍使用 `get_mcp_client()` / `call_tool()`
 
-## Out of scope (Task 3–4)
+## 不在范围内（Task 3–4）
 
-- SQLite `tool_calls` persistence
-- LangGraph ReAct tool loop
+- SQLite `tool_calls` 持久化
+- LangGraph ReAct 工具循环

@@ -1,8 +1,8 @@
-# Task 04 — LangGraph ReAct Subgraph
+# Task 04 — LangGraph ReAct 子图
 
-Verify LangGraph ReAct tool loop replaces `_run_tool_loop` when `ORCHESTRATION_BACKEND=langgraph`, with SSE mapping and Task 3 persistence preserved.
+验证当 `ORCHESTRATION_BACKEND=langgraph` 时，LangGraph ReAct 工具循环替代 `_run_tool_loop`，保留 SSE 映射与 Task 3 持久化能力。
 
-## Prerequisites
+## 前置条件
 
 ```bash
 cd /home/agent
@@ -10,55 +10,55 @@ source .venv/bin/activate
 pip install -e ".[dev]"
 ```
 
-Ensure `.env` contains a valid `DEEPSEEK_API_KEY`.
+确保 `.env` 中包含有效的 `DEEPSEEK_API_KEY`。
 
-## Automated tests
+## 自动化测试
 
 ```bash
 ORCHESTRATION_BACKEND=langgraph ENABLE_MCP=true pytest tests/ -q
 ORCHESTRATION_BACKEND=legacy pytest tests/ -q
 ```
 
-Expected: **56 passed** for each backend.
+预期：两种 backend 各 **56 passed**。
 
-LangGraph-specific coverage:
+LangGraph 专项覆盖：
 
 ```bash
 pytest tests/test_langgraph_react.py -q
 ```
 
-## Feature flag
+## 功能开关
 
 ```bash
 grep ORCHESTRATION_BACKEND .env.example
 # ORCHESTRATION_BACKEND=legacy
 ```
 
-Set `ORCHESTRATION_BACKEND=langgraph` to route `GeneralAgent` tool loops through the LangGraph path. Default remains `legacy`.
+设置 `ORCHESTRATION_BACKEND=langgraph` 可将 `GeneralAgent` 工具循环路由至 LangGraph 路径。默认仍为 `legacy`。
 
-## Architecture (Task 4)
+## 架构（Task 4）
 
-| Path | Module |
-|------|--------|
-| ReAct state | `server/graph/state.py` |
-| Nodes (`call_model`, `execute_tools`) | `server/graph/nodes.py` |
-| Graph compiler | `server/graph/react.py` |
-| SSE mapping | `server/graph/streaming.py` |
+| 路径 | 模块 |
+|------|------|
+| ReAct 状态 | `server/graph/state.py` |
+| 节点（`call_model`、`execute_tools`） | `server/graph/nodes.py` |
+| 图编译 | `server/graph/react.py` |
+| SSE 映射 | `server/graph/streaming.py` |
 | MCP → StructuredTool | `server/langchain/tools.py` |
-| Agent integration | `server/agents/base.py` (`_run_langgraph_tool_loop`) |
+| Agent 集成 | `server/agents/base.py`（`_run_langgraph_tool_loop`） |
 
-## Manual verification (optional, requires API key + MCP)
+## 手动验证（可选，需 API Key + MCP）
 
 ```bash
 ORCHESTRATION_BACKEND=langgraph ENABLE_MCP=true uvicorn server.main:app --port 8000
-# In another terminal:
+# 另一终端:
 research-agent-cli chat "List files in data/mcp_files" --stream
 ```
 
-Expect SSE events: `tool_call_start`, `tool_call_result`, `content`, `done`.
+预期 SSE 事件：`tool_call_start`、`tool_call_result`、`content`、`done`。
 
-## What is not in scope yet (Task 5)
+## 尚未纳入范围（Task 5）
 
-- Multi-agent supervisor routing (`p4-multi-agent`)
-- theory / experiment / literature sub-graphs
-- `agent_handoff` SSE events
+- 多 Agent supervisor 路由（`p4-multi-agent`）
+- theory / experiment / literature 子图
+- `agent_handoff` SSE 事件
