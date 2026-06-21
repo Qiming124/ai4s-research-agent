@@ -20,14 +20,18 @@ from shared.schemas import StreamChunk
 def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-test-key-for-pytest-only")
     monkeypatch.setenv("SESSION_STORE_BACKEND", "memory")
+    monkeypatch.setenv("ENABLE_MCP", "false")
     from server.config import get_settings
+    from server.mcp.client import reset_mcp_client
 
     get_settings.cache_clear()
+    reset_mcp_client()
     reset_session_store()
     from server.memory.manager import reset_memory_manager
 
     reset_memory_manager()
     yield TestClient(app)
+    reset_mcp_client()
     reset_session_store()
     reset_memory_manager()
     get_settings.cache_clear()
