@@ -155,6 +155,52 @@ class Settings(BaseSettings):
         description="Agent 编排后端：legacy（自研 tool loop）或 langgraph",
     )
 
+    # ── L3 向量记忆 / RAG（Phase 5） ─────────────────────────
+
+    enable_rag: bool = Field(
+        default=False,
+        description="是否启用 L3 向量记忆检索",
+    )
+    rag_chroma_path: str = Field(
+        default="./data/chroma",
+        description="Chroma 向量库持久化目录",
+    )
+    rag_embedding_provider: str = Field(
+        default="chroma_default",
+        description="Embedding 提供方：chroma_default、sentence_transformers、openai 或 test（仅测试）",
+    )
+    rag_embedding_model: str = Field(
+        default="all-MiniLM-L6-v2",
+        description="Embedding 模型名（sentence-transformers 或 OpenAI 兼容 API）；chroma_default 时忽略",
+    )
+    rag_embedding_base_url: str = Field(
+        default="",
+        description="OpenAI 兼容 Embedding API 根地址；空则使用 DEEPSEEK_BASE_URL",
+    )
+    rag_chunk_size: int = Field(
+        default=800,
+        ge=100,
+        description="文档分块字符数",
+    )
+    rag_chunk_overlap: int = Field(
+        default=100,
+        ge=0,
+        description="分块重叠字符数",
+    )
+    rag_retrieval_top_k: int = Field(
+        default=4,
+        ge=1,
+        description="每次检索返回的片段数",
+    )
+    rag_agents: str = Field(
+        default="literature,theory",
+        description="启用 RAG 检索的 Agent 列表（逗号分隔）",
+    )
+    rag_index_mcp_files: bool = Field(
+        default=False,
+        description="启动时是否索引 MCP_ALLOWED_DIRS 下的 markdown/text 文件",
+    )
+
     # ── 校验器 ───────────────────────────────────────────────
 
     @field_validator("deepseek_api_key")
@@ -198,6 +244,25 @@ class Settings(BaseSettings):
                 f"ORCHESTRATION_BACKEND 必须是 legacy 或 langgraph，当前为: {value}"
             )
         return normalized
+
+    @field_validator("rag_embedding_provider")
+    @classmethod
+    def validate_rag_embedding_provider(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        allowed = ("chroma_default", "sentence_transformers", "openai", "test")
+        if normalized not in allowed:
+            raise ValueError(
+                f"RAG_EMBEDDING_PROVIDER 必须是 {', '.join(allowed)}，当前为: {value}"
+            )
+        return normalized
+
+    def rag_agent_names(self) -> list[str]:
+        """解析 RAG_AGENTS 配置为 Agent 名称列表。"""
+        return [
+            part.strip().lower()
+            for part in self.rag_agents.split(",")
+            if part.strip()
+        ]
 
     # ── 工具方法 ─────────────────────────────────────────────
 
