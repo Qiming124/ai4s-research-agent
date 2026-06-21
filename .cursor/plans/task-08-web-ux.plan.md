@@ -1,7 +1,8 @@
 ---
 name: Task 08 — Web UX
-task_id: p7-web
-status: completed
+overview: ""
+todos: []
+isProject: false
 ---
 
 # Task 08：Web 三栏布局、工具时间线、RAG 管理、流式稳定性
@@ -12,7 +13,7 @@ status: completed
 
 ## 前置条件
 
-- [x] Task 1–7 在 `dev`：SSE 事件（`agent_handoff`、`tool_call_*`、`agent_name`）、会话 `tool_calls` 持久化、`/v1/documents`、`/v1/stats/tokens`
+- [ ] Task 1–7 在 `dev`：SSE 事件（`agent_handoff`、`tool_call_*`、`agent_name`）、会话 `tool_calls` 持久化、`/v1/documents`、`/v1/stats/tokens`
 - [x] 仅在 `dev` 工作，不 push 远程
 
 ## 步骤
@@ -56,10 +57,13 @@ status: completed
 
 ## 状态日志
 
-| 步骤 | 状态 | 备注 |
-|------|------|------|
-| 计划文件 | done | 本文件 |
-| Hooks | done | useChatStream、useTokenStats、useDocuments、session 多列表 |
-| 组件 | done | ToolTimeline、SessionListSidebar、DocumentPanel、TopStatusBar |
-| 布局 | done | 三栏 ChatPage、ErrorBoundary 覆盖 |
-| 测试 + benchmark | done | build PASS，84 pytest PASS，benchmarks/task-08-web-ux.md |
+
+| 步骤             | 状态   | 备注                                                         |
+| -------------- | ---- | ---------------------------------------------------------- |
+| 计划文件           | done | 本文件                                                        |
+| Hooks          | done | useChatStream、useTokenStats、useDocuments、session 多列表       |
+| 组件             | done | ToolTimeline、SessionListSidebar、DocumentPanel、TopStatusBar |
+| 布局             | done | 三栏 ChatPage、ErrorBoundary 覆盖                               |
+| 测试 + benchmark | done | build PASS，84 pytest PASS，benchmarks/task-08-web-ux.md     |
+
+

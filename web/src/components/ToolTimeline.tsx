@@ -1,65 +1,82 @@
+import { Component, type ReactNode } from "react";
 import type { TimelineEntry } from "../hooks/useChatStream";
+
+/* 工具时间线：如果在 MCP 流式过程中渲染出错，回退为空白，不破坏整个页面 */
+class ToolTimelineGuard extends Component<{ children: ReactNode }> {
+  override state = { hasError: false };
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  override render() {
+    if (this.state.hasError) return null;
+    return this.props.children;
+  }
+}
 
 interface ToolTimelineProps {
   timeline?: TimelineEntry[];
 }
 
-function safeToolText(value: unknown, maxLen = 800): string {
-  if (value == null) return "";
-  const text = typeof value === "string" ? value : JSON.stringify(value, null, 2);
-  return text.length > maxLen ? `${text.slice(0, maxLen)}…` : text;
+function safeText(value: unknown, maxLen = 600): string {
+  try {
+    if (value == null) return "";
+    const text = typeof value === "string" ? value : JSON.stringify(value, null, 2);
+    return text.length > maxLen ? `${text.slice(0, maxLen)}…` : text;
+  } catch {
+    return "(无法显示)";
+  }
 }
 
-export function ToolTimeline({ timeline = [] }: ToolTimelineProps) {
-  if (timeline.length === 0) return null;
+function ToolTimelineInner({ timeline = [] }: ToolTimelineProps) {
+  if (!timeline || timeline.length === 0) return null;
 
   return (
     <div className="tool-timeline">
       <div className="tool-timeline-title">执行时间线</div>
       <ol className="tool-timeline-list">
         {timeline.map((entry) => {
-          if (entry.kind === "handoff") {
-            const h = entry.event;
+          try {
+            if (!entry || !entry.event) return null;
+            if (entry.kind === "handoff") {
+              const h = entry.event as any;
+              return (
+                <li key={h.id ?? "h"} className="timeline-item timeline-handoff">
+                  <div className="timeline-content">
+                    Agent: {h.fromAgent ?? "?"} → {h.toAgent ?? "?"}
+                  </div>
+                </li>
+              );
+            }
+            const ev = entry.event;
+            const status = ev.status ?? "running";
             return (
-              <li key={h.id} className="timeline-item timeline-handoff">
-                <span className="timeline-dot timeline-dot-handoff" aria-hidden />
+              <li key={ev.id ?? "t"} className={`timeline-item timeline-tool`}>
                 <div className="timeline-content">
-                  <div className="timeline-header">
-                    <span className="timeline-label">Agent 切换</span>
-                  </div>
-                  <div className="handoff-route">
-                    <span className="handoff-agent">{h.fromAgent}</span>
-                    <span className="handoff-arrow">→</span>
-                    <span className="handoff-agent handoff-agent-target">{h.toAgent}</span>
-                  </div>
-                  {h.reason && <p className="handoff-reason">{h.reason}</p>}
+                  <strong>{ev.toolName ?? "tool"}</strong>{" "}
+                  <span style={{color: status === "error" ? "#dc2626" : status === "done" ? "#22c55e" : "#f59e0b"}}>
+                    {status === "running" ? "执行中…" : status === "error" ? "失败" : "完成"}
+                  </span>
+                  {ev.result != null && ev.result !== "" && (
+                    <pre className="tool-call-result">{safeText(ev.result)}</pre>
+                  )}
                 </div>
               </li>
             );
+          } catch {
+            return null;
           }
-
-          const ev = entry.event;
-          return (
-            <li key={ev.id} className={`timeline-item timeline-tool tool-call-${ev.status}`}>
-              <span className={`timeline-dot timeline-dot-${ev.status}`} aria-hidden />
-              <div className="timeline-content">
-                <div className="timeline-header">
-                  <code className="tool-call-name">{ev.toolName}</code>
-                  <span className="tool-call-status">
-                    {ev.status === "running" ? "执行中…" : ev.status === "error" ? "失败" : "完成"}
-                  </span>
-                </div>
-                {ev.arguments != null && ev.arguments !== "" && (
-                  <pre className="tool-call-args">{safeToolText(ev.arguments, 400)}</pre>
-                )}
-                {ev.result != null && ev.result !== "" && (
-                  <pre className="tool-call-result">{safeToolText(ev.result)}</pre>
-                )}
-              </div>
-            </li>
-          );
         })}
       </ol>
     </div>
+  );
+}
+
+export function ToolTimeline(props: ToolTimelineProps) {
+  return (
+    <ToolTimelineGuard>
+      <ToolTimelineInner {...props} />
+    </ToolTimelineGuard>
   );
 }

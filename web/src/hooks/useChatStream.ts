@@ -110,12 +110,17 @@ function parseSseBuffer(buffer: string): { events: SseEvent[]; rest: string } {
 
   for (const part of parts) {
     for (const line of part.split("\n")) {
-      if (line.startsWith("data: ")) {
-        try {
-          events.push(JSON.parse(line.slice(6)) as SseEvent);
-        } catch {
-          /* 忽略 malformed chunk */
+      const trimmed = line.trim();
+      if (!trimmed.startsWith("data:")) continue;
+      const payload = trimmed.slice(5).trim();
+      if (!payload) continue;
+      try {
+        const parsed = JSON.parse(payload);
+        if (parsed && typeof parsed === "object" && parsed.type) {
+          events.push(parsed as SseEvent);
         }
+      } catch {
+        /* 忽略 malformed chunk */
       }
     }
   }
@@ -204,6 +209,7 @@ function applyStreamEvent(
   if (ev.type === "tool_call_result" || ev.type === "tool_call_error") {
     ctx.setActiveToolName(null);
     const status = ev.type === "tool_call_result" ? ("done" as const) : ("error" as const);
+    const safeContent = typeof ev.content === "string" ? ev.content : (ev.content == null ? "" : JSON.stringify(ev.content));
     return (prev) =>
       prev.map((m) => {
         if (m.id !== assistantId) return m;
@@ -219,7 +225,7 @@ function applyStreamEvent(
             id: toolId,
             toolName: ev.tool_name ?? "tool",
             status,
-            result: ev.content,
+            result: safeContent,
           };
           return {
             ...m,
@@ -231,7 +237,7 @@ function applyStreamEvent(
         updated[idx] = {
           ...updated[idx],
           status,
-          result: ev.content,
+          result: safeContent,
         };
         const timeline = (m.timeline ?? []).map((entry) =>
           entry.kind === "tool" && entry.event.id === updated[idx].id
@@ -290,15 +296,23 @@ function processStreamEvents(
   let composed: ((prev: ChatMessage[]) => ChatMessage[]) | null = null;
 
   for (const ev of events) {
-    const updater = applyStreamEvent(ev, assistantId, ctx);
-    if (!updater) continue;
-    composed = composed
-      ? (prev) => updater(composed!(prev))
-      : updater;
+    try {
+      const updater = applyStreamEvent(ev, assistantId, ctx);
+      if (!updater) continue;
+      composed = composed
+        ? (prev) => updater(composed!(prev))
+        : updater;
+    } catch {
+      /* 忽略单条事件解析/应用失败，不中断整个批次 */
+    }
   }
 
   if (composed) {
-    setMessages(composed);
+    try {
+      setMessages(composed);
+    } catch {
+      /* 状态更新失败，已在 ErrorBoundary 层兜底 */
+    }
   }
 }
 
