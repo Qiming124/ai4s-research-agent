@@ -104,12 +104,13 @@ export function ChatPage() {
 
   useEffect(() => {
     refreshSessions();
-  }, [sessionId, messages, refreshSessions]);
+  }, [sessionId, refreshSessions]);
 
   useEffect(() => {
     refreshMcp();
     refreshDocuments();
-  }, [refreshMcp, refreshDocuments]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
