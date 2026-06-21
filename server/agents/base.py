@@ -19,7 +19,8 @@ from server.memory.base import BaseSessionStore
 from server.memory.manager import MemoryManager, get_memory_manager
 from server.memory.session import SessionStore, get_session_store
 from server.mcp.client import MCPClient, get_mcp_client
-from shared.schemas import ChatMessage, StreamChunk
+from server.mcp.truncation import truncate_tool_result
+from shared.schemas import ChatMessage, PersistedToolCall, StreamChunk
 
 logger = logging.getLogger(__name__)
 
@@ -98,8 +99,10 @@ class GeneralAgent(BaseAgent):
         api_messages: list[dict[str, Any]],
         tools: list[dict[str, Any]],
         mcp: MCPClient,
+        tool_call_records: list[PersistedToolCall],
     ) -> AsyncIterator[StreamChunk]:
         usage: dict[str, Any] | None = None
+        max_result_chars = self._settings.mcp_tool_result_max_chars
 
         for _round in range(self._settings.mcp_max_tool_rounds):
             result = await self._llm.chat_with_tools(
@@ -145,8 +148,15 @@ class GeneralAgent(BaseAgent):
                         tool_call_id=tc.id,
                     )
                 )
+                record = PersistedToolCall(
+                    id=tc.id,
+                    name=tc.name,
+                    arguments=args_json,
+                )
                 try:
                     tool_result = await mcp.call_tool(tc.name, tc.arguments)
+                    record.result = tool_result
+                    record.status = "success"
                     yield self._with_agent(
                         StreamChunk(
                             type="tool_call_result",
@@ -157,6 +167,8 @@ class GeneralAgent(BaseAgent):
                     )
                 except Exception as exc:
                     err_text = f"工具调用失败: {exc}"
+                    record.status = "error"
+                    record.error = err_text
                     yield self._with_agent(
                         StreamChunk(
                             type="tool_call_error",
@@ -167,10 +179,11 @@ class GeneralAgent(BaseAgent):
                     )
                     tool_result = err_text
 
+                tool_call_records.append(record)
                 api_messages.append({
                     "role": "tool",
                     "tool_call_id": tc.id,
-                    "content": tool_result,
+                    "content": truncate_tool_result(tool_result, max_result_chars),
                 })
         else:
             logger.warning(
@@ -227,7 +240,11 @@ class GeneralAgent(BaseAgent):
             else enable_tools
         )
         mcp = await self._resolve_mcp() if use_tools else None
-        tools = mcp.get_openai_tools() if mcp and mcp.is_connected else []
+        tools = (
+            mcp.get_openai_tools(agent_name=self.name)
+            if mcp and mcp.is_connected
+            else []
+        )
         effective_tools = use_tools and bool(tools)
 
         api_messages = self._build_messages(
@@ -248,9 +265,12 @@ class GeneralAgent(BaseAgent):
 
         full_content = ""
         full_reasoning = ""
+        persisted_tool_calls: list[PersistedToolCall] = []
 
         if effective_tools and mcp is not None:
-            async for chunk in self._run_tool_loop(api_messages, tools, mcp):
+            async for chunk in self._run_tool_loop(
+                api_messages, tools, mcp, persisted_tool_calls
+            ):
                 if chunk.type == "content":
                     full_content += chunk.content
                     yield chunk
@@ -265,6 +285,7 @@ class GeneralAgent(BaseAgent):
                             role="assistant",
                             content=full_content,
                             reasoning_content=full_reasoning or None,
+                            tool_calls=persisted_tool_calls or None,
                         ),
                     )
                     usage = chunk.usage or {}
