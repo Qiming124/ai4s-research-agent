@@ -136,6 +136,13 @@ class Settings(BaseSettings):
         description="单轮对话最多工具调用轮次",
     )
 
+    # ── 编排后端（Phase 3） ──────────────────────────────────
+
+    orchestration_backend: str = Field(
+        default="legacy",
+        description="Agent 编排后端：legacy（自研 tool loop）或 langgraph",
+    )
+
     # ── 校验器 ───────────────────────────────────────────────
 
     @field_validator("deepseek_api_key")
@@ -167,6 +174,16 @@ class Settings(BaseSettings):
         if normalized not in ("memory", "sqlite"):
             raise ValueError(
                 f"SESSION_STORE_BACKEND 必须是 memory 或 sqlite，当前为: {value}"
+            )
+        return normalized
+
+    @field_validator("orchestration_backend")
+    @classmethod
+    def validate_orchestration_backend(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in ("legacy", "langgraph"):
+            raise ValueError(
+                f"ORCHESTRATION_BACKEND 必须是 legacy 或 langgraph，当前为: {value}"
             )
         return normalized
 
