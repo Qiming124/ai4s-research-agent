@@ -1,79 +1,79 @@
-# Docker deployment — AI4S Research Agent
+# Docker 部署 — AI4S Research Agent
 
-Single-container deployment: FastAPI + built React UI + embedded Chroma + MCP stdio servers.
+单容器部署：FastAPI + 构建后的 React UI + 内嵌 Chroma + MCP stdio 服务。
 
-## Prerequisites
+## 前置条件
 
-- Docker Engine 24+ and Docker Compose v2
-- A valid `DEEPSEEK_API_KEY` in the repo root `.env`
+- Docker Engine 24+ 与 Docker Compose v2
+- 在仓库根目录 `.env` 中配置有效的 `DEEPSEEK_API_KEY`
 
-## Quick start
+## 快速启动
 
-From the **repository root**:
+在**仓库根目录**执行：
 
 ```bash
 cp .env.example .env
-# Edit .env and set DEEPSEEK_API_KEY
+# 编辑 .env 并设置 DEEPSEEK_API_KEY
 
 mkdir -p data/mcp_files data/chroma
 
 docker compose -f docker/docker-compose.yml up --build
 ```
 
-Open http://localhost:8000 — the server serves `web/dist` and API routes.
+打开 http://localhost:8000 — 服务端提供 `web/dist` 静态资源与 API 路由。
 
-## Configuration
+## 配置说明
 
-| Mechanism | Purpose |
-|-----------|---------|
-| `env_file: ../.env` | Loads secrets and overrides from repo root |
-| `environment:` in compose | Container paths for data volumes |
-| `../data:/app/data` | Persists `sessions.db`, MCP files, Chroma index |
+| 机制 | 用途 |
+|------|------|
+| `env_file: ../.env` | 从仓库根目录加载密钥与环境变量覆盖 |
+| compose 中的 `environment:` | 容器内数据卷路径 |
+| `../data:/app/data` | 持久化 `sessions.db`、MCP 文件、Chroma 索引 |
 
-Recommended container paths (set automatically in compose):
+推荐的容器内路径（compose 中自动设置）：
 
 - `SESSION_DB_PATH=/app/data/sessions.db`
 - `MCP_ALLOWED_DIRS=/app/data/mcp_files`
 - `RAG_CHROMA_PATH=/app/data/chroma`
-- `LOG_FORMAT=json` — structured logs with `request_id`, `session_id`, `agent_name`, `tool_name`, `latency_ms`
+- `LOG_FORMAT=json` — 结构化日志，含 `request_id`、`session_id`、`agent_name`、`tool_name`、`latency_ms`
 
-See `docker/.env.example` for a Docker-focused template.
+详见面向 Docker 的模板 `docker/.env.example`。
 
-## Health check
+## 健康检查
 
 ```bash
 curl -s http://localhost:8000/health
 ```
 
-Compose and the Dockerfile both probe `/health` every 30s.
+Compose 与 Dockerfile 均每 30 秒探测 `/health`。
 
-## Token usage stats
+## Token 用量统计
 
-After chat turns complete, token usage is stored in SQLite (`token_usage_events` table in `sessions.db`):
+对话轮次完成后，token 用量写入 SQLite（`sessions.db` 中的 `token_usage_events` 表）：
 
 ```bash
 curl -s 'http://localhost:8000/v1/stats/tokens'
 curl -s 'http://localhost:8000/v1/stats/tokens?agent_name=literature&day=2026-06-21'
 ```
 
-Disable with `ENABLE_TOKEN_STATS=false`.
+可通过 `ENABLE_TOKEN_STATS=false` 关闭。
 
-## MCP in Docker
+## Docker 中的 MCP
 
-MCP servers run as Python subprocesses inside the same container (`mcp_servers.json`). Place experiment logs under `data/mcp_files/` on the host; they appear at `/app/data/mcp_files` in the container.
+MCP 服务在同一容器内以 Python 子进程运行（`mcp_servers.json`）。将实验日志放在宿主机的 `data/mcp_files/` 下，容器内对应路径为 `/app/data/mcp_files`。
 
-No separate Chroma service is required — the app uses Chroma `PersistentClient` under `data/chroma`.
+无需单独的 Chroma 服务 — 应用使用 `data/chroma` 下的 Chroma `PersistentClient`。
 
-## Build only
+## 仅构建
 
 ```bash
 docker compose -f docker/docker-compose.yml build
 ```
 
-## Stop
+## 停止
 
 ```bash
 docker compose -f docker/docker-compose.yml down
 ```
 
-Data in `data/` is retained on the host volume.
+`data/` 中的数据会保留在宿主机卷上。
