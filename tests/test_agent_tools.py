@@ -53,6 +53,7 @@ async def test_general_agent_forwards_tool_loop_content(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-test-key-for-pytest-only")
+    monkeypatch.setenv("ORCHESTRATION_BACKEND", "legacy")
     from server.config import get_settings
 
     get_settings.cache_clear()

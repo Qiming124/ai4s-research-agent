@@ -149,6 +149,7 @@ async def test_general_agent_persists_tool_calls(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-test-key-for-pytest-only")
+    monkeypatch.setenv("ORCHESTRATION_BACKEND", "legacy")
     from server.config import get_settings
 
     get_settings.cache_clear()
@@ -184,6 +185,7 @@ async def test_general_agent_truncates_tool_result_for_llm(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-test-key-for-pytest-only")
+    monkeypatch.setenv("ORCHESTRATION_BACKEND", "legacy")
     from server.config import get_settings
 
     get_settings.cache_clear()
