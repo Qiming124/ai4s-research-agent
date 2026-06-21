@@ -1,11 +1,23 @@
 import type { ChatMessage } from "../hooks/useChatStream";
 import { MarkdownContent } from "./MarkdownContent";
 import { ReasoningPanel } from "./ReasoningPanel";
-import { ToolCallPanel } from "./ToolCallPanel";
+import { ToolTimeline } from "./ToolTimeline";
 
 interface MessageBubbleProps {
   message: ChatMessage;
   showReasoning?: boolean;
+}
+
+const AGENT_LABELS: Record<string, string> = {
+  general: "General",
+  theory: "Theory",
+  experiment: "Experiment",
+  literature: "Literature",
+  supervisor: "Supervisor",
+};
+
+function agentLabel(name: string): string {
+  return AGENT_LABELS[name] ?? name;
 }
 
 export function MessageBubble({ message, showReasoning = true }: MessageBubbleProps) {
@@ -19,12 +31,13 @@ export function MessageBubble({ message, showReasoning = true }: MessageBubblePr
           <div className="user-text">{message.content}</div>
         ) : (
           <>
+            {message.agentName && (
+              <span className="agent-tag">{agentLabel(message.agentName)}</span>
+            )}
             {message.error && (
               <div className="message-error">错误：{message.error}</div>
             )}
-            {message.toolCalls && message.toolCalls.length > 0 && (
-              <ToolCallPanel events={message.toolCalls} />
-            )}
+            <ToolTimeline timeline={message.timeline} />
             {showReasoning && (
               <ReasoningPanel
                 reasoning={message.reasoning ?? ""}

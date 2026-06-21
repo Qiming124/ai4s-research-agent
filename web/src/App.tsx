@@ -1,5 +1,10 @@
 import { ChatPage } from "./components/ChatPage";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 
 export default function App() {
-  return <ChatPage />;
+  return (
+    <ErrorBoundary>
+      <ChatPage />
+    </ErrorBoundary>
+  );
 }
