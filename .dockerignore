@@ -1,0 +1,21 @@
+# Build context for docker/Dockerfile (context = repo root)
+.git
+.gitignore
+.cursor
+.pytest_cache
+.mypy_cache
+.ruff_cache
+__pycache__
+*.py[cod]
+*.egg-info
+.venv
+venv
+web/node_modules
+web/dist
+data
+.env
+*.md
+!docker/README.md
+benchmarks
+tests
+agent-transcripts
