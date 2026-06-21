@@ -13,7 +13,12 @@ def test_build_chat_payload_server_default() -> None:
         max_history=None,
         history_summary="default",
     )
-    assert payload == {"message": "hi", "session_id": "sid", "mode": "chat"}
+    assert payload == {
+        "message": "hi",
+        "session_id": "sid",
+        "mode": "chat",
+        "auto_route": True,
+    }
 
 
 def test_build_chat_payload_with_overrides() -> None:
@@ -28,6 +33,7 @@ def test_build_chat_payload_with_overrides() -> None:
         "message": "hi",
         "session_id": "sid",
         "mode": "math",
+        "auto_route": True,
         "max_history_messages": 10,
         "enable_history_summary": True,
     }
