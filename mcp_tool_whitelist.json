@@ -1,0 +1,9 @@
+{
+  "global": [],
+  "agents": {
+    "general": ["*"],
+    "theory": ["__none__"],
+    "experiment": ["filesystem__*"],
+    "literature": ["arxiv__*", "web_search__*"]
+  }
+}

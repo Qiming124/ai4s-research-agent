@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from server.config import Settings
+from server.agents.config import get_agent_default_whitelist, normalize_agent_name
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,7 @@ def resolve_whitelist_patterns(
     agent_name: str | None = None,
 ) -> list[str]:
     patterns: list[str] = []
+    agent_patterns_from_config: list[str] = []
 
     if settings.mcp_tool_whitelist_path:
         config = _load_whitelist_config(settings.mcp_tool_whitelist_path)
@@ -44,9 +46,16 @@ def resolve_whitelist_patterns(
         if agent_name and isinstance(agents, dict):
             agent_patterns = agents.get(agent_name, [])
             if isinstance(agent_patterns, list):
-                patterns.extend(str(p) for p in agent_patterns)
+                agent_patterns_from_config = [str(p) for p in agent_patterns]
+                patterns.extend(agent_patterns_from_config)
 
     patterns.extend(_parse_csv_patterns(settings.mcp_tool_whitelist))
+
+    if agent_name and not agent_patterns_from_config:
+        normalized = normalize_agent_name(agent_name)
+        if normalized and not settings.mcp_tool_whitelist:
+            patterns.extend(get_agent_default_whitelist(normalized))
+
     return patterns
 
 
