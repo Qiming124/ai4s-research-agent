@@ -2,7 +2,30 @@ import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateA
 import type { ChatMode, HistoryPreference, McpPreference } from "../utils/preferences";
 import { buildHistoryRequestFields, buildMcpRequestFields } from "../utils/preferences";
 import { formatBackendError, waitForBackend } from "../utils/backend";
-import { getSessionId, setSessionId } from "../utils/session";
+import {
+  getSessionId,
+  setSessionId,
+  updateSessionMeta,
+} from "../utils/session";
+
+export interface ToolCallEvent {
+  id: string;
+  toolName: string;
+  status: "running" | "done" | "error";
+  arguments?: string;
+  result?: string;
+}
+
+export interface AgentHandoffEvent {
+  id: string;
+  fromAgent: string;
+  toAgent: string;
+  reason?: string;
+}
+
+export type TimelineEntry =
+  | { kind: "tool"; event: ToolCallEvent }
+  | { kind: "handoff"; event: AgentHandoffEvent };
 
 export interface ChatMessage {
   id: string;
@@ -13,15 +36,9 @@ export interface ChatMessage {
   streaming?: boolean;
   error?: string;
   toolCalls?: ToolCallEvent[];
+  handoffs?: AgentHandoffEvent[];
+  timeline?: TimelineEntry[];
   agentName?: string;
-}
-
-export interface ToolCallEvent {
-  id: string;
-  toolName: string;
-  status: "running" | "done" | "error";
-  arguments?: string;
-  result?: string;
 }
 
 interface SseEvent {
@@ -33,23 +50,56 @@ interface SseEvent {
   tool_call_id?: string;
   a2a_task_id?: string;
   usage?: Record<string, unknown>;
+  from_agent?: string;
+  to_agent?: string;
+  route_reason?: string;
+}
+
+interface ServerToolCall {
+  id: string;
+  name: string;
+  arguments?: string;
+  result?: string | null;
+  status: "success" | "error";
+  error?: string | null;
 }
 
 interface ServerMessage {
   role: string;
   content: string;
   reasoning_content?: string | null;
+  tool_calls?: ServerToolCall[] | null;
+}
+
+function mapPersistedToolCalls(raw: ServerToolCall[] | null | undefined): ToolCallEvent[] | undefined {
+  if (!raw || raw.length === 0) return undefined;
+  return raw.map((tc) => ({
+    id: tc.id,
+    toolName: tc.name,
+    status: tc.status === "error" ? ("error" as const) : ("done" as const),
+    arguments: tc.arguments,
+    result: tc.status === "error" ? (tc.error ?? tc.result ?? undefined) : (tc.result ?? undefined),
+  }));
 }
 
 function mapServerMessages(raw: ServerMessage[]): ChatMessage[] {
   return raw
     .filter((m) => m.role === "user" || m.role === "assistant")
-    .map((m) => ({
-      id: crypto.randomUUID(),
-      role: m.role as "user" | "assistant",
-      content: m.content,
-      reasoning: m.reasoning_content ?? undefined,
-    }));
+    .map((m) => {
+      const toolCalls = mapPersistedToolCalls(m.tool_calls);
+      const timeline: TimelineEntry[] | undefined = toolCalls?.map((event) => ({
+        kind: "tool" as const,
+        event,
+      }));
+      return {
+        id: crypto.randomUUID(),
+        role: m.role as "user" | "assistant",
+        content: m.content,
+        reasoning: m.reasoning_content ?? undefined,
+        toolCalls,
+        timeline,
+      };
+    });
 }
 
 /** 从 buffer 中解析完整的 SSE data 事件，返回未完成的尾部 */
@@ -98,27 +148,54 @@ function applyStreamEvent(
     }
     if (ev.agent_name) {
       ctx.setActiveAgentName(ev.agent_name);
+      return (prev) =>
+        prev.map((m) =>
+          m.id === assistantId ? { ...m, agentName: ev.agent_name } : m,
+        );
     }
     return null;
   }
 
-  if (ev.type === "tool_call_start") {
-    const toolId = ev.tool_call_id ?? crypto.randomUUID();
-    ctx.setActiveToolName(ev.tool_name ?? "tool");
+  if (ev.type === "agent_handoff") {
+    const handoffId = ev.a2a_task_id ?? crypto.randomUUID();
+    if (ev.to_agent) {
+      ctx.setActiveAgentName(ev.to_agent);
+    }
+    const handoff: AgentHandoffEvent = {
+      id: handoffId,
+      fromAgent: ev.from_agent ?? "?",
+      toAgent: ev.to_agent ?? "?",
+      reason: ev.route_reason ?? ev.content,
+    };
     return (prev) =>
       prev.map((m) =>
         m.id === assistantId
           ? {
               ...m,
-              toolCalls: [
-                ...(m.toolCalls ?? []),
-                {
-                  id: toolId,
-                  toolName: ev.tool_name ?? "tool",
-                  status: "running" as const,
-                  arguments: ev.content,
-                },
-              ],
+              agentName: ev.to_agent ?? m.agentName,
+              handoffs: [...(m.handoffs ?? []), handoff],
+              timeline: [...(m.timeline ?? []), { kind: "handoff", event: handoff }],
+            }
+          : m,
+      );
+  }
+
+  if (ev.type === "tool_call_start") {
+    const toolId = ev.tool_call_id ?? crypto.randomUUID();
+    ctx.setActiveToolName(ev.tool_name ?? "tool");
+    const toolEvent: ToolCallEvent = {
+      id: toolId,
+      toolName: ev.tool_name ?? "tool",
+      status: "running",
+      arguments: ev.content,
+    };
+    return (prev) =>
+      prev.map((m) =>
+        m.id === assistantId
+          ? {
+              ...m,
+              toolCalls: [...(m.toolCalls ?? []), toolEvent],
+              timeline: [...(m.timeline ?? []), { kind: "tool", event: toolEvent }],
             }
           : m,
       );
@@ -138,17 +215,16 @@ function applyStreamEvent(
             );
         if (idx === -1) {
           const toolId = ev.tool_call_id ?? crypto.randomUUID();
+          const toolEvent: ToolCallEvent = {
+            id: toolId,
+            toolName: ev.tool_name ?? "tool",
+            status,
+            result: ev.content,
+          };
           return {
             ...m,
-            toolCalls: [
-              ...toolCalls,
-              {
-                id: toolId,
-                toolName: ev.tool_name ?? "tool",
-                status,
-                result: ev.content,
-              },
-            ],
+            toolCalls: [...toolCalls, toolEvent],
+            timeline: [...(m.timeline ?? []), { kind: "tool", event: toolEvent }],
           };
         }
         const updated = [...toolCalls];
@@ -157,7 +233,12 @@ function applyStreamEvent(
           status,
           result: ev.content,
         };
-        return { ...m, toolCalls: updated };
+        const timeline = (m.timeline ?? []).map((entry) =>
+          entry.kind === "tool" && entry.event.id === updated[idx].id
+            ? { kind: "tool" as const, event: updated[idx] }
+            : entry,
+        );
+        return { ...m, toolCalls: updated, timeline };
       });
   }
 
@@ -239,6 +320,11 @@ export function useChatStream(
   const isStreamingRef = useRef(false);
   const pendingSessionIdRef = useRef<string | null>(null);
   const historyEpochRef = useRef(0);
+  const sessionIdRef = useRef(sessionId);
+
+  useEffect(() => {
+    sessionIdRef.current = sessionId;
+  }, [sessionId]);
 
   const finishStreaming = useCallback(() => {
     setIsStreaming(false);
@@ -247,20 +333,20 @@ export function useChatStream(
     );
   }, []);
 
-  const loadHistory = useCallback(async (opts?: { force?: boolean }) => {
+  const loadHistory = useCallback(async (opts?: { force?: boolean; sid?: string }) => {
     if (!opts?.force && isStreamingRef.current) return;
 
     historyAbortRef.current?.abort();
     const controller = new AbortController();
     historyAbortRef.current = controller;
     const epoch = historyEpochRef.current;
+    const sid = opts?.sid ?? sessionIdRef.current;
 
     setIsLoadingHistory(true);
     setHistoryError(null);
     setBackendOffline(false);
 
     try {
-      const sid = getSessionId();
       const res = await fetch(`/v1/sessions/${sid}`, { signal: controller.signal });
       if (controller.signal.aborted || epoch !== historyEpochRef.current || isStreamingRef.current) {
         return;
@@ -322,6 +408,12 @@ export function useChatStream(
     const trimmed = text.trim();
     if (!trimmed || isStreaming) return;
 
+    const sid = sessionIdRef.current;
+    updateSessionMeta(sid, {
+      title: trimmed.slice(0, 40) + (trimmed.length > 40 ? "…" : ""),
+      updatedAt: Date.now(),
+    });
+
     const userMsg: ChatMessage = {
       id: crypto.randomUUID(),
       role: "user",
@@ -335,6 +427,8 @@ export function useChatStream(
       reasoning: "",
       streaming: true,
       toolCalls: [],
+      handoffs: [],
+      timeline: [],
     };
 
     setMessages((prev) => [...prev, userMsg, assistantMsg]);
@@ -351,7 +445,7 @@ export function useChatStream(
       setSessionIdState,
       setActiveAgentName,
       setActiveToolName,
-      sessionId,
+      sessionId: sid,
       deferSessionSync: true,
       pendingSessionIdRef,
     };
@@ -362,7 +456,7 @@ export function useChatStream(
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: trimmed,
-          session_id: sessionId,
+          session_id: sid,
           mode: chatMode,
           ...buildHistoryRequestFields(historyPref),
           ...buildMcpRequestFields(mcpPref),
@@ -394,7 +488,6 @@ export function useChatStream(
         handleParsedEvents(events);
       }
 
-      // 处理流结束时 buffer 中未以 \n\n 结尾的最后一条事件
       buffer += decoder.decode();
       if (buffer.trim()) {
         const { events } = parseSseBuffer(`${buffer}\n\n`);
@@ -406,6 +499,7 @@ export function useChatStream(
           m.id === assistantId && m.streaming ? { ...m, streaming: false } : m,
         ),
       );
+      updateSessionMeta(sessionIdRef.current, { updatedAt: Date.now() });
     } catch (err) {
       if ((err as Error).name === "AbortError") {
         finishStreaming();
@@ -428,15 +522,47 @@ export function useChatStream(
         pendingSessionIdRef.current = null;
       }
     }
-  }, [isStreaming, sessionId, chatMode, historyPref, mcpPref, finishStreaming]);
+  }, [isStreaming, chatMode, historyPref, mcpPref, finishStreaming]);
 
   const clearSession = useCallback(async () => {
     historyEpochRef.current += 1;
-    await fetch(`/v1/sessions/${sessionId}`, { method: "DELETE" });
+    const sid = sessionIdRef.current;
+    await fetch(`/v1/sessions/${sid}`, { method: "DELETE" });
     setMessages([]);
     setHistoryError(null);
     setBackendOffline(false);
-  }, [sessionId]);
+    updateSessionMeta(sid, { updatedAt: Date.now() });
+  }, []);
+
+  const switchSession = useCallback(
+    async (newId: string) => {
+      if (isStreamingRef.current) return;
+      setSessionId(newId);
+      setSessionIdState(newId);
+      sessionIdRef.current = newId;
+      historyEpochRef.current += 1;
+      setMessages([]);
+      setHistoryError(null);
+      setBackendOffline(false);
+      await loadHistory({ force: true, sid: newId });
+    },
+    [loadHistory],
+  );
+
+  const createSession = useCallback(
+    async (newId: string) => {
+      if (isStreamingRef.current) return;
+      setSessionId(newId);
+      setSessionIdState(newId);
+      sessionIdRef.current = newId;
+      historyEpochRef.current += 1;
+      setMessages([]);
+      setHistoryError(null);
+      setBackendOffline(false);
+      setIsLoadingHistory(false);
+    },
+    [],
+  );
 
   return {
     messages,
@@ -451,5 +577,7 @@ export function useChatStream(
     stopGeneration,
     clearSession,
     reloadHistory: loadHistory,
+    switchSession,
+    createSession,
   };
 }
