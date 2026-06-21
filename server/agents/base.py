@@ -13,6 +13,10 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from server.config import Settings, get_settings
+from server.graph.react import build_react_graph, messages_from_api_dicts
+from server.graph.streaming import stream_react_graph
+from server.langchain.llm import get_chat_model
+from server.langchain.tools import mcp_tools_to_langchain
 from server.llm.client import DeepSeekClient, get_deepseek_client
 from server.llm.prompts import DEFAULT_SYSTEM_PROMPT, MATH_MODE_SYSTEM_PROMPT
 from server.memory.base import BaseSessionStore
@@ -214,6 +218,46 @@ class GeneralAgent(BaseAgent):
 
         yield self._with_agent(StreamChunk(type="done", content="", usage=usage))
 
+    async def _run_langgraph_tool_loop(
+        self,
+        api_messages: list[dict[str, Any]],
+        mcp: MCPClient,
+        tool_call_records: list[PersistedToolCall],
+    ) -> AsyncIterator[StreamChunk]:
+        lc_tools = mcp_tools_to_langchain(mcp, agent_name=self.name)
+        if not lc_tools:
+            async for chunk in self._llm.stream_chat(api_messages):
+                yield self._with_agent(chunk)
+            return
+
+        tool_model = get_chat_model(
+            self._settings,
+            enable_thinking=False,
+        )
+        final_model = get_chat_model(self._settings, enable_thinking=True)
+        graph = build_react_graph(
+            tool_model,
+            lc_tools,
+            max_tool_rounds=self._settings.mcp_max_tool_rounds,
+            max_result_chars=self._settings.mcp_tool_result_max_chars,
+        )
+        inputs = {
+            "messages": messages_from_api_dicts(api_messages),
+            "tool_call_records": [],
+            "tool_rounds": 0,
+        }
+
+        async for chunk, records in stream_react_graph(
+            graph,
+            inputs,
+            final_model=final_model,
+            agent_name=self.name,
+            max_tool_rounds=self._settings.mcp_max_tool_rounds,
+        ):
+            if records:
+                tool_call_records.extend(records)
+            yield self._with_agent(chunk)
+
     async def run(
         self,
         message: str,
@@ -268,9 +312,18 @@ class GeneralAgent(BaseAgent):
         persisted_tool_calls: list[PersistedToolCall] = []
 
         if effective_tools and mcp is not None:
-            async for chunk in self._run_tool_loop(
-                api_messages, tools, mcp, persisted_tool_calls
-            ):
+            use_langgraph = self._settings.orchestration_backend == "langgraph"
+            tool_loop = (
+                self._run_langgraph_tool_loop
+                if use_langgraph
+                else self._run_tool_loop
+            )
+            tool_loop_args = (
+                (api_messages, mcp, persisted_tool_calls)
+                if use_langgraph
+                else (api_messages, tools, mcp, persisted_tool_calls)
+            )
+            async for chunk in tool_loop(*tool_loop_args):
                 if chunk.type == "content":
                     full_content += chunk.content
                     yield chunk
