@@ -16,6 +16,7 @@ from server.langchain.tools import mcp_tools_to_langchain
 from server.llm.client import DeepSeekClient, get_deepseek_client
 from server.memory.base import BaseSessionStore
 from server.memory.manager import MemoryManager, get_memory_manager
+from server.memory.rag.retrieval import build_rag_augmented_prompt
 from server.memory.session import SessionStore, get_session_store
 from server.mcp.client import MCPClient, get_mcp_client
 from server.mcp.truncation import truncate_tool_result
@@ -272,6 +273,17 @@ class SubAgent:
     ) -> AsyncIterator[StreamChunk]:
         sid = self._sessions.get_or_create(session_id)
         system_prompt = system_prompt_override or self.system_prompt
+
+        if (
+            self._settings.enable_rag
+            and self.name in self._settings.rag_agent_names()
+        ):
+            system_prompt = build_rag_augmented_prompt(
+                system_prompt,
+                message,
+                sid,
+                self._settings,
+            )
 
         full_history = self._sessions.get_messages(sid)
         history = await self._memory.get_llm_context(

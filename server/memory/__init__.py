@@ -9,6 +9,6 @@
 #     manager.py     — MemoryManager 统一入口
 #
 # Phase 3-4：
-#     semantic/      — L3 RAG 向量库
+#     rag/           — L3 RAG 向量库（Phase 5）
 #     structured/    — L4 结构化科研记忆
 # =============================================================================

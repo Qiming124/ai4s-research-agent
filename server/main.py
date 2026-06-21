@@ -30,6 +30,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from server.api.chat import router as chat_router
+from server.api.documents import router as documents_router
 from server.api.mcp import router as mcp_router
 from server.config import get_settings, setup_logging
 from server.mcp.client import get_mcp_client, reset_mcp_client
@@ -69,6 +70,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await get_mcp_client()
     else:
         logger.info("  MCP: 未启用")
+    if settings.enable_rag:
+        logger.info("  RAG: 已启用 (%s)", settings.rag_chroma_path)
+        if settings.rag_index_mcp_files:
+            from server.memory.rag.store import get_rag_store
+
+            indexed = get_rag_store().index_mcp_files()
+            logger.info("  RAG: 已索引 MCP 文件 %d 篇", len(indexed))
+    else:
+        logger.info("  RAG: 未启用")
     logger.info("=" * 50)
 
     yield
@@ -108,6 +118,7 @@ def create_app() -> FastAPI:
     # 挂载 API 路由（/health /v1/chat /v1/chat/stream /v1/sessions/*）
     app.include_router(chat_router)
     app.include_router(mcp_router)
+    app.include_router(documents_router)
 
     # 生产模式：dist 存在时托管 web/dist 静态文件与首页。
     # 开发模式 dist 不存在则跳过（用 Vite :5173 + proxy）

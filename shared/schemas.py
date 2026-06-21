@@ -176,3 +176,41 @@ class MCPStatusResponse(BaseModel):
     server_enabled: bool = Field(description="服务端 ENABLE_MCP 配置")
     connected: bool = Field(description="MCP Client 是否已连接")
     servers: list[MCPServerInfo] = Field(default_factory=list)
+
+
+class DocumentUploadRequest(BaseModel):
+    """POST /v1/documents 请求体。"""
+
+    content: str = Field(..., min_length=1, description="文档正文（markdown 或纯文本）")
+    title: str | None = Field(default=None, description="文档标题")
+    source: str = Field(default="", description="来源路径或 URL")
+    doc_id: str | None = Field(default=None, description="可选：指定文档 ID（覆盖更新）")
+
+
+class DocumentInfo(BaseModel):
+    doc_id: str
+    title: str
+    source: str = ""
+    chunk_count: int = 0
+    created_at: str
+
+
+class DocumentListResponse(BaseModel):
+    documents: list[DocumentInfo] = Field(default_factory=list)
+    total: int = 0
+
+
+class DocumentUploadResponse(BaseModel):
+    document: DocumentInfo
+    status: str = "indexed"
+
+
+class SessionRagRef(BaseModel):
+    doc_id: str
+    snippet: str = ""
+    created_at: str | None = None
+
+
+class SessionRagRefsResponse(BaseModel):
+    session_id: str
+    refs: list[SessionRagRef] = Field(default_factory=list)
