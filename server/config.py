@@ -135,6 +135,18 @@ class Settings(BaseSettings):
         default=10,
         description="单轮对话最多工具调用轮次",
     )
+    mcp_tool_result_max_chars: int = Field(
+        default=8000,
+        description="工具结果写入 LLM 上下文前的最大字符数（超出则截断并附摘要提示）",
+    )
+    mcp_tool_whitelist: str = Field(
+        default="",
+        description="全局工具白名单：逗号分隔 glob 模式（如 filesystem__*,arxiv__*）；空=全部",
+    )
+    mcp_tool_whitelist_path: str = Field(
+        default="",
+        description="可选 JSON 白名单文件路径，支持 global 与 agents 映射",
+    )
 
     # ── 编排后端（Phase 3） ──────────────────────────────────
 

@@ -13,6 +13,7 @@ from server.config import Settings, get_settings
 from server.langchain.mcp import create_multiserver_client
 from server.mcp.config import load_mcp_servers
 from server.mcp.registry import ToolRegistry
+from server.mcp.whitelist import filter_openai_tools
 
 logger = logging.getLogger(__name__)
 
@@ -112,8 +113,9 @@ class MCPClient:
     def is_server_connected(self, server_name: str) -> bool:
         return server_name in self._sessions
 
-    def get_openai_tools(self) -> list[dict[str, Any]]:
-        return self._registry.to_openai_tools()
+    def get_openai_tools(self, agent_name: str | None = None) -> list[dict[str, Any]]:
+        tools = self._registry.to_openai_tools()
+        return filter_openai_tools(tools, self._settings, agent_name)
 
 
 _mcp_client: MCPClient | None = None
