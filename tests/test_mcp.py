@@ -4,9 +4,32 @@ MCP Client 与 Registry 测试。
 
 from __future__ import annotations
 
+import sys
+
 import pytest
 
+from server.langchain.mcp import build_multiserver_connections
+from server.mcp.config import MCPServerConfig
 from server.mcp.registry import ToolRegistry
+
+
+def test_build_multiserver_connections_stdio() -> None:
+    configs = {
+        "filesystem": MCPServerConfig(
+            command="python",
+            args=["-m", "server.mcp.servers.filesystem"],
+            env={"MCP_ALLOWED_DIRS": "/tmp"},
+            enabled=True,
+        ),
+        "disabled": MCPServerConfig(command="echo", args=[], enabled=False),
+    }
+    connections = build_multiserver_connections(configs)
+    assert set(connections) == {"filesystem"}
+    fs = connections["filesystem"]
+    assert fs["transport"] == "stdio"
+    assert fs["command"] == sys.executable
+    assert fs["args"] == ["-m", "server.mcp.servers.filesystem"]
+    assert fs["env"] == {"MCP_ALLOWED_DIRS": "/tmp"}
 
 
 def test_tool_registry_openai_format() -> None:

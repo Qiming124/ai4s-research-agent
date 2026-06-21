@@ -1,17 +1,17 @@
-# MCP Client：连接多个 stdio MCP Server，聚合 tools 并执行调用。
+# MCP Client：通过 langchain-mcp-adapters MultiServerMCPClient 连接多个 stdio MCP Server。
 
 from __future__ import annotations
 
 import logging
-import sys
 from contextlib import AsyncExitStack
 from typing import Any
 
-from mcp import ClientSession, StdioServerParameters
-from mcp.client.stdio import stdio_client
+from langchain_mcp_adapters.client import MultiServerMCPClient
+from mcp import ClientSession
 
 from server.config import Settings, get_settings
-from server.mcp.config import MCPServerConfig, load_mcp_servers
+from server.langchain.mcp import create_multiserver_client
+from server.mcp.config import load_mcp_servers
 from server.mcp.registry import ToolRegistry
 
 logger = logging.getLogger(__name__)
@@ -21,6 +21,7 @@ class MCPClient:
     def __init__(self, settings: Settings | None = None) -> None:
         self._settings = settings or get_settings()
         self._registry = ToolRegistry()
+        self._adapter: MultiServerMCPClient | None = None
         self._sessions: dict[str, ClientSession] = {}
         self._exit_stack: AsyncExitStack | None = None
         self._connected = False
@@ -42,30 +43,34 @@ class MCPClient:
             logger.warning("MCP 配置文件为空或不存在: %s", self._settings.mcp_config_path)
             return
 
+        self._adapter = create_multiserver_client(configs)
+        if not self._adapter.connections:
+            logger.warning("MCP 无已启用的 Server 配置")
+            return
+
         self._exit_stack = AsyncExitStack()
         await self._exit_stack.__aenter__()
 
-        for server_name, cfg in configs.items():
-            if not cfg.enabled:
-                continue
+        for server_name in self._adapter.connections:
             try:
-                await self._connect_server(server_name, cfg)
+                await self._connect_server(server_name)
             except Exception:
                 logger.exception("连接 MCP Server 失败: %s", server_name)
 
         self._connected = True
-        logger.info("MCP Client 已连接 %d 个 Server，共 %d 个工具", len(self._sessions), len(self._registry.tools))
-
-    async def _connect_server(self, server_name: str, cfg: MCPServerConfig) -> None:
-        assert self._exit_stack is not None
-        params = StdioServerParameters(
-            command=sys.executable if cfg.command == "python" else cfg.command,
-            args=cfg.args,
-            env=cfg.env or None,
+        logger.info(
+            "MCP Client 已连接 %d 个 Server，共 %d 个工具",
+            len(self._sessions),
+            len(self._registry.tools),
         )
-        read, write = await self._exit_stack.enter_async_context(stdio_client(params))
-        session = await self._exit_stack.enter_async_context(ClientSession(read, write))
-        await session.initialize()
+
+    async def _connect_server(self, server_name: str) -> None:
+        assert self._adapter is not None
+        assert self._exit_stack is not None
+
+        session = await self._exit_stack.enter_async_context(
+            self._adapter.session(server_name)
+        )
         self._sessions[server_name] = session
 
         tools_result = await session.list_tools()
@@ -99,6 +104,7 @@ class MCPClient:
         if self._exit_stack is not None:
             await self._exit_stack.aclose()
             self._exit_stack = None
+        self._adapter = None
         self._sessions.clear()
         self._registry.clear()
         self._connected = False
