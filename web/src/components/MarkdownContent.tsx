@@ -1,67 +1,74 @@
-import { useEffect, useRef, type RefObject } from "react";
+import { Component } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import remarkMath from "remark-math";
-import rehypeKatex from "rehype-katex";
-import rehypeHighlight from "rehype-highlight";
-import { preprocessMathContent } from "../utils/preprocessMath";
-import "highlight.js/styles/github.min.css";
 
 interface MarkdownContentProps {
   content: string;
   className?: string;
-  /** 流式生成中：纯文本显示，避免半成品 LaTeX 触发 KaTeX 报错 */
+  /** 流式生成中：纯文本显示 */
   isStreaming?: boolean;
 }
 
-/** 为 KaTeX 仍无法解析的公式添加友好提示 */
-function useKatexErrorHints(
-  containerRef: RefObject<HTMLDivElement | null>,
-  deps: string,
-) {
-  useEffect(() => {
-    const root = containerRef.current;
-    if (!root) return;
+const MAX_MARKDOWN_CHARS = 12000;
+const remarkPlugins = [remarkGfm];
 
-    for (const el of root.querySelectorAll(".katex-error")) {
-      if (el.getAttribute("data-hint-applied")) continue;
-      el.setAttribute("data-hint-applied", "true");
-      el.setAttribute("title", "公式语法不完整或无法解析，以下为原文");
+class MarkdownGuard extends Component<
+  { content: string; className: string },
+  { failed: boolean }
+> {
+  override state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  override componentDidCatch(error: Error) {
+    console.warn("Markdown render failed, using plain text:", error.message);
+  }
+
+  override render() {
+    if (this.state.failed) {
+      return (
+        <pre className={`message-plain ${this.props.className}`.trim()}>
+          {this.props.content}
+        </pre>
+      );
     }
-  }, [deps, containerRef]);
+
+    return (
+      <div className={`markdown-body ${this.props.className}`}>
+        <ReactMarkdown remarkPlugins={remarkPlugins}>
+          {this.props.content}
+        </ReactMarkdown>
+      </div>
+    );
+  }
 }
 
-/** Markdown 渲染（GFM + LaTeX + 代码高亮） */
+function PlainText({ content, className }: { content: string; className: string }) {
+  return (
+    <pre className={`message-plain ${className}`.trim()}>{content}</pre>
+  );
+}
+
+/** 消息正文：流式纯文本；结束后轻量 GFM（无 KaTeX/高亮，避免栈溢出） */
 export function MarkdownContent({
   content,
   className = "",
   isStreaming = false,
 }: MarkdownContentProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const processed =
-    content && !isStreaming ? preprocessMathContent(content) : (content ?? "");
-
-  useKatexErrorHints(containerRef, processed);
+  const safeClass = className.trim();
 
   if (!content) return null;
 
   if (isStreaming) {
-    return (
-      <pre className={`streaming-plain ${className}`.trim()}>{content}</pre>
-    );
+    return <PlainText content={content} className={`streaming-plain ${safeClass}`} />;
   }
 
-  return (
-    <div ref={containerRef} className={`markdown-body ${className}`}>
-      <ReactMarkdown
-        remarkPlugins={[remarkMath, remarkGfm]}
-        rehypePlugins={[
-          [rehypeKatex, { strict: "ignore", errorColor: "#b45309" }],
-          rehypeHighlight,
-        ]}
-      >
-        {processed}
-      </ReactMarkdown>
-    </div>
-  );
+  // 超长内容直接纯文本，避免 markdown 解析过深
+  if (content.length > MAX_MARKDOWN_CHARS) {
+    return <PlainText content={content} className={safeClass} />;
+  }
+
+  return <MarkdownGuard content={content} className={safeClass} />;
 }

@@ -1,27 +1,14 @@
-import { useEffect, useState } from "react";
-import { MarkdownContent } from "./MarkdownContent";
-
 interface ReasoningPanelProps {
   reasoning: string;
   isStreaming: boolean;
 }
 
-/** 可折叠的思考过程面板；流式时默认展开 */
+/** 思考过程：始终纯文本，避免流结束后切换 Markdown/KaTeX 导致崩溃 */
 export function ReasoningPanel({ reasoning, isStreaming }: ReasoningPanelProps) {
-  const [open, setOpen] = useState(true);
-
-  useEffect(() => {
-    if (isStreaming) setOpen(true);
-  }, [isStreaming]);
-
   if (!reasoning) return null;
 
   return (
-    <details
-      className="reasoning-panel"
-      open={open}
-      onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}
-    >
+    <details className="reasoning-panel" open={isStreaming || undefined}>
       <summary className="reasoning-summary">
         思考过程
         <span className="reasoning-meta">
@@ -30,7 +17,7 @@ export function ReasoningPanel({ reasoning, isStreaming }: ReasoningPanelProps) 
         </span>
       </summary>
       <div className="reasoning-body">
-        <MarkdownContent content={reasoning} className="reasoning-md" isStreaming={isStreaming} />
+        <pre className="reasoning-plain reasoning-md">{reasoning}</pre>
       </div>
     </details>
   );

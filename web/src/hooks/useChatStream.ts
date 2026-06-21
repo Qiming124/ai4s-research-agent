@@ -293,26 +293,29 @@ function processStreamEvents(
   ctx: Parameters<typeof applyStreamEvent>[2],
   setMessages: Dispatch<SetStateAction<ChatMessage[]>>,
 ) {
-  let composed: ((prev: ChatMessage[]) => ChatMessage[]) | null = null;
+  const updaters: Array<(prev: ChatMessage[]) => ChatMessage[]> = [];
 
   for (const ev of events) {
     try {
       const updater = applyStreamEvent(ev, assistantId, ctx);
-      if (!updater) continue;
-      composed = composed
-        ? (prev) => updater(composed!(prev))
-        : updater;
+      if (updater) updaters.push(updater);
     } catch {
       /* 忽略单条事件解析/应用失败，不中断整个批次 */
     }
   }
 
-  if (composed) {
-    try {
-      setMessages(composed);
-    } catch {
-      /* 状态更新失败，已在 ErrorBoundary 层兜底 */
-    }
+  if (updaters.length === 0) return;
+
+  try {
+    setMessages((prev) => {
+      let next = prev;
+      for (const updater of updaters) {
+        next = updater(next);
+      }
+      return next;
+    });
+  } catch {
+    /* 状态更新失败，已在 ErrorBoundary 层兜底 */
   }
 }
 
