@@ -86,6 +86,14 @@ class Settings(BaseSettings):
         default="INFO",
         description="日志级别：INFO=常规，DEBUG=打印 LLM 请求摘要",
     )
+    log_format: str = Field(
+        default="text",
+        description="日志格式：text=人类可读，json=结构化 JSON（Docker/可观测推荐）",
+    )
+    enable_token_stats: bool = Field(
+        default=True,
+        description="是否将 LLM token 用量写入 SQLite 聚合表",
+    )
 
     # ── Agent 参数 ───────────────────────────────────────────
 
@@ -245,6 +253,14 @@ class Settings(BaseSettings):
             )
         return normalized
 
+    @field_validator("log_format")
+    @classmethod
+    def validate_log_format(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in ("text", "json"):
+            raise ValueError(f"LOG_FORMAT 必须是 text 或 json，当前为: {value}")
+        return normalized
+
     @field_validator("rag_embedding_provider")
     @classmethod
     def validate_rag_embedding_provider(cls, value: str) -> str:
@@ -289,7 +305,15 @@ def setup_logging(settings: Settings | None = None) -> None:
     # 调用方：server/main.py 在应用启动阶段调用。
     cfg = settings or get_settings()
     level = getattr(logging, cfg.log_level.upper(), logging.INFO)
-    logging.basicConfig(
-        level=level,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    )
+    if cfg.log_format == "json":
+        from server.observability.structured import StructuredLogFormatter
+
+        handler = logging.StreamHandler()
+        handler.setFormatter(StructuredLogFormatter())
+        logging.basicConfig(level=level, handlers=[handler], force=True)
+    else:
+        logging.basicConfig(
+            level=level,
+            format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+            force=True,
+        )

@@ -20,6 +20,7 @@ from server.memory.rag.retrieval import build_rag_augmented_prompt
 from server.memory.session import SessionStore, get_session_store
 from server.mcp.client import MCPClient, get_mcp_client
 from server.mcp.truncation import truncate_tool_result
+from server.observability import finalize_chat_turn, set_agent_name, set_session_id
 from shared.schemas import ChatMessage, PersistedToolCall, StreamChunk
 
 logger = logging.getLogger(__name__)
@@ -272,6 +273,8 @@ class SubAgent:
         persist_session: bool = True,
     ) -> AsyncIterator[StreamChunk]:
         sid = self._sessions.get_or_create(session_id)
+        set_session_id(sid)
+        set_agent_name(self.name)
         system_prompt = system_prompt_override or self.system_prompt
 
         if (
@@ -358,6 +361,7 @@ class SubAgent:
                         )
                     usage = chunk.usage or {}
                     usage["session_id"] = sid
+                    finalize_chat_turn(sid, self.name, usage)
                     yield self._with_agent(
                         StreamChunk(type="done", content="", usage=usage),
                         a2a_task_id=a2a_task_id,
@@ -393,6 +397,7 @@ class SubAgent:
                     )
                 usage = chunk.usage or {}
                 usage["session_id"] = sid
+                finalize_chat_turn(sid, self.name, usage)
                 yield self._with_agent(
                     StreamChunk(type="done", content="", usage=usage),
                     a2a_task_id=a2a_task_id,

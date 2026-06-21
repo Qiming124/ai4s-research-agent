@@ -214,3 +214,22 @@ class SessionRagRef(BaseModel):
 class SessionRagRefsResponse(BaseModel):
     session_id: str
     refs: list[SessionRagRef] = Field(default_factory=list)
+
+
+class TokenUsageAgentBreakdown(BaseModel):
+    agent_name: str
+    event_count: int = 0
+    total_tokens: int = 0
+
+
+class TokenUsageTotals(BaseModel):
+    event_count: int = 0
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
+
+
+class TokenUsageStatsResponse(BaseModel):
+    filters: dict[str, str | None] = Field(default_factory=dict)
+    totals: TokenUsageTotals
+    by_agent: list[TokenUsageAgentBreakdown] = Field(default_factory=list)

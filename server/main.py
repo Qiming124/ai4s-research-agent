@@ -32,8 +32,10 @@ from fastapi.staticfiles import StaticFiles
 from server.api.chat import router as chat_router
 from server.api.documents import router as documents_router
 from server.api.mcp import router as mcp_router
+from server.api.stats import router as stats_router
 from server.config import get_settings, setup_logging
 from server.mcp.client import get_mcp_client, reset_mcp_client
+from server.observability.middleware import RequestContextMiddleware
 
 logger = logging.getLogger(__name__)
 
@@ -107,6 +109,7 @@ def create_app() -> FastAPI:
     )
 
     # CORS：Phase 1 不做精细鉴权，允许所有来源跨域访问 API
+    app.add_middleware(RequestContextMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
@@ -119,6 +122,7 @@ def create_app() -> FastAPI:
     app.include_router(chat_router)
     app.include_router(mcp_router)
     app.include_router(documents_router)
+    app.include_router(stats_router)
 
     # 生产模式：dist 存在时托管 web/dist 静态文件与首页。
     # 开发模式 dist 不存在则跳过（用 Vite :5173 + proxy）

@@ -24,6 +24,7 @@ from server.memory.manager import MemoryManager, get_memory_manager
 from server.memory.session import SessionStore, get_session_store
 from server.mcp.client import MCPClient, get_mcp_client
 from server.mcp.truncation import truncate_tool_result
+from server.observability import finalize_chat_turn, set_agent_name, set_session_id
 from shared.schemas import ChatMessage, PersistedToolCall, StreamChunk
 
 logger = logging.getLogger(__name__)
@@ -269,6 +270,8 @@ class GeneralAgent(BaseAgent):
         enable_tools: bool | None = None,
     ) -> AsyncIterator[StreamChunk]:
         sid = self._sessions.get_or_create(session_id)
+        set_session_id(sid)
+        set_agent_name(self.name)
         system_prompt = system_prompt_override or self.system_prompt
 
         full_history = self._sessions.get_messages(sid)
@@ -343,6 +346,7 @@ class GeneralAgent(BaseAgent):
                     )
                     usage = chunk.usage or {}
                     usage["session_id"] = sid
+                    finalize_chat_turn(sid, self.name, usage)
                     yield self._with_agent(
                         StreamChunk(type="done", content="", usage=usage)
                     )
@@ -376,6 +380,7 @@ class GeneralAgent(BaseAgent):
                 )
                 usage = chunk.usage or {}
                 usage["session_id"] = sid
+                finalize_chat_turn(sid, self.name, usage)
                 yield self._with_agent(StreamChunk(type="done", content="", usage=usage))
 
     async def run_sync(

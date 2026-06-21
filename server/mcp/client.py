@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from contextlib import AsyncExitStack
 from typing import Any
 
@@ -14,6 +15,7 @@ from server.langchain.mcp import create_multiserver_client
 from server.mcp.config import load_mcp_servers
 from server.mcp.registry import ToolRegistry
 from server.mcp.whitelist import filter_openai_tools
+from server.observability.structured import log_event
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +95,29 @@ class MCPClient:
         if session is None:
             raise RuntimeError(f"MCP Server 未连接: {registered.server_name}")
 
-        result = await session.call_tool(registered.tool_name, arguments)
+        start = time.perf_counter()
+        try:
+            result = await session.call_tool(registered.tool_name, arguments)
+        except Exception as exc:
+            latency_ms = (time.perf_counter() - start) * 1000
+            log_event(
+                logger,
+                "tool_call_error",
+                level=logging.ERROR,
+                tool_name=qualified_name,
+                latency_ms=latency_ms,
+                error=str(exc),
+            )
+            raise
+
+        latency_ms = (time.perf_counter() - start) * 1000
+        log_event(
+            logger,
+            "tool_call_complete",
+            tool_name=qualified_name,
+            latency_ms=latency_ms,
+        )
+
         parts: list[str] = []
         for block in result.content:
             text = getattr(block, "text", None)
