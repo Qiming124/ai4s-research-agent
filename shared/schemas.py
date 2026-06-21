@@ -79,6 +79,14 @@ class ChatRequest(BaseModel):
         default=None,
         description="是否启用 MCP 工具；None 时使用服务端 ENABLE_MCP 默认值",
     )
+    agent: Literal["general", "theory", "experiment", "literature"] | None = Field(
+        default=None,
+        description="指定 Agent；省略时按 auto_route 自动路由",
+    )
+    auto_route: bool = Field(
+        default=True,
+        description="未指定 agent 时是否自动意图路由；False 则使用 general",
+    )
 
 
 class ChatResponse(BaseModel):
@@ -114,13 +122,17 @@ class StreamChunk(BaseModel):
         "tool_call_start",
         "tool_call_result",
         "tool_call_error",
+        "agent_handoff",
     ]
     content: str = ""
     usage: dict[str, Any] | None = None
     agent_name: str | None = Field(default=None, description="产出该 chunk 的 Agent 名称")
     tool_name: str | None = Field(default=None, description="MCP 工具名")
     tool_call_id: str | None = Field(default=None, description="工具调用 ID")
-    a2a_task_id: str | None = Field(default=None, description="A2A 任务 ID（Phase 2C 预留）")
+    a2a_task_id: str | None = Field(default=None, description="A2A 任务 ID（子任务追踪）")
+    route_reason: str | None = Field(default=None, description="路由原因（meta/handoff）")
+    from_agent: str | None = Field(default=None, description="handoff 来源 Agent")
+    to_agent: str | None = Field(default=None, description="handoff 目标 Agent")
 
 
 class SessionResponse(BaseModel):

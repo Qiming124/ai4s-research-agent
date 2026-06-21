@@ -63,7 +63,19 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--mode", choices=["chat", "math"], default="chat",
-        help="对话模式：chat=通用，math=数学推导",
+        help="对话模式：chat=通用，math=数学推导（路由至 theory Agent）",
+    )
+    parser.add_argument(
+        "--agent",
+        choices=["general", "theory", "experiment", "literature"],
+        default=None,
+        help="指定 Agent；省略则按 --auto-route 自动路由",
+    )
+    parser.add_argument(
+        "--auto-route",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="未指定 --agent 时自动意图路由（默认开启）",
     )
     parser.add_argument(
         "--max-history",
@@ -90,12 +102,17 @@ def build_chat_payload(
     mode: str,
     max_history: int | None,
     history_summary: str,
+    agent: str | None = None,
+    auto_route: bool = True,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "message": message,
         "session_id": session_id,
         "mode": mode,
+        "auto_route": auto_route,
     }
+    if agent is not None:
+        payload["agent"] = agent
     if max_history is not None:
         payload["max_history_messages"] = max_history
     if history_summary == "on":
@@ -162,6 +179,8 @@ async def stream_chat(
     mode: str = "chat",
     max_history: int | None = None,
     history_summary: str = "default",
+    agent: str | None = None,
+    auto_route: bool = True,
 ) -> tuple[str, str]:
     # 调用 POST /v1/chat/stream，消费 SSE 事件流并实时显示在终端。
     #
@@ -184,6 +203,8 @@ async def stream_chat(
         mode=mode,
         max_history=max_history,
         history_summary=history_summary,
+        agent=agent,
+        auto_route=auto_route,
     )
     reasoning_parts: list[str] = []
     content_parts: list[str] = []
@@ -206,8 +227,25 @@ async def stream_chat(
 
                 if event_type == "meta":
                     sid = data.get("session_id")
+                    agent_name = data.get("agent_name")
+                    route_reason = data.get("route_reason")
+                    if agent_name and console.is_terminal:
+                        meta_parts = [f"agent={agent_name}"]
+                        if route_reason:
+                            meta_parts.append(f"route={route_reason}")
+                        console.print(f"[dim]{' '.join(meta_parts)}[/dim]")
                     if sid:
                         pass  # 已在 run_cli 打印
+                    continue
+
+                if event_type == "agent_handoff":
+                    from_a = data.get("from_agent", "?")
+                    to_a = data.get("to_agent", "?")
+                    reason = data.get("route_reason", "")
+                    console.print(
+                        f"[dim cyan]→ handoff {from_a} → {to_a}"
+                        f"{f' ({reason})' if reason else ''}[/dim cyan]"
+                    )
                     continue
 
                 if event_type == "reasoning":
@@ -277,6 +315,8 @@ async def run_cli(args: argparse.Namespace) -> None:
         f"Server: {base_url}\n"
         f"Session: {session_id}\n"
         f"Mode: {args.mode}\n"
+        f"Agent: {args.agent or 'auto'}\n"
+        f"Auto-route: {args.auto_route}\n"
         f"Max history: {args.max_history if args.max_history is not None else 'server default'}\n"
         f"History summary: {args.history_summary}\n"
         "命令: /clear 清空会话 | /history 查看历史 | exit/quit 退出",
@@ -340,6 +380,8 @@ async def run_cli(args: argparse.Namespace) -> None:
                     mode=args.mode,
                     max_history=args.max_history,
                     history_summary=args.history_summary,
+                    agent=args.agent,
+                    auto_route=args.auto_route,
                 )
             except httpx.ConnectError:
                 console.print("[red]连接中断，请确认 Server 是否仍在运行[/red]")

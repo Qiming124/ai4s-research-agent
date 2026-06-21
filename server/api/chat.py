@@ -34,6 +34,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
 from server.agents.base import get_general_agent
+from server.agents.orchestrator import get_multi_agent_orchestrator
 from server.config import get_settings
 from server.memory.session import get_session_store
 from shared.schemas import ChatRequest, ChatResponse, HealthResponse, SessionResponse
@@ -60,6 +61,10 @@ async def health_check() -> HealthResponse:
 
 # ── 非流式对话 ───────────────────────────────────────────────
 
+def _use_multi_agent_orchestrator() -> bool:
+    return get_settings().orchestration_backend == "langgraph"
+
+
 @router.post("/v1/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest) -> ChatResponse:
     # 非流式对话端点：接收用户消息，等待模型完整响应后一次性返回 JSON。
@@ -67,16 +72,30 @@ async def chat(request: ChatRequest) -> ChatResponse:
     #
     # 参数 request — ChatRequest（必填 message，可选 session_id / system_prompt）
     # 返回 ChatResponse JSON（session_id / content / reasoning / usage）
-    agent = get_general_agent(math_mode=(request.mode == "math"))
     try:
-        session_id, content, reasoning, usage = await agent.run_sync(
-            message=request.message,
-            session_id=request.session_id,
-            system_prompt_override=request.system_prompt,
-            max_history_messages=request.max_history_messages,
-            enable_history_summary=request.enable_history_summary,
-            enable_tools=request.enable_tools,
-        )
+        if _use_multi_agent_orchestrator():
+            orchestrator = get_multi_agent_orchestrator()
+            session_id, content, reasoning, usage, _, _ = await orchestrator.run_sync(
+                message=request.message,
+                session_id=request.session_id,
+                agent=request.agent,
+                auto_route=request.auto_route,
+                mode=request.mode,
+                system_prompt_override=request.system_prompt,
+                max_history_messages=request.max_history_messages,
+                enable_history_summary=request.enable_history_summary,
+                enable_tools=request.enable_tools,
+            )
+        else:
+            agent = get_general_agent(math_mode=(request.mode == "math"))
+            session_id, content, reasoning, usage = await agent.run_sync(
+                message=request.message,
+                session_id=request.session_id,
+                system_prompt_override=request.system_prompt,
+                max_history_messages=request.max_history_messages,
+                enable_history_summary=request.enable_history_summary,
+                enable_tools=request.enable_tools,
+            )
     except Exception as exc:
         logger.exception("非流式对话失败")
         raise HTTPException(status_code=502, detail=f"LLM 调用失败: {exc}") from exc
@@ -105,10 +124,44 @@ async def _stream_generator(request: ChatRequest) -> AsyncIterator[str]:
     #     2. 发送 meta 事件（携带 session_id）
     #     3. 调用 Agent.run() 逐块产出 reasoning/content/done/error
     #     4. 每个 StreamChunk 转一条 SSE data 事件
-    agent = get_general_agent(math_mode=(request.mode == "math"))
     session_store = get_session_store()
-
     session_id = session_store.get_or_create(request.session_id)
+
+    if _use_multi_agent_orchestrator():
+        orchestrator = get_multi_agent_orchestrator()
+        target, route_reason = orchestrator.resolve_target_agent(
+            request.message,
+            agent=request.agent,
+            auto_route=request.auto_route,
+            mode=request.mode,
+        )
+        yield _sse_event({
+            "type": "meta",
+            "session_id": session_id,
+            "agent_name": target,
+            "route_reason": route_reason,
+        })
+
+        try:
+            async for chunk in orchestrator.run(
+                message=request.message,
+                session_id=session_id,
+                agent=request.agent,
+                auto_route=request.auto_route,
+                mode=request.mode,
+                system_prompt_override=request.system_prompt,
+                max_history_messages=request.max_history_messages,
+                enable_history_summary=request.enable_history_summary,
+                enable_tools=request.enable_tools,
+            ):
+                payload = chunk.model_dump()
+                yield _sse_event(payload)
+        except Exception as exc:
+            logger.exception("流式对话失败")
+            yield _sse_event({"type": "error", "content": str(exc)})
+        return
+
+    agent = get_general_agent(math_mode=(request.mode == "math"))
     yield _sse_event({
         "type": "meta",
         "session_id": session_id,
