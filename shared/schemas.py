@@ -20,6 +20,19 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 
+class PersistedToolCall(BaseModel):
+    # 持久化到会话中的单次 MCP 工具调用记录（Phase 3）。
+    #
+    # 字段与 SSE tool_call_* 事件对齐，供 Web 历史时间线回放。
+
+    id: str = Field(description="tool_call_id")
+    name: str = Field(description="qualified 工具名，如 filesystem__read_file")
+    arguments: str = Field(default="", description="JSON 参数字符串")
+    result: str | None = Field(default=None, description="工具返回内容（成功时）")
+    status: Literal["success", "error"] = Field(default="success")
+    error: str | None = Field(default=None, description="错误信息（status=error 时）")
+
+
 class ChatMessage(BaseModel):
     # 单条对话消息，格式与 OpenAI Chat Completions API 保持一致。
     #
@@ -32,6 +45,10 @@ class ChatMessage(BaseModel):
     reasoning_content: str | None = Field(
         default=None,
         description="assistant 消息的思考过程（Phase 2A 持久化）",
+    )
+    tool_calls: list[PersistedToolCall] | None = Field(
+        default=None,
+        description="assistant 消息关联的 MCP 工具调用记录（Phase 3 持久化）",
     )
 
 

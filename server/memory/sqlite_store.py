@@ -16,13 +16,14 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 import threading
 import uuid
 from pathlib import Path
 
 from server.memory.base import BaseSessionStore
-from shared.schemas import ChatMessage
+from shared.schemas import ChatMessage, PersistedToolCall
 
 _SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS sessions (
@@ -67,6 +68,7 @@ class SQLiteSessionStore(BaseSessionStore):
 
     def _migrate(self) -> None:
         # Phase 2A：为已有数据库追加 reasoning_content 列。
+        # Phase 3：追加 tool_calls JSON 列。
         cols = {
             row[1]
             for row in self._conn.execute("PRAGMA table_info(messages)").fetchall()
@@ -75,7 +77,32 @@ class SQLiteSessionStore(BaseSessionStore):
             self._conn.execute(
                 "ALTER TABLE messages ADD COLUMN reasoning_content TEXT"
             )
-            self._conn.commit()
+        if "tool_calls" not in cols:
+            self._conn.execute(
+                "ALTER TABLE messages ADD COLUMN tool_calls TEXT"
+            )
+        self._conn.commit()
+
+    def _serialize_tool_calls(
+        self, tool_calls: list[PersistedToolCall] | None
+    ) -> str | None:
+        if not tool_calls:
+            return None
+        return json.dumps(
+            [tc.model_dump() for tc in tool_calls],
+            ensure_ascii=False,
+        )
+
+    def _deserialize_tool_calls(self, raw: str | None) -> list[PersistedToolCall] | None:
+        if not raw:
+            return None
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            return None
+        if not isinstance(data, list):
+            return None
+        return [PersistedToolCall.model_validate(item) for item in data]
 
     def create_session_id(self) -> str:
         return str(uuid.uuid4())
@@ -95,7 +122,7 @@ class SQLiteSessionStore(BaseSessionStore):
         with self._lock:
             rows = self._conn.execute(
                 """
-                SELECT role, content, reasoning_content FROM messages
+                SELECT role, content, reasoning_content, tool_calls FROM messages
                 WHERE session_id = ?
                 ORDER BY seq
                 """,
@@ -106,6 +133,7 @@ class SQLiteSessionStore(BaseSessionStore):
                 role=row["role"],
                 content=row["content"],
                 reasoning_content=row["reasoning_content"],
+                tool_calls=self._deserialize_tool_calls(row["tool_calls"]),
             )
             for row in rows
         ]
@@ -123,8 +151,8 @@ class SQLiteSessionStore(BaseSessionStore):
             next_seq = int(row["max_seq"]) + 1
             self._conn.execute(
                 """
-                INSERT INTO messages (session_id, role, content, seq, reasoning_content)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO messages (session_id, role, content, seq, reasoning_content, tool_calls)
+                VALUES (?, ?, ?, ?, ?, ?)
                 """,
                 (
                     session_id,
@@ -132,6 +160,7 @@ class SQLiteSessionStore(BaseSessionStore):
                     message.content,
                     next_seq,
                     message.reasoning_content,
+                    self._serialize_tool_calls(message.tool_calls),
                 ),
             )
             self._conn.execute(
