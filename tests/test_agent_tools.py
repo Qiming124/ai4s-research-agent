@@ -15,7 +15,7 @@ from shared.schemas import StreamChunk
 class FakeMCP:
     is_connected = True
 
-    def get_openai_tools(self) -> list[dict[str, Any]]:
+    def get_openai_tools(self, agent_name: str | None = None) -> list[dict[str, Any]]:
         return [{"type": "function", "function": {"name": "test__tool", "parameters": {}}}]
 
     async def call_tool(self, name: str, arguments: dict[str, Any]) -> str:

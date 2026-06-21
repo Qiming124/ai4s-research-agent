@@ -18,7 +18,7 @@ from server.memory.session import (
     reset_session_store,
 )
 from server.memory.sqlite_store import SQLiteSessionStore
-from shared.schemas import ChatMessage, ChatRequest
+from shared.schemas import ChatMessage, ChatRequest, PersistedToolCall
 
 
 @pytest.fixture(params=["memory", "sqlite"])
@@ -77,6 +77,43 @@ def test_session_store_reasoning_content(
     assert messages[0].reasoning_content == "thinking process"
 
 
+def test_session_store_tool_calls(
+    store: InMemorySessionStore | SQLiteSessionStore,
+) -> None:
+    """assistant 消息的 tool_calls 可持久化往返。"""
+    sid = store.create_session_id()
+    tool_calls = [
+        PersistedToolCall(
+            id="call-1",
+            name="filesystem__read_file",
+            arguments='{"path":"notes.md"}',
+            result="file contents",
+            status="success",
+        ),
+        PersistedToolCall(
+            id="call-2",
+            name="arxiv__search_papers",
+            arguments='{"query":"transformer"}',
+            status="error",
+            error="timeout",
+        ),
+    ]
+    store.append_message(
+        sid,
+        ChatMessage(
+            role="assistant",
+            content="summary",
+            tool_calls=tool_calls,
+        ),
+    )
+    messages = store.get_messages(sid)
+    assert len(messages) == 1
+    assert messages[0].tool_calls is not None
+    assert len(messages[0].tool_calls) == 2
+    assert messages[0].tool_calls[0].name == "filesystem__read_file"
+    assert messages[0].tool_calls[1].error == "timeout"
+
+
 def test_session_store_delete_session(
     store: InMemorySessionStore | SQLiteSessionStore,
 ) -> None:
@@ -100,13 +137,29 @@ def test_sqlite_persistence_across_instances(tmp_path: Path) -> None:
     store_a = SQLiteSessionStore(db)
     sid = store_a.create_session_id()
     store_a.append_message(sid, ChatMessage(role="user", content="hello"))
-    store_a.append_message(sid, ChatMessage(role="assistant", content="world"))
+    store_a.append_message(
+        sid,
+        ChatMessage(
+            role="assistant",
+            content="world",
+            tool_calls=[
+                PersistedToolCall(
+                    id="c1",
+                    name="test__tool",
+                    arguments="{}",
+                    result="ok",
+                ),
+            ],
+        ),
+    )
 
     store_b = SQLiteSessionStore(db)
     messages = store_b.get_messages(sid)
     assert len(messages) == 2
     assert messages[0].content == "hello"
     assert messages[1].content == "world"
+    assert messages[1].tool_calls is not None
+    assert messages[1].tool_calls[0].result == "ok"
 
 
 def test_get_session_store_factory_memory(monkeypatch: pytest.MonkeyPatch) -> None:
