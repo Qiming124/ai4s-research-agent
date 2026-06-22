@@ -48,9 +48,12 @@ router = APIRouter(tags=["chat"])
 
 @router.get("/health", response_model=HealthResponse)
 async def health_check() -> HealthResponse:
-    # 健康检查端点：确认服务已启动且配置加载正确。
-    # 不调用 DeepSeek API，瞬间返回。
-    # 返回示例：{"status":"ok","model":"deepseek-v4-pro","reasoning_effort":"max"}
+    """
+    健康检查：确认服务已启动且配置已加载（不调用 LLM）。
+
+    返回:
+        HealthResponse: status、model、reasoning_effort
+    """
     settings = get_settings()
     return HealthResponse(
         status="ok",
@@ -67,11 +70,18 @@ def _use_multi_agent_orchestrator() -> bool:
 
 @router.post("/v1/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest) -> ChatResponse:
-    # 非流式对话端点：接收用户消息，等待模型完整响应后一次性返回 JSON。
-    # 适合脚本调用、curl 测试、批量处理。
-    #
-    # 参数 request — ChatRequest（必填 message，可选 session_id / system_prompt）
-    # 返回 ChatResponse JSON（session_id / content / reasoning / usage）
+    """
+    非流式对话：等待模型完整响应后一次返回 JSON。
+
+    参数:
+        request: ChatRequest，必填 message，可选 session_id、mode、MCP 等
+
+    返回:
+        ChatResponse: session_id、content、reasoning、usage
+
+    异常:
+        HTTPException 502: LLM 或编排层调用失败
+    """
     try:
         if _use_multi_agent_orchestrator():
             orchestrator = get_multi_agent_orchestrator()
@@ -188,20 +198,15 @@ async def _stream_generator(request: ChatRequest) -> AsyncIterator[str]:
 
 @router.post("/v1/chat/stream")
 async def chat_stream(request: ChatRequest) -> StreamingResponse:
-    # 流式对话端点，返回 SSE 事件流。
-    #
-    # 响应头：
-    #     Content-Type: text/event-stream
-    #     Cache-Control: no-cache        （禁用缓存）
-    #     Connection: keep-alive         （保持连接）
-    #     X-Accel-Buffering: no          （禁用 Nginx 缓冲）
-    #
-    # SSE 事件 type：
-    #     meta      — 会话 ID
-    #     reasoning — thinking 推理片段
-    #     content   — 回答片段
-    #     done      — 流结束，含 usage
-    #     error     — 错误信息
+    """
+    SSE 流式对话，事件类型见 StreamChunk.type。
+
+    参数:
+        request: 与非流式接口相同的 ChatRequest
+
+    返回:
+        StreamingResponse，media_type 为 text/event-stream
+    """
     return StreamingResponse(
         _stream_generator(request),
         media_type="text/event-stream",
@@ -217,8 +222,18 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
 
 @router.get("/v1/sessions/{session_id}", response_model=SessionResponse)
 async def get_session(session_id: str) -> SessionResponse:
-    # 查询指定会话的完整历史消息。
-    # 返回 SessionResponse；404 表示 session_id 不存在。
+    """
+    查询会话历史消息（含 reasoning、tool_calls）。
+
+    参数:
+        session_id: 会话 ID
+
+    返回:
+        SessionResponse
+
+    异常:
+        HTTPException 404: 会话不存在
+    """
     store = get_session_store()
     if not store.session_exists(session_id):
         raise HTTPException(status_code=404, detail=f"会话不存在: {session_id}")
@@ -227,9 +242,15 @@ async def get_session(session_id: str) -> SessionResponse:
 
 @router.delete("/v1/sessions/{session_id}")
 async def delete_session(session_id: str) -> dict[str, str]:
-    # 清空指定会话的全部历史消息（保留会话 ID 本身）。
-    # 若 session_id 不存在会自动创建后清空（幂等）。
-    # CLI 的 /clear 命令调用此端点。
+    """
+    清空指定会话的消息列表（保留 session_id，幂等）。
+
+    参数:
+        session_id: 会话 ID
+
+    返回:
+        含 status=cleared 与 session_id 的字典
+    """
     store = get_session_store()
     store.get_or_create(session_id)
     store.clear_session(session_id)

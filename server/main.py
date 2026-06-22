@@ -45,9 +45,15 @@ WEB_DIST = Path(__file__).resolve().parent.parent / "web" / "dist"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    # 应用生命周期管理器。
-    # yield 前 → 启动时执行（加载配置、设置日志、打印摘要）
-    # yield 后 → 关闭时执行（记录日志）
+    """
+    应用生命周期：启动时加载配置、连接 MCP/RAG；关闭时释放 MCP Client。
+
+    参数:
+        app: FastAPI 应用实例
+
+    产出:
+        无（yield 前后分别执行启动与清理逻辑）
+    """
     settings = get_settings()
     setup_logging(settings)
 
@@ -95,12 +101,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 def create_app() -> FastAPI:
-    # 创建并配置 FastAPI 应用（工厂函数）。
-    # 返回完成以下配置的 app 实例：
-    #     1. 应用元信息
-    #     2. CORS 中间件（允许所有来源跨域）
-    #     3. 挂载 chat_router
-    #     4. 若 web/dist 存在则托管静态资源
+    """
+    创建 FastAPI 应用：注册路由、CORS、可观测中间件与静态资源托管。
+
+    返回:
+        配置完成的 FastAPI 实例
+    """
     app = FastAPI(
         title="AI4S Research Agent",
         description="深度学习损失函数极小值理论 — 科研辅助多智能体系统 Phase 2A/2B",

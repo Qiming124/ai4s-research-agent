@@ -32,6 +32,7 @@ router = APIRouter(tags=["documents"])
 
 
 def _to_info(record) -> DocumentInfo:
+    """将 RagStore 的 DocumentRecord 转为 API 用的 DocumentInfo。"""
     return DocumentInfo(
         doc_id=record.doc_id,
         title=record.title,
@@ -43,6 +44,19 @@ def _to_info(record) -> DocumentInfo:
 
 @router.post("/v1/documents", response_model=DocumentUploadResponse)
 async def upload_document(request: DocumentUploadRequest) -> DocumentUploadResponse:
+    """
+    上传文档正文并写入 Chroma 向量库。
+
+    参数:
+        request: 含 content、title、source、可选 doc_id
+
+    返回:
+        DocumentUploadResponse，含索引后的 document 元数据
+
+    异常:
+        HTTPException 400: RAG 未启用或内容无效
+        HTTPException 500: 索引过程失败
+    """
     settings = get_settings()
     if not settings.enable_rag:
         raise HTTPException(status_code=400, detail="RAG 未启用（ENABLE_RAG=false）")
@@ -65,6 +79,12 @@ async def upload_document(request: DocumentUploadRequest) -> DocumentUploadRespo
 
 @router.get("/v1/documents", response_model=DocumentListResponse)
 async def list_documents() -> DocumentListResponse:
+    """
+    列出已索引的 RAG 文档（ENABLE_RAG=false 时返回空列表）。
+
+    返回:
+        DocumentListResponse: documents 与 total
+    """
     settings = get_settings()
     if not settings.enable_rag:
         return DocumentListResponse(documents=[], total=0)
@@ -76,6 +96,18 @@ async def list_documents() -> DocumentListResponse:
 
 @router.delete("/v1/documents/{doc_id}")
 async def delete_document(doc_id: str) -> dict[str, str]:
+    """
+    删除指定文档及其向量 chunk。
+
+    参数:
+        doc_id: 文档唯一 ID
+
+    返回:
+        status=deleted 与 doc_id
+
+    异常:
+        HTTPException 400/404: RAG 未启用或文档不存在
+    """
     settings = get_settings()
     if not settings.enable_rag:
         raise HTTPException(status_code=400, detail="RAG 未启用（ENABLE_RAG=false）")
@@ -88,6 +120,15 @@ async def delete_document(doc_id: str) -> dict[str, str]:
 
 @router.get("/v1/sessions/{session_id}/rag-refs", response_model=SessionRagRefsResponse)
 async def get_session_rag_refs(session_id: str) -> SessionRagRefsResponse:
+    """
+    查询某会话检索过的 RAG 文档引用（doc_id + 片段预览）。
+
+    参数:
+        session_id: 会话 ID
+
+    返回:
+        SessionRagRefsResponse
+    """
     settings = get_settings()
     store = SessionRagRefStore(settings.session_db_path)
     refs = [

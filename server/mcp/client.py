@@ -21,7 +21,21 @@ logger = logging.getLogger(__name__)
 
 
 class MCPClient:
+    """
+    MCP 多 Server 客户端：通过 stdio 连接 mcp_servers.json 中配置的 Server。
+
+    属性:
+        registry: 已注册工具的 ToolRegistry
+        is_connected: 是否已完成 connect
+    """
+
     def __init__(self, settings: Settings | None = None) -> None:
+        """
+        初始化客户端（不自动连接，需调用 connect）。
+
+        参数:
+            settings: 可选 Settings，默认 get_settings()
+        """
         self._settings = settings or get_settings()
         self._registry = ToolRegistry()
         self._adapter: MultiServerMCPClient | None = None
@@ -38,6 +52,12 @@ class MCPClient:
         return self._connected
 
     async def connect(self) -> None:
+        """
+        按配置连接所有已启用的 MCP Server 并注册工具。
+
+        返回:
+            无；连接失败的分 Server 记录日志但不中断其他 Server
+        """
         if self._connected:
             return
 
@@ -146,6 +166,12 @@ _mcp_client: MCPClient | None = None
 
 
 async def get_mcp_client() -> MCPClient:
+    """
+    获取全局 MCPClient 单例；首次调用且 ENABLE_MCP 为 true 时执行 connect。
+
+    返回:
+        MCPClient 实例
+    """
     global _mcp_client
     if _mcp_client is None:
         _mcp_client = MCPClient()
@@ -160,6 +186,13 @@ def reset_mcp_client() -> None:
 
 
 async def build_mcp_status() -> "MCPStatusResponse":
+    """
+    构建 GET /v1/mcp/status 的响应体。
+
+    返回:
+        MCPStatusResponse，含 server_enabled、connected、各 Server 工具列表
+    """
+
     from shared.schemas import MCPServerInfo, MCPStatusResponse, MCPToolInfo
 
     settings = get_settings()

@@ -1,3 +1,6 @@
+/**
+ * SSE 流式对话 Hook：管理消息列表、会话 ID、流式状态与 MCP/历史偏好。
+ */
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import type { ChatMode, HistoryPreference, McpPreference } from "../utils/preferences";
 import { buildHistoryRequestFields, buildMcpRequestFields } from "../utils/preferences";
@@ -319,6 +322,14 @@ function processStreamEvents(
   }
 }
 
+/**
+ * 聊天流式 Hook：SSE 消费、会话历史、MCP 事件与多会话切换。
+ *
+ * @param chatMode - 对话模式 chat 或 math
+ * @param historyPref - L1 历史策略（是否用服务端默认等）
+ * @param mcpPref - MCP 是否启用及是否用服务端默认
+ * @returns 消息列表、sessionId、流式状态及 sendMessage 等操作方法
+ */
 export function useChatStream(
   chatMode: ChatMode,
   historyPref: HistoryPreference,

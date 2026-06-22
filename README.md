@@ -1,10 +1,21 @@
-# AI4S 科研辅助 Agent — Phase 1
+# AI4S 科研辅助 Agent
 
-面向「深度学习损失函数极小值理论」研究的 AI4S 智能体辅助工具。
+面向「深度学习损失函数极小值理论」研究的 AI4S 智能体：对话、MCP 工具、多 Agent 路由、RAG 记忆、Docker 部署。
 
-**Phase 1 能力**：基于 DeepSeek V4 Pro（`reasoning_effort=max`，1M 上下文）的可对话 Agent Server，提供终端 CLI Client 与 Web 聊天界面。
+**文档索引**：[`docs/README.md`](docs/README.md)（架构、API、环境变量、部署）
 
-**后续规划**：理论推导 / 实验分析 / 文献检索 / 科研记忆（RAG）多智能体协同。
+**当前能力概览**：
+
+| 模块 | 说明 |
+|------|------|
+| 对话 | DeepSeek V4 Pro 流式 reasoning + content（SSE） |
+| L2 会话 | SQLite 持久化，含 reasoning、tool_calls |
+| L1 工作记忆 | 历史截断与可选 LLM 摘要 |
+| MCP | web_search / arxiv / filesystem（stdio） |
+| 多 Agent | `ORCHESTRATION_BACKEND=langgraph` 时 Supervisor 路由 |
+| RAG | Chroma 向量库 + `/v1/documents` |
+| Web | 三栏 UI、KaTeX 公式、会话列表 |
+| Docker | 单镜像含前端构建产物与 API |
 
 ---
 
@@ -134,23 +145,29 @@ cp .env.example .env
 
 ## 配置说明（.env）
 
+完整变量表见 [`docs/ENV.md`](docs/ENV.md)。
+
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
 | `DEEPSEEK_API_KEY` | （必填） | API 密钥 |
 | `DEEPSEEK_BASE_URL` | `https://api.deepseek.com` | API 地址 |
 | `MODEL` | `deepseek-v4-pro` | 模型 ID |
-| `MAX_TOKENS` | `384000` | 最大输出 token（thinking max 需大预算） |
+| `MAX_TOKENS` | `384000` | 最大输出 token |
 | `REASONING_EFFORT` | `max` | 推理强度：`high` 或 `max` |
 | `LOG_LEVEL` | `INFO` | `DEBUG` 可打印 LLM 请求摘要 |
-| `HOST` | `0.0.0.0` | 监听地址（Nginx 代理时改 `127.0.0.1`） |
+| `LOG_FORMAT` | `text` | Docker 建议 `json` |
+| `ENABLE_TOKEN_STATS` | `true` | Token 用量写入 SQLite |
+| `HOST` | `0.0.0.0` | 监听地址 |
 | `PORT` | `8000` | 监听端口 |
-| `SESSION_STORE_BACKEND` | `sqlite` | 会话存储：`sqlite`（持久化）或 `memory`（内存） |
-| `SESSION_DB_PATH` | `./data/sessions.db` | SQLite 数据库路径（仅 `sqlite` 后端生效） |
-| `MAX_HISTORY_MESSAGES` | `0` | L1 截断：保留最近 N 条历史；`0` 表示不限制 |
-| `ENABLE_HISTORY_SUMMARY` | `false` | 截断时对丢弃部分做 LLM 摘要（额外 API 调用） |
-| `HISTORY_SUMMARY_MAX_TOKENS` | `1024` | 历史摘要最大输出 token |
+| `SESSION_STORE_BACKEND` | `sqlite` | `sqlite` 或 `memory` |
+| `SESSION_DB_PATH` | `./data/sessions.db` | SQLite 路径 |
+| `MAX_HISTORY_MESSAGES` | `0` | L1 截断条数，`0` 不限制 |
+| `ENABLE_HISTORY_SUMMARY` | `false` | 截断时 LLM 摘要 |
+| `ENABLE_MCP` | `false` | **启用 MCP 工具** |
+| `ORCHESTRATION_BACKEND` | `legacy` | `legacy` 或 `langgraph` |
+| `ENABLE_RAG` | `false` | 启用 RAG 向量检索 |
 
----
+MCP、RAG 其余变量见 `.env.example` 与 [`docs/mcp-config.md`](docs/mcp-config.md)。
 
 ## Phase 2A 能力清单
 
@@ -235,7 +252,10 @@ cd .. && uvicorn server.main:app --host 0.0.0.0 --port 8000
 | Chat / Math 模式 | 切换对话模式，请求携带 `mode` 字段（math 使用数学推导 prompt） |
 | 清空会话 | 调用 `DELETE /v1/sessions/{id}` 并清空 UI |
 
-### 生产部署（Nginx + systemd）
+### 生产部署
+
+- **Docker**：见 [`docker/README.md`](docker/README.md) 与 [`docs/DEPLOY.md`](docs/DEPLOY.md)
+- **Nginx + systemd**：见下方示例（SSE 需关闭 `proxy_buffering`）
 
 ```bash
 # 1. 安装 Nginx
@@ -285,7 +305,7 @@ systemctl daemon-reload && systemctl enable --now ai4s-agent
 
 ## API 参考
 
-### GET /health
+详见 [`docs/API.md`](docs/API.md)。
 
 ```bash
 curl http://127.0.0.1:8000/health

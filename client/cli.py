@@ -49,7 +49,12 @@ console = Console()
 # ── 命令行参数解析 ────────────────────────────────────────────
 
 def parse_args() -> argparse.Namespace:
-    # 解析命令行参数，返回 Namespace 含 server / session / show_reasoning / mode 属性。
+    """
+    解析 CLI 命令行参数。
+
+    返回:
+        argparse.Namespace: server、session、mode、agent、历史策略等字段
+    """
     parser = argparse.ArgumentParser(
         description="AI4S 科研助手 CLI — 与 DeepSeek Agent Server 对话",
     )
@@ -105,6 +110,21 @@ def build_chat_payload(
     agent: str | None = None,
     auto_route: bool = True,
 ) -> dict[str, Any]:
+    """
+    构造 POST /v1/chat/stream 的 JSON 请求体。
+
+    参数:
+        message: 用户输入
+        session_id: 会话 ID
+        mode: chat 或 math
+        max_history: L1 历史条数，None 表示不传（用服务端默认）
+        history_summary: on/off/default
+        agent: 指定 Agent，None 为自动路由
+        auto_route: 是否自动意图路由
+
+    返回:
+        可直接 json 序列化的 dict
+    """
     payload: dict[str, Any] = {
         "message": message,
         "session_id": session_id,
@@ -123,7 +143,18 @@ def build_chat_payload(
 
 
 async def check_server_health(client: httpx.AsyncClient) -> dict[str, Any]:
-    # 调用 GET /health 确认 server 可连。失败抛 httpx.ConnectError。
+    """
+    调用 GET /health 检查服务端是否可用。
+
+    参数:
+        client: httpx 异步客户端
+
+    返回:
+        健康检查 JSON 字典
+
+    异常:
+        httpx.HTTPError: 连接失败或 HTTP 非 2xx
+    """
     response = await client.get("/health")
     response.raise_for_status()
     return response.json()

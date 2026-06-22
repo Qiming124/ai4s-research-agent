@@ -21,9 +21,7 @@ from pydantic import BaseModel, Field
 
 
 class PersistedToolCall(BaseModel):
-    # 持久化到会话中的单次 MCP 工具调用记录（Phase 3）。
-    #
-    # 字段与 SSE tool_call_* 事件对齐，供 Web 历史时间线回放。
+    """持久化到会话中的 MCP 工具调用记录（与 SSE tool_call_* 事件对齐）。"""
 
     id: str = Field(description="tool_call_id")
     name: str = Field(description="qualified 工具名，如 filesystem__read_file")
@@ -34,11 +32,7 @@ class PersistedToolCall(BaseModel):
 
 
 class ChatMessage(BaseModel):
-    # 单条对话消息，格式与 OpenAI Chat Completions API 保持一致。
-    #
-    # 字段：
-    #     role    — "system"（系统提示）/ "user"（用户）/ "assistant"（模型回答）
-    #     content — 文本内容，任意字符串
+    """单条对话消息，格式与 OpenAI Chat API 一致。"""
 
     role: Literal["system", "user", "assistant"]
     content: str
@@ -53,14 +47,7 @@ class ChatMessage(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    # POST /v1/chat 与 POST /v1/chat/stream 的请求体。
-    #
-    # 字段：
-    #     message       — 用户本轮输入（必填，不能为空字符串）
-    #     session_id    — 会话 ID。为空时服务端自动生成 UUID
-    #     system_prompt — 可选：临时覆盖默认 system prompt
-    #
-    # Debug：message 为空字符串 → pydantic 校验失败返回 400/422。
+    """POST /v1/chat 与 /v1/chat/stream 的请求体。"""
 
     message: str = Field(..., min_length=1, description="用户输入的消息内容")
     session_id: str | None = Field(default=None, description="会话 ID，用于多轮对话上下文")
@@ -173,6 +160,8 @@ class MCPServerInfo(BaseModel):
 
 
 class MCPStatusResponse(BaseModel):
+    """GET /v1/mcp/status 响应：服务端 MCP 开关与连接状态。"""
+
     server_enabled: bool = Field(description="服务端 ENABLE_MCP 配置")
     connected: bool = Field(description="MCP Client 是否已连接")
     servers: list[MCPServerInfo] = Field(default_factory=list)
