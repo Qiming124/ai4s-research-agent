@@ -19,3 +19,6 @@ data
 benchmarks
 tests
 agent-transcripts
+*.md
+!README.md
+!docker/README.md

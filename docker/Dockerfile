@@ -1,11 +1,9 @@
-# syntax=docker/dockerfile:1
-
 # ── Stage 1: build web frontend ──────────────────────────────
 FROM node:20-alpine AS web-build
 
 WORKDIR /web
-COPY web/package.json web/package-lock.json* ./
-RUN npm ci --ignore-scripts 2>/dev/null || npm install
+COPY web/package.json web/package-lock.json ./
+RUN npm ci --ignore-scripts || npm install
 COPY web/ ./
 RUN npm run build
 
@@ -31,7 +29,7 @@ COPY client/ ./client/
 COPY shared/ ./shared/
 COPY mcp_servers.json ./
 
-RUN pip install .
+RUN pip install ".[rag]"
 
 COPY --from=web-build /web/dist ./web/dist
 

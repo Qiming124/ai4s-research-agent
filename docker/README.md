@@ -6,6 +6,32 @@
 
 - Docker Engine 24+ 与 Docker Compose v2
 - 在仓库根目录 `.env` 中配置有效的 `DEEPSEEK_API_KEY`
+- 能拉取基础镜像（`node:20-alpine`、`python:3.12-slim`）。国内网络若出现 `auth.docker.io` / `i/o timeout`，见下方「镜像加速」
+
+## 镜像加速（国内 / Docker Hub 超时）
+
+构建报错示例：
+
+```text
+failed to fetch oauth token: Post "https://auth.docker.io/token": dial tcp ... i/o timeout
+```
+
+**Docker Desktop（Windows + WSL）**：Settings → Docker Engine，在 JSON 中加入 `registry-mirrors`（任选可用源，示例）：
+
+```json
+{
+  "registry-mirrors": [
+    "https://docker.1ms.run",
+    "https://dockerpull.com"
+  ]
+}
+```
+
+Apply & Restart 后执行 `docker info` 确认 mirrors 已生效，再重新 `build`。
+
+**Linux**：编辑 `/etc/docker/daemon.json` 同样配置后 `sudo systemctl restart docker`。
+
+本仓库 Dockerfile **未使用** `# syntax=docker/dockerfile:1`，避免额外拉取 `docker/dockerfile` 前端镜像。
 
 ## 快速启动
 
@@ -67,7 +93,7 @@ MCP 服务在同一容器内以 Python 子进程运行（`mcp_servers.json`）�
 ## 仅构建
 
 ```bash
-docker compose -f docker/docker-compose.yml build
+docker compose --progress=plain -f docker/docker-compose.yml build
 ```
 
 ## 停止
