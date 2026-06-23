@@ -8,23 +8,23 @@
 cd /path/to/ai4s-research-agent
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-cp .env.example .env   # 编辑 DEEPSEEK_API_KEY、ENABLE_MCP 等
-mkdir -p data/mcp_files data/chroma
-uvicorn server.main:app --reload --host 0.0.0.0 --port 8000
+cp conf/.env.example conf/.env   # 编辑 DEEPSEEK_API_KEY、ENABLE_MCP 等
+mkdir -p data/mcp_files data/chroma log
+uvicorn server.main:app --reload --host 0.0.0.0 --port 8000 --app-dir app
 ```
 
 ### Web 开发模式
 
 ```bash
-cd web && npm install && npm run dev
+cd app/web && npm install && npm run dev
 # http://localhost:5173（Vite 代理 API 到 8000）
 ```
 
 ### Web 生产模式（与 API 同端口）
 
 ```bash
-cd web && npm run build
-cd .. && uvicorn server.main:app --host 0.0.0.0 --port 8000
+cd app/web && npm run build
+cd ../../ && uvicorn server.main:app --host 0.0.0.0 --port 8000 --app-dir app
 # http://localhost:8000
 ```
 
@@ -32,11 +32,11 @@ cd .. && uvicorn server.main:app --host 0.0.0.0 --port 8000
 
 ## 二、Docker Compose
 
-详见 [docker/README.md](../docker/README.md)。
+详见 [doc/docker.md](../doc/docker.md)。
 
 ```bash
-cp .env.example .env
-mkdir -p data/mcp_files data/chroma
+cp conf/.env.example conf/.env
+mkdir -p data/mcp_files data/chroma log
 docker compose -f docker/docker-compose.yml up -d --build
 ```
 
@@ -121,4 +121,4 @@ location / {
 | MCP 未启用 | `.env` 设 `ENABLE_MCP=true` 且启动时带 `--env-file` |
 | 页面 404 | 确认镜像含 `web/dist`（需 build 阶段 `npm run build`） |
 | 会话丢失 | 挂载 `data/` 卷；`SESSION_STORE_BACKEND=sqlite` |
-| Docker Hub 超时 | 配置 `registry-mirrors`，见 docker/README.md |
+| Docker Hub 超时 | 配置 `registry-mirrors`，见 doc/docker.md |

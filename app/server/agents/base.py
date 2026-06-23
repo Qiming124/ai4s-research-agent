@@ -106,10 +106,31 @@ class GeneralAgent(BaseAgent):
         mcp: MCPClient,
         tool_call_records: list[PersistedToolCall],
     ) -> AsyncIterator[StreamChunk]:
+        """
+        Legacy 工具调用循环（自研，非 LangGraph）。
+
+        流程：
+            1. 发非流式 function-calling 请求（关闭 thinking 以节省 token）
+            2. 若 LLM 返回 tool_calls，调用 MCP 执行工具后回填 tool 消息
+            3. 循环直到 LLM 不返回 tool_calls 或达到 max_tool_rounds 上限
+            4. 最后发一次流式请求生成含 reasoning 的最终回答
+
+        参数:
+            api_messages: 包含 system、历史、用户消息的 OpenAI 格式列表
+            tools: OpenAI 格式的 tools 列表（传给 function calling）
+            mcp: MCP 客户端（执行工具调用的实际后端）
+            tool_call_records: 持久化记录的收集列表（由调用方最终写入会话）
+
+        产出:
+            StreamChunk: tool_call_start / tool_call_result / tool_call_error
+                        / reasoning / content / done
+        """
         usage: dict[str, Any] | None = None
         max_result_chars = self._settings.mcp_tool_result_max_chars
 
+        # ── 工具循环（多轮 function calling） ──────────────────────
         for _round in range(self._settings.mcp_max_tool_rounds):
+            # 第一步：非流式 function-calling（thinking=off 以提升速度）
             result = await self._llm.chat_with_tools(
                 api_messages,
                 tools,
@@ -118,14 +139,16 @@ class GeneralAgent(BaseAgent):
             if result.usage:
                 usage = result.usage
 
+            # 第二步：LLM 未请求工具 → 以当前累积回复结束
             if not result.tool_calls:
                 if result.content:
                     yield self._with_agent(StreamChunk(type="content", content=result.content))
                     usage = result.usage or usage
                     yield self._with_agent(StreamChunk(type="done", content="", usage=usage))
                     return
-                break
+                break  # 既无 tool_calls 也无 content，结束循环
 
+            # 第三步：将 assistant 消息（含 tool_calls）追加到对话上下文
             assistant_msg: dict[str, Any] = {
                 "role": "assistant",
                 "content": result.content or "",
@@ -199,6 +222,7 @@ class GeneralAgent(BaseAgent):
         # 最终流式回答（含 reasoning）
         full_content = ""
         full_reasoning = ""
+        # 最终流式回答（含 reasoning，thinking=enabled）
         async for chunk in self._llm.stream_chat(api_messages):
             if chunk.type == "reasoning":
                 full_reasoning += chunk.content
@@ -269,6 +293,32 @@ class GeneralAgent(BaseAgent):
         enable_history_summary: bool | None = None,
         enable_tools: bool | None = None,
     ) -> AsyncIterator[StreamChunk]:
+        """
+        Agent 主入口：处理用户消息并流式产出回复。
+
+        完整链路：
+            1. 创建/获取会话 ID，设置可观测上下文
+            2. 从 MemoryManager 获取 L2 全量历史 + L1 截断/摘要
+            3. 决定是否启用 MCP 工具（enable_mcp 且 enable_tools 未显式关闭）
+            4. 组装 API 消息列表（system + history + user + tools hint）
+            5. 根据编排后端选择工具循环路径：
+               - langgraph → _run_langgraph_tool_loop
+               - legacy   → _run_tool_loop（自研）
+               - 无工具   → 直发流式请求
+            6. 收集 reasoning + content 完整文本
+            7. 存储 user+assistant 消息到 L2 会话，记录 token 用量
+
+        参数:
+            message: 用户输入
+            session_id: 可选会话 ID；None 时自动生成
+            system_prompt_override: 覆盖默认 system prompt
+            max_history_messages: L1 截断条数；None=用 .env 默认
+            enable_history_summary: 是否对截断部分做摘要；None=用 .env 默认
+            enable_tools: 是否启用 MCP；None=用 .env 默认
+
+        产出:
+            StreamChunk 流（reasoning/content/done/error/tool_call_*）
+        """
         sid = self._sessions.get_or_create(session_id)
         set_session_id(sid)
         set_agent_name(self.name)

@@ -6,8 +6,8 @@
 
 ## 概述
 
-- **配置文件**：项目根目录 [`mcp_servers.json`](../mcp_servers.json)
-- **环境变量**：`.env` 中的 `ENABLE_MCP` 等（见 [环境变量](#环境变量)）
+- **配置文件**：项目根目录 [`mcp_servers.json`](../conf/mcp_servers.json)
+- **环境变量**：`conf/.env` 中的 `ENABLE_MCP` 等（见 [环境变量](#环境变量)）
 - **架构**：启动时 `MCPClient` 按配置逐个拉起 stdio MCP Server，聚合工具后供 `GeneralAgent` 通过 function calling 调用
 - **工具命名**：`{server名}__{工具名}`，例如 `arxiv__search_papers`
 
@@ -17,23 +17,23 @@ Web 端可在 **设置 → MCP 工具** 查看 Server 连接状态与工具列�
 
 ## 快速启用
 
-1. 复制并编辑 `.env`：
+1. 复制并编辑 `conf/.env`：
 
 ```env
 ENABLE_MCP=true
-MCP_CONFIG_PATH=./mcp_servers.json
+MCP_CONFIG_PATH=./conf/mcp_servers.json
 MCP_ALLOWED_DIRS=./data/mcp_files
 MCP_MAX_TOOL_ROUNDS=5
 ```
 
-2. 确认 [`mcp_servers.json`](../mcp_servers.json) 中需要的 Server 为 `"enabled": true`
+2. 确认 [`mcp_servers.json`](../conf/mcp_servers.json) 中需要的 Server 为 `"enabled": true`
 
 3. **重启 uvicorn**（MCP 在进程启动时连接，修改 json 后需重启）
 
 4. 启动日志应出现类似：
 
 ```
-MCP: 已启用 (./mcp_servers.json)
+MCP: 已启用 (./conf/mcp_servers.json)
 MCP Client 已连接 3 个 Server，共 6 个工具
 ```
 
@@ -46,7 +46,7 @@ MCP Client 已连接 3 个 Server，共 6 个工具
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
 | `ENABLE_MCP` | `false` | 是否启用 MCP 工具层 |
-| `MCP_CONFIG_PATH` | `./mcp_servers.json` | MCP Server 配置文件路径 |
+| `MCP_CONFIG_PATH` | `./conf/mcp_servers.json` | MCP Server 配置文件路径 |
 | `MCP_ALLOWED_DIRS` | `./data/mcp_files` | filesystem MCP 允许访问的目录，多个路径用 `:` 分隔 |
 | `MCP_MAX_TOOL_ROUNDS` | `5` | 单轮对话中 LLM 工具调用循环的上限 |
 
@@ -56,7 +56,7 @@ MCP Client 已连接 3 个 Server，共 6 个工具
 
 ## 配置文件格式
 
-[`mcp_servers.json`](../mcp_servers.json) 为 JSON 对象，**键名为 Server 标识**（小写字母、数字、下划线），值为：
+[`mcp_servers.json`](../conf/mcp_servers.json) 为 JSON 对象，**键名为 Server 标识**（小写字母、数字、下划线），值为：
 
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|

@@ -5,7 +5,7 @@
 ## 前置条件
 
 - Docker Engine 24+ 与 Docker Compose v2
-- 在仓库根目录 `.env` 中配置有效的 `DEEPSEEK_API_KEY`
+- 在 `conf/.env` 中配置有效的 `DEEPSEEK_API_KEY`
 - 能拉取基础镜像（`node:20-alpine`、`python:3.12-slim`）。国内网络若出现 `auth.docker.io` / `i/o timeout`，见下方「镜像加速」
 
 ## 镜像加速（国内 / Docker Hub 超时）
@@ -38,32 +38,35 @@ Apply & Restart 后执行 `docker info` 确认 mirrors 已生效，再重新 `bu
 在**仓库根目录**执行：
 
 ```bash
-cp .env.example .env
-# 编辑 .env 并设置 DEEPSEEK_API_KEY
+cp conf/.env.example conf/.env
+# 编辑 conf/.env 并设置 DEEPSEEK_API_KEY
 
-mkdir -p data/mcp_files data/chroma
+mkdir -p data/mcp_files data/chroma log
 
 docker compose -f docker/docker-compose.yml up --build
 ```
 
-打开 http://localhost:8000 — 服务端提供 `web/dist` 静态资源与 API 路由。
+打开 http://localhost:8000 — 服务端提供 `app/web/dist` 静态资源与 API 路由。
 
 ## 配置说明
 
 | 机制 | 用途 |
 |------|------|
-| `env_file: ../.env` | 从仓库根目录加载密钥与环境变量覆盖 |
+| `env_file: ../conf/.env` | 从 conf 目录加载密钥与环境变量 |
 | compose 中的 `environment:` | 容器内数据卷路径 |
-| `../data:/app/data` | 持久化 `sessions.db`、MCP 文件、Chroma 索引 |
+| `../data:/repo/data` | 持久化 sessions.db、MCP 文件、Chroma |
+| `../log:/repo/log` | 应用日志 app.log |
+| `../conf:/repo/conf:ro` | MCP JSON 配置 |
 
 推荐的容器内路径（compose 中自动设置）：
 
-- `SESSION_DB_PATH=/app/data/sessions.db`
-- `MCP_ALLOWED_DIRS=/app/data/mcp_files`
-- `RAG_CHROMA_PATH=/app/data/chroma`
-- `LOG_FORMAT=json` — 结构化日志，含 `request_id`、`session_id`、`agent_name`、`tool_name`、`latency_ms`
+- `SESSION_DB_PATH=/repo/data/sessions.db`
+- `MCP_ALLOWED_DIRS=/repo/data/mcp_files`
+- `RAG_CHROMA_PATH=/repo/data/chroma`
+- `MCP_CONFIG_PATH=/repo/conf/mcp_servers.json`
+- `LOG_FORMAT=json` — 结构化日志
 
-详见面向 Docker 的模板 `docker/.env.example`。
+详见 `conf/docker.env.example`。
 
 ## 健康检查
 

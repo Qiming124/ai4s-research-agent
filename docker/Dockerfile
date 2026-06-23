@@ -2,9 +2,9 @@
 FROM node:20-alpine AS web-build
 
 WORKDIR /web
-COPY web/package.json web/package-lock.json ./
+COPY app/web/package.json app/web/package-lock.json ./
 RUN npm ci --ignore-scripts || npm install
-COPY web/ ./
+COPY app/web/ ./
 RUN npm run build
 
 # ── Stage 2: Python runtime ──────────────────────────────────
@@ -15,29 +15,28 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
-WORKDIR /app
+WORKDIR /repo
 
-# System deps: curl for healthcheck; build tools for chromadb/hnswlib wheels if needed
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 COPY pyproject.toml README.md ./
-COPY server/ ./server/
-COPY client/ ./client/
-COPY shared/ ./shared/
-COPY mcp_servers.json ./
+COPY app/server/ ./app/server/
+COPY app/client/ ./app/client/
+COPY app/shared/ ./app/shared/
+COPY conf/mcp_servers.json ./conf/mcp_servers.json
 
 RUN pip install ".[rag]"
 
-COPY --from=web-build /web/dist ./web/dist
+COPY --from=web-build /web/dist ./app/web/dist
 
-RUN mkdir -p /app/data/mcp_files /app/data/chroma
+RUN mkdir -p /repo/data/mcp_files /repo/data/chroma /repo/log
 
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
     CMD curl -f http://127.0.0.1:8000/health || exit 1
 
-CMD ["uvicorn", "server.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "server.main:app", "--host", "0.0.0.0", "--port", "8000", "--app-dir", "app"]

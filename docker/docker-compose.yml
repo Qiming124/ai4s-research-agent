@@ -1,10 +1,8 @@
-# Docker Compose for AI4S Research Agent (Phase 6)
+# Docker Compose for AI4S Research Agent
 #
-# Usage (from repo root):
-#   cp .env.example .env   # fill DEEPSEEK_API_KEY
-#   docker compose -f docker/docker-compose.yml up --build
-#
-# Data persists in ../data (sessions.db, mcp_files, chroma).
+# 用法（仓库根目录）：
+#   cp conf/.env.example conf/.env   # 填入 DEEPSEEK_API_KEY
+#   docker compose -f docker/docker-compose.yml up -d --build
 
 services:
   app:
@@ -14,17 +12,19 @@ services:
     ports:
       - "${PORT:-8000}:8000"
     env_file:
-      - ../.env
+      - ../conf/.env
     environment:
       HOST: "0.0.0.0"
       PORT: "8000"
       LOG_FORMAT: json
-      SESSION_DB_PATH: /app/data/sessions.db
-      MCP_ALLOWED_DIRS: /app/data/mcp_files
-      RAG_CHROMA_PATH: /app/data/chroma
-      MCP_CONFIG_PATH: /app/mcp_servers.json
+      SESSION_DB_PATH: /repo/data/sessions.db
+      MCP_ALLOWED_DIRS: /repo/data/mcp_files
+      RAG_CHROMA_PATH: /repo/data/chroma
+      MCP_CONFIG_PATH: /repo/conf/mcp_servers.json
     volumes:
-      - ../data:/app/data
+      - ../data:/repo/data
+      - ../log:/repo/log
+      - ../conf:/repo/conf:ro
     healthcheck:
       test: ["CMD", "curl", "-f", "http://127.0.0.1:8000/health"]
       interval: 30s

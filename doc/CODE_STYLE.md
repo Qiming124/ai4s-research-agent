@@ -39,6 +39,6 @@ async def get_session(session_id: str) -> SessionResponse:
 
 ## 文档
 
-- 用户向文档放在 `docs/` 与根 `README.md`。
-- MCP 专题：`docs/mcp-config.md`。
-- 部署：`docs/DEPLOY.md`、`docker/README.md`。
+- 用户向文档放在 `doc/` 与根 `README.md`。
+- MCP 专题：`doc/mcp-config.md`。
+- 部署：`doc/DEPLOY.md`、`doc/docker.md`。

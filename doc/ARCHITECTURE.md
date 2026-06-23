@@ -43,26 +43,29 @@
 
 ## MCP
 
-- 配置：`mcp_servers.json`
+- 配置：`conf/mcp_servers.json`
 - 运行时：`MCPClient` 拉起 stdio 子进程（web_search、arxiv、filesystem）
 - 工具名：`{server}__{tool}`，如 `filesystem__list_files`
 - 详见 [mcp-config.md](mcp-config.md)
 
 ## Web 前端
 
-- 开发：`web/` Vite + React，5173 代理 8000
-- 生产：`npm run build` → `web/dist`，由 `server/main.py` 托管
+- 开发：`app/web/` Vite + React，5173 代理 8000
+- 生产：`npm run build` → `app/web/dist`，由 `server/main.py` 托管
 - 状态：会话列表 localStorage；消息从 `GET /v1/sessions/{id}` 恢复
 
 ## 关键目录
 
 | 路径 | 职责 |
 |------|------|
-| `shared/schemas.py` | 请求/响应模型 |
-| `server/config.py` | `.env` → Settings |
-| `server/agents/` | Agent 与编排 |
-| `server/mcp/` | MCP Client、Registry、内置 Server |
-| `server/graph/` | LangGraph ReAct 子图 |
-| `server/memory/rag/` | RAG 入库与检索 |
-| `server/observability/` | 结构化日志、token 统计 |
-| `web/src/` | React UI |
+| `app/shared/schemas.py` | 请求/响应模型 |
+| `app/shared/paths.py` | 目录布局常量 |
+| `app/server/config.py` | `conf/.env` → Settings |
+| `app/server/agents/` | Agent 与编排 |
+| `app/server/mcp/` | MCP Client、Registry、内置 Server |
+| `app/server/graph/` | LangGraph ReAct 子图 |
+| `app/server/memory/rag/` | RAG 入库与检索 |
+| `app/server/observability/` | 结构化日志、token 统计 |
+| `app/web/src/` | React UI |
+| `conf/` | 环境变量模板与 MCP JSON |
+| `log/` | 运行时日志 |

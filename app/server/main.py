@@ -39,7 +39,7 @@ from server.observability.middleware import RequestContextMiddleware
 
 logger = logging.getLogger(__name__)
 
-# 前端构建产物目录（npm run build 后生成）
+# 前端构建产物：app/web/dist
 WEB_DIST = Path(__file__).resolve().parent.parent / "web" / "dist"
 
 

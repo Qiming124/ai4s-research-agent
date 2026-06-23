@@ -18,53 +18,67 @@ from shared.schemas import ChatMessage
 
 
 class BaseSessionStore(ABC):
-    # 会话仓库抽象基类。子类必须实现以下 8 个方法。
+    """
+    会话仓库抽象基类——子类必须实现 8 个方法。
+
+    方法契约：
+
+        1. create_session_id() → str
+           生成新的 UUID 会话 ID。
+
+        2. get_or_create(session_id?: str) → str
+           获取或创建会话。session_id 为 None 时自动生成。
+
+        3. get_messages(session_id: str) → list[ChatMessage]
+           获取指定会话的全部历史消息。返回副本防止外部修改。
+           会话不存在时返回空列表。
+
+        4. append_message(session_id: str, message: ChatMessage) → None
+           向指定会话追加一条消息。session 不存在时自动创建。
+
+        5. clear_session(session_id: str) → bool
+           清空指定会话的消息列表（保留 session_id 本身）。
+           返回 True 若会话存在；False 若不存在。
+
+        6. delete_session(session_id: str) → bool
+           完全删除会话及所有消息。
+           返回 True 若会话存在并已删除；False 若不存在。
+
+        7. session_exists(session_id: str) → bool
+           检查会话是否存在（即使消息列表为空也返回 True）。
+
+        8. list_session_ids() → list[str]
+           列出当前所有会话 ID（调试用，按创建时间排列）。
+    """
 
     @abstractmethod
     def create_session_id(self) -> str:
-        # 生成新的 UUID 会话 ID。
-        # 返回：全局唯一的 session_id 字符串。
         ...
 
     @abstractmethod
     def get_or_create(self, session_id: str | None) -> str:
-        # 获取或创建会话。
-        # 参数 session_id — 客户端指定 ID；None 时自动生成。
-        # 返回：实际使用的 session_id。
         ...
 
     @abstractmethod
     def get_messages(self, session_id: str) -> list[ChatMessage]:
-        # 获取指定会话的全部历史消息（返回副本，防止外部修改内部状态）。
-        # 参数 session_id — 目标会话 ID。
-        # 返回：按时间顺序排列的 ChatMessage 列表；会话不存在时返回空列表。
         ...
 
     @abstractmethod
     def append_message(self, session_id: str, message: ChatMessage) -> None:
-        # 向指定会话追加一条消息；session 不存在时自动创建。
-        # 参数 session_id — 目标会话 ID。
-        # 参数 message    — 要追加的消息。
         ...
 
     @abstractmethod
     def clear_session(self, session_id: str) -> bool:
-        # 清空指定会话的全部历史消息（保留 session_id 本身）。
-        # 返回：会话存在并已清空 True；不存在 False。
         ...
 
     @abstractmethod
     def delete_session(self, session_id: str) -> bool:
-        # 完全删除指定会话（含所有消息）。
-        # 返回：会话存在并已删除 True；不存在 False。
         ...
 
     @abstractmethod
     def session_exists(self, session_id: str) -> bool:
-        # 检查指定会话是否存在（即使消息列表为空也返回 True）。
         ...
 
     @abstractmethod
     def list_session_ids(self) -> list[str]:
-        # 列出当前所有会话 ID（调试用）。
         ...

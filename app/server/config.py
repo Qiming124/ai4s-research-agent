@@ -1,7 +1,7 @@
 # =============================================================================
 # 应用配置模块。
 #
-# 职责：从项目根目录 .env 文件与环境变量加载所有运行时配置。
+# 职责：从 conf/.env（或兼容根目录 .env）与环境变量加载运行时配置。
 #       通过 get_settings() 提供全局可访问的单例配置对象。
 #
 # 架构位置（被以下模块引用）：
@@ -18,7 +18,7 @@
 #     4. 应用 field_validator 校验（如 API Key 不能是占位符）
 #
 # Debug：
-#     - 启动报 ValidationError: deepseek_api_key Field required → 根目录没有 .env
+#     - 启动报 ValidationError: deepseek_api_key Field required → conf/.env 未配置
 #     - 启动报 ValueError → .env 中 DEEPSEEK_API_KEY 为空或仍是 sk-your-api-key-here
 #     - 模型无 reasoning 输出 → 检查 REASONING_EFFORT 是否为 max
 # =============================================================================
@@ -32,6 +32,16 @@ from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from server.llm.prompts import DEFAULT_SYSTEM_PROMPT
+from shared.paths import DATA_ROOT, LOG_ROOT, conf_path, resolve_env_file
+
+_ENV_FILE = resolve_env_file()
+_SETTINGS_KW: dict = {
+    "env_file_encoding": "utf-8",
+    "case_sensitive": False,
+    "extra": "ignore",
+}
+if _ENV_FILE.is_file():
+    _SETTINGS_KW["env_file"] = str(_ENV_FILE)
 
 
 class Settings(BaseSettings):
@@ -42,12 +52,7 @@ class Settings(BaseSettings):
     #     print(cfg.model)      # → deepseek-v4-pro
 
     # pydantic-settings 配置：从 .env 读取，大小写不敏感，忽略未定义的额外变量
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        case_sensitive=False,   # .env 中的 DEEPSEEK_API_KEY 匹配字段 deepseek_api_key
-        extra="ignore",         # .env 中有未定义变量不会导致启动失败
-    )
+    model_config = SettingsConfigDict(**_SETTINGS_KW)
 
     # ── DeepSeek API 参数 ────────────────────────────────────
 
@@ -113,7 +118,7 @@ class Settings(BaseSettings):
         description="会话存储后端：memory（内存，重启丢失）或 sqlite（持久化）",
     )
     session_db_path: str = Field(
-        default="./data/sessions.db",
+        default=str(DATA_ROOT / "sessions.db"),
         description="SQLite 数据库文件路径（仅 session_store_backend=sqlite 时生效）",
     )
     enable_history_summary: bool = Field(
@@ -132,11 +137,11 @@ class Settings(BaseSettings):
         description="是否启用 MCP 工具调用",
     )
     mcp_config_path: str = Field(
-        default="./mcp_servers.json",
+        default=str(conf_path("mcp_servers.json")),
         description="MCP Server 配置文件路径",
     )
     mcp_allowed_dirs: str = Field(
-        default="./data/mcp_files",
+        default=str(DATA_ROOT / "mcp_files"),
         description="filesystem MCP 允许访问的目录（冒号分隔多个路径）",
     )
     mcp_max_tool_rounds: int = Field(
@@ -152,7 +157,7 @@ class Settings(BaseSettings):
         description="全局工具白名单：逗号分隔 glob 模式（如 filesystem__*,arxiv__*）；空=全部",
     )
     mcp_tool_whitelist_path: str = Field(
-        default="",
+        default=str(conf_path("mcp_tool_whitelist.json")),
         description="可选 JSON 白名单文件路径，支持 global 与 agents 映射",
     )
 
@@ -170,7 +175,7 @@ class Settings(BaseSettings):
         description="是否启用 L3 向量记忆检索",
     )
     rag_chroma_path: str = Field(
-        default="./data/chroma",
+        default=str(DATA_ROOT / "chroma"),
         description="Chroma 向量库持久化目录",
     )
     rag_embedding_provider: str = Field(
@@ -219,7 +224,7 @@ class Settings(BaseSettings):
         if not stripped or stripped == "sk-your-api-key-here":
             raise ValueError(
                 "DEEPSEEK_API_KEY 未配置或为占位符。"
-                "请复制 .env.example 为 .env 并填入真实密钥。"
+                "请复制 conf/.env.example 为 conf/.env 并填入真实密钥。"
             )
         return stripped
 
@@ -299,21 +304,35 @@ def get_settings() -> Settings:
 
 
 def setup_logging(settings: Settings | None = None) -> None:
-    # 按配置指定的日志级别初始化 Python 根 logger。
-    # 参数 settings 为 None 时自动调用 get_settings()。
-    #
-    # 调用方：server/main.py 在应用启动阶段调用。
+    """
+    初始化根 logger：控制台输出 + 写入 log/app.log。
+
+    参数:
+        settings: 可选 Settings；省略时调用 get_settings()
+    """
     cfg = settings or get_settings()
     level = getattr(logging, cfg.log_level.upper(), logging.INFO)
+    LOG_ROOT.mkdir(parents=True, exist_ok=True)
+    log_file = LOG_ROOT / "app.log"
+
+    handlers: list[logging.Handler] = []
     if cfg.log_format == "json":
         from server.observability.structured import StructuredLogFormatter
 
-        handler = logging.StreamHandler()
-        handler.setFormatter(StructuredLogFormatter())
-        logging.basicConfig(level=level, handlers=[handler], force=True)
+        stream_handler = logging.StreamHandler()
+        stream_handler.setFormatter(StructuredLogFormatter())
+        handlers.append(stream_handler)
+        file_handler = logging.FileHandler(log_file, encoding="utf-8")
+        file_handler.setFormatter(StructuredLogFormatter())
+        handlers.append(file_handler)
     else:
-        logging.basicConfig(
-            level=level,
-            format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-            force=True,
-        )
+        text_fmt = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+        formatter = logging.Formatter(text_fmt)
+        stream_handler = logging.StreamHandler()
+        stream_handler.setFormatter(formatter)
+        handlers.append(stream_handler)
+        file_handler = logging.FileHandler(log_file, encoding="utf-8")
+        file_handler.setFormatter(formatter)
+        handlers.append(file_handler)
+
+    logging.basicConfig(level=level, handlers=handlers, force=True)

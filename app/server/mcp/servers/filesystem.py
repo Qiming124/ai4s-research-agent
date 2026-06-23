@@ -10,10 +10,13 @@ from mcp.server.fastmcp import FastMCP
 mcp = FastMCP("filesystem")
 
 
+from shared.paths import DATA_ROOT
+
+
 def _allowed_roots() -> list[Path]:
-    raw = os.environ.get("MCP_ALLOWED_DIRS", "./data/mcp_files").strip()
+    raw = os.environ.get("MCP_ALLOWED_DIRS", str(DATA_ROOT / "mcp_files")).strip()
     if not raw:
-        raw = "./data/mcp_files"
+        raw = str(DATA_ROOT / "mcp_files")
     return [Path(p).resolve() for p in raw.split(":") if p.strip()]
 
 

@@ -1,6 +1,6 @@
 # 环境变量说明
 
-配置文件：项目根目录 `.env`（从 `.env.example` 复制）。  
+配置文件：`conf/.env`（从 `conf/.env.example` 复制）。  
 加载逻辑：`server/config.py` 中的 `Settings`，大小写不敏感。
 
 ## 必填
@@ -48,7 +48,7 @@
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
 | `ENABLE_MCP` | `false` | **是否启用 MCP**；生产需 `true` |
-| `MCP_CONFIG_PATH` | `./mcp_servers.json` | MCP Server 配置路径 |
+| `MCP_CONFIG_PATH` | `./conf/mcp_servers.json` | MCP Server 配置路径 |
 | `MCP_ALLOWED_DIRS` | `./data/mcp_files` | filesystem 工具可读目录（冒号分隔） |
 | `MCP_MAX_TOOL_ROUNDS` | `10` | 单轮对话最大工具循环次数 |
 | `MCP_TOOL_RESULT_MAX_CHARS` | `8000` | 工具结果写入上下文前最大字符 |

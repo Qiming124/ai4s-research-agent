@@ -41,6 +41,6 @@ fi
 echo ""
 echo "==> 迁移完成！后续步骤："
 echo "    cd $DEST"
-echo "    cp .env.example .env   # 填入 DEEPSEEK_API_KEY"
+echo "    cp conf/.env.example conf/.env   # 填入 DEEPSEEK_API_KEY"
 echo "    python3 -m pip install -e ."
 echo "    uvicorn server.main:app --reload --host 0.0.0.0 --port 8000"

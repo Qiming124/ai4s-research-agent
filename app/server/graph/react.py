@@ -1,4 +1,23 @@
+# =============================================================================
 # ReAct 子图编译入口。
+#
+# 职责：构建 LangGraph ReAct 工具循环子图（call_model ↔ execute_tools 节点）。
+#
+# 图结构（Mermaid）：
+#     ┌──────────┐   有 tool_calls    ┌──────────────┐
+#     │ call_model ├────────────────→ │ execute_tools │
+#     └─────┬──────┘                  └──────┬───────┘
+#           │ 无 tool_calls                  │
+#           ↓                                │
+#          END  ←────────────────────────────┘
+#
+# 限制：
+#     - max_tool_rounds：防止无限循环（默认 10 轮）
+#     - tool_rounds >= max_tool_rounds 时从 call_model 直接 → END
+#
+# OpenAI dict → LangChain BaseMessage 转换：
+#     messages_from_api_dicts 负责将 Legacy 路径的 dict 消息转为 LangGraph 可用的类型。
+# =============================================================================
 
 from __future__ import annotations
 
@@ -20,7 +39,21 @@ from server.graph.state import ReactState
 
 
 def messages_from_api_dicts(messages: list[dict[str, Any]]) -> list[BaseMessage]:
-    """将 OpenAI 风格 dict 消息转为 LangChain BaseMessage 列表。"""
+    """
+    将 OpenAI 风格的 dict 消息列表转为 LangChain BaseMessage 列表。
+
+    映射规则：
+        role=system     → SystemMessage
+        role=user       → HumanMessage
+        role=assistant  → AIMessage（含可选 tool_calls 子结构）
+        role=tool       → ToolMessage（含 tool_call_id）
+
+    参数:
+        messages: [{"role": ..., "content": ..., "tool_calls": [...]}, ...]
+
+    返回:
+        BaseMessage 列表，可直接传入 LangGraph StateGraph
+    """
     result: list[BaseMessage] = []
     for msg in messages:
         role = msg.get("role")
@@ -32,10 +65,12 @@ def messages_from_api_dicts(messages: list[dict[str, Any]]) -> list[BaseMessage]
         elif role == "assistant":
             tool_calls = msg.get("tool_calls")
             if tool_calls:
+                # assistant 消息含 tool_calls → 解析为 LangChain 格式
                 lc_tool_calls = []
                 for tc in tool_calls:
                     fn = tc.get("function", {})
                     args_raw = fn.get("arguments", "{}")
+                    # 兼容两种格式：字符串 JSON 或已解析的 dict
                     if isinstance(args_raw, str):
                         import json
 
@@ -56,6 +91,7 @@ def messages_from_api_dicts(messages: list[dict[str, Any]]) -> list[BaseMessage]
             else:
                 result.append(AIMessage(content=content))
         elif role == "tool":
+            # 工具返回消息，含 tool_call_id 用于关联请求
             result.append(
                 ToolMessage(
                     content=content,
@@ -70,8 +106,16 @@ def _route_after_call_model(
     *,
     max_tool_rounds: int,
 ) -> str:
+    """
+    条件路由：根据 AIMessage 是否含 tool_calls 决定下一步。
+
+    规则：
+        - AIMessage 且含 tool_calls 且未达回合上限 → "execute_tools"
+        - 否则 → END（对话结束）
+    """
     last = state["messages"][-1]
     if isinstance(last, AIMessage) and last.tool_calls:
+        # 检查是否已达工具调用轮次上限
         if state.get("tool_rounds", 0) >= max_tool_rounds:
             return END
         return "execute_tools"
@@ -86,8 +130,31 @@ def build_react_graph(
     max_tool_rounds: int,
     max_result_chars: int,
 ) -> Any:
-    """编译 ReAct 工具循环子图：call_model ↔ execute_tools。"""
+    """
+    编译 LangGraph ReAct 工具循环子图。
+
+    参数:
+        model: thinking=off 的 LangChain ChatOpenAI 模型（工具调用用）
+        tools: LangChain StructuredTool 列表
+        max_tool_rounds: 最多工具调用轮次（达到后强制结束）
+        max_result_chars: 工具结果截断上限
+
+    返回:
+        CompiledStateGraph（可调用 .ainvoke / .astream）
+
+    图节点：
+        call_model    — 调 LLM 获取 tool_calls
+        execute_tools — 执行 tool_calls 并回填 ToolMessage
+
+    图边：
+        START → call_model
+        call_model → execute_tools（有 tool_calls 且未达上限）
+        call_model → END（无 tool_calls 或已达到上限）
+        execute_tools → call_model（循环回模型）
+    """
     graph = StateGraph(ReactState)
+
+    # 添加两个核心节点
     graph.add_node("call_model", make_call_model_node(model, tools))
     graph.add_node(
         "execute_tools",
@@ -95,6 +162,8 @@ def build_react_graph(
     )
 
     graph.set_entry_point("call_model")
+
+    # 条件边：根据 call_model 输出决定下一步
     graph.add_conditional_edges(
         "call_model",
         lambda state: _route_after_call_model(state, max_tool_rounds=max_tool_rounds),
@@ -103,6 +172,8 @@ def build_react_graph(
             END: END,
         },
     )
+
+    # execute_tools 完成后回到 call_model（下一步可能继续调工具或结束）
     graph.add_edge("execute_tools", "call_model")
 
     return graph.compile()

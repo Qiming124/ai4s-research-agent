@@ -2,7 +2,7 @@
 
 面向「深度学习损失函数极小值理论」研究的 AI4S 智能体：对话、MCP 工具、多 Agent 路由、RAG 记忆、Docker 部署。
 
-**文档索引**：[`docs/README.md`](docs/README.md)（架构、API、环境变量、部署）
+**文档索引**：[`doc/README.md`](doc/README.md)（架构、API、环境变量、部署）
 
 **当前能力概览**：
 
@@ -56,21 +56,39 @@
   → SSE 事件流 → 客户端实时渲染
 ```
 
-### 目录说明
+### 目录布局
+
+```
+agent/
+├── README.md              # 项目总览（根目录保留）
+├── app/                   # 全部应用代码
+│   ├── server/            # FastAPI 后端
+│   ├── client/            # CLI
+│   ├── shared/            # schemas + paths
+│   └── web/               # Vite + React 前端
+├── conf/                  # .env 模板、mcp_servers.json 等
+├── doc/                   # 技术文档
+├── log/                   # 运行时日志 app.log
+├── data/                  # sessions.db、chroma、mcp_files
+└── docker/                # Dockerfile / compose
+```
+
+Python 包名仍为 `server`、`client`、`shared`（位于 `app/` 下），import 写法不变。
+
+### 主要模块
 
 | 路径 | 职责 |
 |------|------|
-| `shared/schemas.py` | 请求/响应/流式 chunk 数据结构定义 |
-| `server/config.py` | 从 `.env` 加载全部运行时配置 |
-| `server/llm/prompts.py` | 系统提示词（科研助手 persona） |
-| `server/llm/client.py` | DeepSeek API 封装（流式/非流式） |
-| `server/memory/session.py` | 内存会话存储（session_id → 消息列表） |
-| `server/agents/base.py` | BaseAgent 抽象基类 + GeneralAgent 实现 |
-| `server/api/chat.py` | HTTP 路由（/health、/v1/chat、SSE、/v1/sessions） |
-| `server/main.py` | FastAPI 入口、CORS、静态文件托管 |
-| `client/cli.py` | 终端 CLI 客户端（httpx + rich 流式渲染） |
-| `web/` | Vite + React 聊天页面（Markdown + 可折叠思考过程） |
-| `tests/test_session.py` | 单元测试 |
+| `app/shared/schemas.py` | 请求/响应/流式 chunk 数据结构 |
+| `app/shared/paths.py` | 仓库根、conf、log、data 路径常量 |
+| `app/server/config.py` | 从 `conf/.env` 加载配置 |
+| `app/server/llm/` | DeepSeek 客户端与 prompt |
+| `app/server/memory/` | 会话存储（SQLite / 内存） |
+| `app/server/agents/` | Agent 编排与 tool loop |
+| `app/server/api/` | HTTP 路由与 SSE |
+| `app/server/main.py` | FastAPI 入口、静态文件托管 |
+| `app/client/cli.py` | 终端 CLI |
+| `app/web/` | React 聊天 UI |
 
 ---
 
@@ -96,16 +114,16 @@ git checkout v0.1     # Phase 1 存档版
 
 | 序号 | 文件 | 作用 |
 |------|------|------|
-| 1 | `shared/schemas.py` | 所有数据结构的定义 |
-| 2 | `server/llm/prompts.py` | System Prompt 常量 |
-| 3 | `server/config.py` | Settings 类——如何从 .env 加载配置 |
-| 4 | `server/memory/session.py` | SessionStore——会话上下文存储 |
-| 5 | `server/llm/client.py` | DeepSeekClient——如何调 API |
-| 6 | `server/agents/base.py` | BaseAgent + GeneralAgent——核心业务流程 |
-| 7 | `server/api/chat.py` | 5 个 HTTP 端点，SSE 事件序列化 |
-| 8 | `server/main.py` | FastAPI 入口、CORS、静态文件托管 |
-| 9 | `client/cli.py` | 终端交互客户端 |
-| 10 | `web/src/` | 前端 React 页面（可选） |
+| 1 | `app/shared/schemas.py` | 所有数据结构的定义 |
+| 2 | `app/server/llm/prompts.py` | System Prompt 常量 |
+| 3 | `app/server/config.py` | Settings — 从 conf/.env 加载 |
+| 4 | `app/server/memory/session.py` | SessionStore |
+| 5 | `app/server/llm/client.py` | DeepSeekClient |
+| 6 | `app/server/agents/base.py` | BaseAgent + GeneralAgent |
+| 7 | `app/server/api/chat.py` | HTTP 端点与 SSE |
+| 8 | `app/server/main.py` | FastAPI 入口 |
+| 9 | `app/client/cli.py` | 终端客户端 |
+| 10 | `app/web/src/` | React 前端（可选） |
 
 ---
 
@@ -125,27 +143,27 @@ source .venv/bin/activate
 pip install -e .
 
 # 4. 配置 API Key
-cp .env.example .env
-# 编辑 .env，把 DEEPSEEK_API_KEY 改成你的真实密钥
+cp conf/.env.example conf/.env
+# 编辑 conf/.env，填入 DEEPSEEK_API_KEY
 ```
 
 ### 获取 DeepSeek API Key
 
 1. 访问 [DeepSeek 开放平台](https://platform.deepseek.com/)
 2. 注册/登录 → API Keys → 创建密钥
-3. 将密钥写入 `.env` 的 `DEEPSEEK_API_KEY=sk-...`
+3. 将密钥写入 `conf/.env` 的 `DEEPSEEK_API_KEY=sk-...`
 
 ### 安全提示
 
-- `.env` 包含真实密钥，已被 `.gitignore` 排除，**永远不会**被提交到 Git
-- `.env.example` 是**公开模板**，值固定为占位符 `sk-your-api-key-here`，可以安全提交
+- `conf/.env` 包含真实密钥，已被 `.gitignore` 排除，**永远不会**被提交到 Git
+- `conf/.env.example` 是**公开模板**，值固定为占位符 `sk-your-api-key-here`，可以安全提交
 - 如果密钥曾泄露，请去 DeepSeek 控制台删除旧 Key 并生成新 Key
 
 ---
 
-## 配置说明（.env）
+## 配置说明（conf/.env）
 
-完整变量表见 [`docs/ENV.md`](docs/ENV.md)。
+完整变量表见 [`doc/ENV.md`](doc/ENV.md)。
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
@@ -167,7 +185,7 @@ cp .env.example .env
 | `ORCHESTRATION_BACKEND` | `legacy` | `legacy` 或 `langgraph` |
 | `ENABLE_RAG` | `false` | 启用 RAG 向量检索 |
 
-MCP、RAG 其余变量见 `.env.example` 与 [`docs/mcp-config.md`](docs/mcp-config.md)。
+MCP、RAG 其余变量见 `conf/.env.example` 与 [`doc/mcp-config.md`](doc/mcp-config.md)。
 
 ## Phase 2A 能力清单
 
@@ -198,10 +216,10 @@ MCP、RAG 其余变量见 `.env.example` 与 [`docs/mcp-config.md`](docs/mcp-con
 source .venv/bin/activate
 
 # 开发模式（带热重载）
-uvicorn server.main:app --reload --host 0.0.0.0 --port 8000
+uvicorn server.main:app --reload --host 0.0.0.0 --port 8000 --app-dir app
 
 # 生产模式（配合 Nginx，无 reload 低 CPU）
-uvicorn server.main:app --host 127.0.0.1 --port 8000
+uvicorn server.main:app --host 127.0.0.1 --port 8000 --app-dir app
 ```
 
 启动后会打印配置摘要（API Key 脱敏）：
@@ -234,11 +252,11 @@ python -m client.cli --session my-work    # 固定会话 ID
 sudo apt install nodejs npm
 
 # 开发模式
-cd web && npm install && npm run dev   # → http://localhost:5173
+cd app/web && npm install && npm run dev   # → http://localhost:5173
 
 # 生产模式（与 API 同端口 8000）
-cd web && npm install && npm run build
-cd .. && uvicorn server.main:app --host 0.0.0.0 --port 8000
+cd app/web && npm install && npm run build
+cd ../../ && uvicorn server.main:app --host 0.0.0.0 --port 8000 --app-dir app
 # → http://127.0.0.1:8000/
 ```
 
@@ -254,7 +272,7 @@ cd .. && uvicorn server.main:app --host 0.0.0.0 --port 8000
 
 ### 生产部署
 
-- **Docker**：见 [`docker/README.md`](docker/README.md) 与 [`docs/DEPLOY.md`](docs/DEPLOY.md)
+- **Docker**：见 [`doc/docker.md`](doc/docker.md) 与 [`doc/DEPLOY.md`](doc/DEPLOY.md)
 - **Nginx + systemd**：见下方示例（SSE 需关闭 `proxy_buffering`）
 
 ```bash
@@ -292,7 +310,7 @@ After=network.target
 [Service]
 Type=simple
 WorkingDirectory=/root/ai4s-research-agent
-ExecStart=/usr/bin/uvicorn server.main:app --host 127.0.0.1 --port 8000
+ExecStart=/usr/bin/uvicorn server.main:app --host 127.0.0.1 --port 8000 --app-dir app
 Restart=always
 RestartSec=3
 [Install]
@@ -305,7 +323,7 @@ systemctl daemon-reload && systemctl enable --now ai4s-agent
 
 ## API 参考
 
-详见 [`docs/API.md`](docs/API.md)。
+详见 [`doc/API.md`](doc/API.md)。
 
 ```bash
 curl http://127.0.0.1:8000/health
@@ -354,7 +372,7 @@ python -m client.cli --no-show-reasoning      # 隐藏推理过程
 
 | 现象 | 可能原因 | 排查步骤 |
 |------|----------|----------|
-| 启动报 `ValidationError` | `.env` 未配置 | `cp .env.example .env` 并填入密钥 |
+| 启动报 `ValidationError` | `conf/.env` 未配置 | `cp conf/.env.example conf/.env` 并填入密钥 |
 | `401 Unauthorized` | API Key 无效 | 检查 DeepSeek 控制台 |
 | CLI `Connection refused` | Server 未启动 | 先运行 uvicorn |
 | SSE 无输出后中断 | 网络/API 限流 | `LOG_LEVEL=DEBUG` 查日志 |

@@ -8,9 +8,15 @@ dist/
 build/
 
 # 密钥与本地配置（切勿提交）
+conf/.env
 .env
 
-# 测试缓存与测试文件
+# 日志
+log/*.log
+log/*
+!log/.gitkeep
+
+# 测试
 .pytest_cache/
 .coverage
 .coverage.*
@@ -29,8 +35,8 @@ benchmarks/
 .DS_Store
 
 # Web 前端
-web/node_modules/
-web/dist/
+app/web/node_modules/
+app/web/dist/
 
-# SQLite 会话数据库（Phase 2A）
+# 运行时数据
 data/

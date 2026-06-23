@@ -1,4 +1,20 @@
+# =============================================================================
 # 参数化 ReAct 子 Agent：独立 prompt + 工具白名单。
+#
+# 职责：
+#     MultiAgentOrchestrator 意图路由后，按 agent_name 创建 SubAgent 实例，
+#     每个实例绑定专属 system_prompt 和工具白名单。
+#
+# 与 GeneralAgent 的区别：
+#     1. SubAgent 不维护全局单例（每次 create 或由 orchestrator 缓存）
+#     2. 支持 RAG（build_rag_augmented_prompt 注入 context）
+#     3. 支持 A2A task_id（子任务追踪，填入 SSE StreamChunk.a2a_task_id）
+#     4. 支持 persist_session 参数控制是否写入 L2 消息（子 Agent 可能不独立存会话）
+#
+# 工具循环支持双后端：
+#     legacy    → _run_legacy_tool_loop（自研 function calling loop）
+#     langgraph → _run_langgraph_tool_loop（LangGraph ReAct 子图）
+# =============================================================================
 
 from __future__ import annotations
 
@@ -272,6 +288,27 @@ class SubAgent:
         a2a_task_id: str | None = None,
         persist_session: bool = True,
     ) -> AsyncIterator[StreamChunk]:
+        """
+        SubAgent 主入口：处理用户消息并流式产出回复。
+
+        完整链路（与 GeneralAgent.run 类似，额外支持）：
+            1. 若 ENABLE_RAG 且本 Agent 在 rag_agents 中 → 注入 RAG 上下文
+            2. A2A task_id 填入每个 StreamChunk（用于前端/日志的跨 Agent 追踪）
+            3. persist_session=False 时跳过 L2 会话写入（子 Agent 临时调用场景）
+
+        参数:
+            message: 用户输入
+            session_id: 可选会话 ID
+            system_prompt_override: 覆盖默认 prompt
+            max_history_messages: L1 截断条数
+            enable_history_summary: 截断时是否摘要
+            enable_tools: 是否启用 MCP
+            a2a_task_id: A2A 子任务 ID（由 orchestrator 分配）
+            persist_session: 是否写入 L2 消息（默认 True）
+
+        产出:
+            StreamChunk 流
+        """
         sid = self._sessions.get_or_create(session_id)
         set_session_id(sid)
         set_agent_name(self.name)

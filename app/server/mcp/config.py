@@ -1,4 +1,23 @@
+# =============================================================================
 # MCP Server 配置加载。
+#
+# 职责：
+#     1. 从 mcp_servers.json 读取各 Server 的启动配置
+#     2. 支持 `${VAR}` 环境变量替换
+#     3. 构建 langchain-mcp-adapters 所需的 StdioConnection 字典
+#
+# mcp_servers.json 格式：
+#     {
+#         "server_name": {
+#             "command": "python" 或 "npx" 或可执行文件路径,
+#             "args": ["-m", "mcp_module"],
+#             "env": { "API_KEY": "${MY_API_KEY}" },
+#             "enabled": true
+#         }
+#     }
+#
+# ${VAR} 在加载时替换为当前环境变量值，未设置时替换为空字符串。
+# =============================================================================
 
 from __future__ import annotations
 
@@ -15,14 +34,19 @@ from pydantic import BaseModel, Field
 
 
 class MCPServerConfig(BaseModel):
-    command: str
-    args: list[str] = Field(default_factory=list)
-    env: dict[str, str] = Field(default_factory=dict)
-    enabled: bool = True
+    """单个 MCP Server 的配置模型。"""
+    command: str                                    # 启动命令（python / npx / 绝对路径）
+    args: list[str] = Field(default_factory=list)   # 命令行参数列表
+    env: dict[str, str] = Field(default_factory=dict)  # 环境变量（已展开 ${VAR}）
+    enabled: bool = True                            # 是否启用此 Server
 
 
 def _expand_env(value: str) -> str:
-    """将 ${VAR} 替换为环境变量值。"""
+    """
+    替换字符串中的 ${VAR} 引用为对应环境变量值。
+
+    例如："${HOME}" → "/home/user"、"${UNDEFINED}" → ""
+    """
     def replacer(match: re.Match[str]) -> str:
         var = match.group(1)
         return os.environ.get(var, "")
@@ -31,6 +55,15 @@ def _expand_env(value: str) -> str:
 
 
 def load_mcp_servers(config_path: str | Path) -> dict[str, MCPServerConfig]:
+    """
+    从 mcp_servers.json 加载全部已启用 Server 配置。
+
+    参数:
+        config_path: JSON 配置文件路径
+
+    返回:
+        {server_name: MCPServerConfig} 字典；文件不存在或为空时返回 {}
+    """
     path = Path(config_path)
     if not path.exists():
         return {}
@@ -41,6 +74,7 @@ def load_mcp_servers(config_path: str | Path) -> dict[str, MCPServerConfig]:
     for name, entry in raw.items():
         if not isinstance(entry, dict):
             continue
+        # 展开 env 中的 ${VAR} 引用
         env = {k: _expand_env(str(v)) for k, v in entry.get("env", {}).items()}
         servers[name] = MCPServerConfig(
             command=entry["command"],
@@ -54,13 +88,25 @@ def load_mcp_servers(config_path: str | Path) -> dict[str, MCPServerConfig]:
 def build_multiserver_connections(
     configs: dict[str, MCPServerConfig],
 ) -> dict[str, StdioConnection]:
-    """Convert loaded MCP server configs to MultiServerMCPClient stdio connections."""
+    """
+    将加载的 MCPServerConfig 字典转为 MultiServerMCPClient 所需的 stdio 连接字典。
+
+    特殊处理：command 为 "python" 时替换为 sys.executable（当前 Python 解释器路径），
+    确保子进程使用正确的 Python 环境。
+
+    参数:
+        configs: load_mcp_servers() 的返回值
+
+    返回:
+        {server_name: StdioConnection} 字典（filtered to enabled only）
+    """
     connections: dict[str, StdioConnection] = {}
 
     for name, cfg in configs.items():
         if not cfg.enabled:
-            continue
+            continue  # 跳过已禁用的 Server
 
+        # "python" → 当前解释器路径，确保子进程用对虚拟环境
         command = sys.executable if cfg.command == "python" else cfg.command
         connection: StdioConnection = {
             "transport": "stdio",
@@ -77,5 +123,13 @@ def build_multiserver_connections(
 def create_multiserver_client(
     configs: dict[str, MCPServerConfig],
 ) -> MultiServerMCPClient:
-    """Build a MultiServerMCPClient from mcp_servers.json-derived configs."""
+    """
+    从 MCPServerConfig 创建 MultiServerMCPClient。
+
+    参数:
+        configs: load_mcp_servers() 的返回值
+
+    返回:
+        MultiServerMCPClient 实例（按 connections 创建，调用 .connect 建立连接）
+    """
     return MultiServerMCPClient(build_multiserver_connections(configs))
