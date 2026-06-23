@@ -22,6 +22,7 @@ from server.llm.prompts import DEFAULT_SYSTEM_PROMPT, MATH_MODE_SYSTEM_PROMPT
 from server.memory.base import BaseSessionStore
 from server.memory.manager import MemoryManager, get_memory_manager
 from server.memory.session import SessionStore, get_session_store
+from server.memory.rag.retrieval import build_rag_augmented_prompt
 from server.mcp.client import MCPClient, get_mcp_client
 from server.mcp.truncation import truncate_tool_result
 from server.observability import finalize_chat_turn, set_agent_name, set_session_id
@@ -323,6 +324,17 @@ class GeneralAgent(BaseAgent):
         set_session_id(sid)
         set_agent_name(self.name)
         system_prompt = system_prompt_override or self.system_prompt
+
+        if (
+            self._settings.enable_rag
+            and self.name in self._settings.rag_agent_names()
+        ):
+            system_prompt = build_rag_augmented_prompt(
+                system_prompt,
+                message,
+                sid,
+                self._settings,
+            )
 
         full_history = self._sessions.get_messages(sid)
         history = await self._memory.get_llm_context(

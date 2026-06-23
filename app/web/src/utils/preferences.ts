@@ -8,6 +8,10 @@ const ENABLE_MCP_KEY = "ai4s_enable_mcp";
 
 export type ChatMode = "chat" | "math";
 
+export type AgentChoice = "auto" | "general" | "theory" | "experiment" | "literature";
+
+const AGENT_CHOICE_KEY = "ai4s_agent_choice";
+
 export function getShowReasoning(): boolean {
   const raw = localStorage.getItem(SHOW_REASONING_KEY);
   if (raw === null) return true;
@@ -76,6 +80,41 @@ export function getEnableMcp(): boolean {
 
 export function setEnableMcp(value: boolean): void {
   localStorage.setItem(ENABLE_MCP_KEY, String(value));
+}
+
+export function getAgentChoice(): AgentChoice {
+  const raw = localStorage.getItem(AGENT_CHOICE_KEY);
+  if (
+    raw === "general" ||
+    raw === "theory" ||
+    raw === "experiment" ||
+    raw === "literature"
+  ) {
+    return raw;
+  }
+  return "auto";
+}
+
+export function setAgentChoice(value: AgentChoice): void {
+  localStorage.setItem(AGENT_CHOICE_KEY, value);
+}
+
+export interface AgentPreference {
+  agent: AgentChoice;
+}
+
+export function getAgentPreference(): AgentPreference {
+  return { agent: getAgentChoice() };
+}
+
+/** 构造 ChatRequest 中的 agent / auto_route 字段。 */
+export function buildAgentRequestFields(
+  pref: AgentPreference,
+): Record<string, string | boolean> {
+  if (pref.agent === "auto") {
+    return { auto_route: true };
+  }
+  return { agent: pref.agent, auto_route: false };
 }
 
 export interface HistoryPreference {

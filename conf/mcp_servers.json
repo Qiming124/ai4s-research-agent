@@ -2,6 +2,9 @@
   "web_search": {
     "command": "python",
     "args": ["-m", "server.mcp.servers.web_search"],
+    "env": {
+      "TAVILY_API_KEY": "${TAVILY_API_KEY}"
+    },
     "enabled": true
   },
   "arxiv": {
@@ -15,6 +18,11 @@
     "env": {
       "MCP_ALLOWED_DIRS": "${MCP_ALLOWED_DIRS}"
     },
+    "enabled": true
+  },
+  "sympy": {
+    "command": "python",
+    "args": ["-m", "server.mcp.servers.sympy"],
     "enabled": true
   }
 }

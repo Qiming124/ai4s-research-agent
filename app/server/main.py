@@ -29,10 +29,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from server.api.agents import router as agents_router
 from server.api.chat import router as chat_router
 from server.api.documents import router as documents_router
 from server.api.mcp import router as mcp_router
 from server.api.stats import router as stats_router
+from server.api.structured_memory import router as structured_memory_router
 from server.config import get_settings, setup_logging
 from server.mcp.client import get_mcp_client, reset_mcp_client
 from server.observability.middleware import RequestContextMiddleware
@@ -75,6 +77,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
         if not os.environ.get("MCP_ALLOWED_DIRS"):
             os.environ["MCP_ALLOWED_DIRS"] = settings.mcp_allowed_dirs
+        if settings.tavily_api_key and not os.environ.get("TAVILY_API_KEY"):
+            os.environ["TAVILY_API_KEY"] = settings.tavily_api_key
         await get_mcp_client()
     else:
         logger.info("  MCP: 未启用")
@@ -126,9 +130,11 @@ def create_app() -> FastAPI:
 
     # 挂载 API 路由（/health /v1/chat /v1/chat/stream /v1/sessions/*）
     app.include_router(chat_router)
+    app.include_router(agents_router)
     app.include_router(mcp_router)
     app.include_router(documents_router)
     app.include_router(stats_router)
+    app.include_router(structured_memory_router)
 
     # 生产模式：dist 存在时托管 web/dist 静态文件与首页。
     # 开发模式 dist 不存在则跳过（用 Vite :5173 + proxy）

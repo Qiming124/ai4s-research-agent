@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 
-from server.mcp.client import build_mcp_status
+from server.config import get_settings
+from server.mcp.client import build_mcp_status, reload_mcp_client
 from shared.schemas import MCPStatusResponse
 
 router = APIRouter(tags=["mcp"])
@@ -18,4 +19,14 @@ async def mcp_status() -> MCPStatusResponse:
     返回:
         MCPStatusResponse: server_enabled、connected、servers
     """
+    return await build_mcp_status()
+
+
+@router.post("/v1/mcp/reload", response_model=MCPStatusResponse)
+async def mcp_reload() -> MCPStatusResponse:
+    """重新加载 mcp_servers.json 并重建 MCP 连接（无需重启 uvicorn）。"""
+    settings = get_settings()
+    if not settings.enable_mcp:
+        raise HTTPException(status_code=400, detail="MCP 未启用（ENABLE_MCP=false）")
+    await reload_mcp_client()
     return await build_mcp_status()

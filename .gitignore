@@ -16,14 +16,13 @@ log/*.log
 log/*
 !log/.gitkeep
 
-# 测试
+# 测试缓存（tests/ 目录纳入版本库）
 .pytest_cache/
 .coverage
 .coverage.*
 htmlcov/
 coverage.xml
 .tox/
-tests/
 benchmarks/
 
 # IDE

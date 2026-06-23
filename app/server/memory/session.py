@@ -70,6 +70,19 @@ class InMemorySessionStore(BaseSessionStore):
     def list_session_ids(self) -> list[str]:
         return list(self._sessions.keys())
 
+    def list_session_summaries(self) -> list[dict[str, str | int]]:
+        summaries: list[dict[str, str | int]] = []
+        for session_id, messages in self._sessions.items():
+            summaries.append(
+                {
+                    "session_id": session_id,
+                    "created_at": None,
+                    "updated_at": None,
+                    "message_count": len(messages),
+                }
+            )
+        return summaries
+
 
 # Phase 1 类名别名，保持 agents/base.py 等调用方 import 不变
 SessionStore = InMemorySessionStore

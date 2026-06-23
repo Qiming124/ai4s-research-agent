@@ -20,11 +20,15 @@ const HELP_SECTIONS: HelpSection[] = [
       },
       {
         name: "Session",
-        desc: "每个浏览器会绑定一个会话 ID。刷新页面后会自动从服务端恢复完整对话历史（含思考过程）。顶栏显示的 Session 为当前会话的短 ID。",
+        desc: "每个浏览器维护会话列表（localStorage + 服务端 SQLite）。侧栏「×」会永久删除该会话（purge）；顶栏「清空会话」仅清空当前对话内容，保留 session ID。列表仅显示服务端有消息的会话，以及当前新建尚未发消息的会话。",
+      },
+      {
+        name: "多 Agent 协作",
+        desc: "在 conf/.env 设置 ORCHESTRATION_BACKEND=langgraph（或 multi）后，系统会按意图路由到 general / theory / experiment / literature。侧栏可选手动指定 Agent 或自动路由。流式过程中会出现 agent_handoff 事件，顶栏显示当前 Agent。",
       },
       {
         name: "Agent 指示",
-        desc: "生成回答时顶栏会显示当前处理的 Agent 名称（如 general）。后续版本将扩展为多 Agent 协作。",
+        desc: "生成回答时顶栏会显示当前 Agent 名称。Math 模式会优先路由到 theory Agent。",
       },
     ],
   },
@@ -50,15 +54,19 @@ const HELP_SECTIONS: HelpSection[] = [
     items: [
       {
         name: "LaTeX 渲染",
-        desc: "回答中的 $...$（行内）与 $$...$$（独立成行）公式会在生成完成后自动渲染。分段函数、矩阵等复杂公式建议使用 $$...$$。",
+        desc: "回答中的 $...$（行内）与 $$...$$（独立成行）公式会在生成完成后自动渲染。分段函数、矩阵、多行推导必须使用 $$...$$，不要放在行内 $ 中。",
+      },
+      {
+        name: "Math 模式",
+        desc: "含大量公式的问题请切换到 Math 模式（侧栏或顶栏）。模型会使用更严格的 LaTeX 规范：cases 完整闭合、每行用 \\\\ 分隔、复杂公式独立成行。",
       },
       {
         name: "生成过程中",
         desc: "流式输出时公式以原文显示，避免未闭合的 LaTeX 导致渲染错误；生成结束后会自动切换为排版后的公式。",
       },
       {
-        name: "渲染失败",
-        desc: "若 LaTeX 语法不完整或不被支持，完成后会保留原文并以琥珀色提示标出。系统会尝试自动补全未闭合的 $ 定界符和 \\begin{cases} 等环境。",
+        name: "自动修复与局限",
+        desc: "系统会尝试补全未闭合的 $、裸 \\begin{cases}、缺开头 $$ 等。若公式被截断（如只有 \\begin{cases} 第一行）或 $...$ 被换行拆开，仍可能显示为琥珀色原文——可请模型「用完整 $$...$$ 重写该公式」。",
       },
     ],
   },

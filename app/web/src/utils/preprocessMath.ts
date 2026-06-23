@@ -138,15 +138,23 @@ function processDisplayDollars(content: string): string {
   );
 }
 
+function normalizeLatexDelimiters(content: string): string {
+  let result = content;
+  // \( ... \) → $ ... $，\[ ... \] → $$ ... $$
+  result = result.replace(/\\\[([\s\S]*?)\\\]/g, (_, inner: string) => `$$${inner.trim()}$$`);
+  result = result.replace(/\\\(([\s\S]*?)\\\)/g, (_, inner: string) => `$${inner.trim()}$`);
+  return result;
+}
+
 /**
  * 对 Markdown 文本中的数学片段做预处理。
  */
 export function preprocessMathContent(content: string): string {
-  if (!content.includes("$") && !content.includes("\\begin{")) {
-    return content;
-  }
+  let result = normalizeLatexDelimiters(content);
 
-  let result = content;
+  if (!result.includes("$") && !result.includes("\\begin{")) {
+    return result;
+  }
 
   // 1. 裸环境 / 缺开头 $$
   result = wrapBareLatexEnvironments(result);

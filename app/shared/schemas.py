@@ -187,6 +187,38 @@ class SessionResponse(BaseModel):
     messages: list[ChatMessage]
 
 
+class SessionSummary(BaseModel):
+    """会话列表项：含时间与消息条数。"""
+
+    session_id: str
+    created_at: str | None = None
+    updated_at: str | None = None
+    message_count: int = 0
+
+
+class SessionListResponse(BaseModel):
+    """GET /v1/sessions 响应。"""
+
+    sessions: list[SessionSummary] = Field(default_factory=list)
+    total: int = 0
+
+
+class AgentInfo(BaseModel):
+    """单个 Agent 角色元数据。"""
+
+    name: str
+    description: str = ""
+    rag_enabled: bool = False
+    default_tool_patterns: list[str] = Field(default_factory=list)
+
+
+class AgentListResponse(BaseModel):
+    """GET /v1/agents 响应。"""
+
+    orchestration_backend: str
+    agents: list[AgentInfo] = Field(default_factory=list)
+
+
 class HealthResponse(BaseModel):
     """GET /health 的响应体：确认服务已启动且配置正确加载。"""
 
@@ -287,3 +319,34 @@ class TokenUsageStatsResponse(BaseModel):
     filters: dict[str, str | None] = Field(default_factory=dict)
     totals: TokenUsageTotals
     by_agent: list[TokenUsageAgentBreakdown] = Field(default_factory=list)
+
+
+# ── L4 结构化科研记忆 ─────────────────────────────────────────
+
+class StructuredMemoryEntry(BaseModel):
+    """单条结构化记忆（定理、假设、实验结论、引用等）。"""
+
+    id: int | None = None
+    session_id: str | None = None
+    kind: Literal["theorem", "hypothesis", "conclusion", "citation", "note"] = "note"
+    title: str = ""
+    body: str = Field(..., min_length=1)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    created_at: str | None = None
+
+
+class StructuredMemoryCreateRequest(BaseModel):
+    """POST /v1/memory/structured 请求体。"""
+
+    session_id: str | None = None
+    kind: Literal["theorem", "hypothesis", "conclusion", "citation", "note"] = "note"
+    title: str = ""
+    body: str = Field(..., min_length=1)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class StructuredMemoryListResponse(BaseModel):
+    """GET /v1/memory/structured 响应。"""
+
+    entries: list[StructuredMemoryEntry] = Field(default_factory=list)
+    total: int = 0

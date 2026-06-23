@@ -9,7 +9,7 @@ from collections.abc import AsyncIterator
 from server.agents.config import AgentName, normalize_agent_name
 from server.agents.subagent import SubAgent
 from server.config import Settings, get_settings
-from server.graph.router import classify_intent
+from server.graph.router_llm import classify_intent_smart
 from server.mcp.client import MCPClient
 from shared.schemas import StreamChunk
 
@@ -37,7 +37,7 @@ class MultiAgentOrchestrator:
             )
         return self._agents[name]
 
-    def resolve_target_agent(
+    async def resolve_target_agent(
         self,
         message: str,
         *,
@@ -50,7 +50,7 @@ class MultiAgentOrchestrator:
             return explicit, f"explicit:{explicit}"
 
         if auto_route:
-            return classify_intent(message, mode=mode)
+            return await classify_intent_smart(message, mode=mode, settings=self._settings)
 
         return "general", "auto_route_disabled"
 
@@ -67,7 +67,7 @@ class MultiAgentOrchestrator:
         enable_history_summary: bool | None = None,
         enable_tools: bool | None = None,
     ) -> AsyncIterator[StreamChunk]:
-        target, route_reason = self.resolve_target_agent(
+        target, route_reason = await self.resolve_target_agent(
             message,
             agent=agent,
             auto_route=auto_route,

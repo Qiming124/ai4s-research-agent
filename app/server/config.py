@@ -165,7 +165,15 @@ class Settings(BaseSettings):
 
     orchestration_backend: str = Field(
         default="legacy",
-        description="Agent 编排后端：legacy（自研 tool loop）或 langgraph",
+        description="Agent 编排：legacy、langgraph 或 multi（与 langgraph 相同）",
+    )
+    router_use_llm: bool = Field(
+        default=False,
+        description="意图路由是否优先使用 LLM（失败回退关键词规则）",
+    )
+    tavily_api_key: str = Field(
+        default="",
+        description="Tavily 搜索 API Key；设置后 web_search MCP 优先使用 Tavily",
     )
 
     # ── L3 向量记忆 / RAG（Phase 5） ─────────────────────────
@@ -206,8 +214,8 @@ class Settings(BaseSettings):
         description="每次检索返回的片段数",
     )
     rag_agents: str = Field(
-        default="literature,theory",
-        description="启用 RAG 检索的 Agent 列表（逗号分隔）",
+        default="literature,theory,general",
+        description="启用 RAG 检索的 Agent 列表（逗号分隔）；含 general 时 legacy 模式也注入",
     )
     rag_index_mcp_files: bool = Field(
         default=False,
@@ -252,9 +260,11 @@ class Settings(BaseSettings):
     @classmethod
     def validate_orchestration_backend(cls, value: str) -> str:
         normalized = value.strip().lower()
+        if normalized == "multi":
+            return "langgraph"
         if normalized not in ("legacy", "langgraph"):
             raise ValueError(
-                f"ORCHESTRATION_BACKEND 必须是 legacy 或 langgraph，当前为: {value}"
+                f"ORCHESTRATION_BACKEND 必须是 legacy、langgraph 或 multi，当前为: {value}"
             )
         return normalized
 

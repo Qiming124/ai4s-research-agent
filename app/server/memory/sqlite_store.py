@@ -204,6 +204,28 @@ class SQLiteSessionStore(BaseSessionStore):
     def list_session_ids(self) -> list[str]:
         with self._lock:
             rows = self._conn.execute(
-                "SELECT session_id FROM sessions ORDER BY updated_at",
+                "SELECT session_id FROM sessions ORDER BY updated_at DESC",
             ).fetchall()
         return [row["session_id"] for row in rows]
+
+    def list_session_summaries(self) -> list[dict[str, str | int]]:
+        with self._lock:
+            rows = self._conn.execute(
+                """
+                SELECT s.session_id, s.created_at, s.updated_at,
+                       COUNT(m.id) AS message_count
+                FROM sessions s
+                LEFT JOIN messages m ON m.session_id = s.session_id
+                GROUP BY s.session_id
+                ORDER BY s.updated_at DESC
+                """,
+            ).fetchall()
+        return [
+            {
+                "session_id": row["session_id"],
+                "created_at": row["created_at"],
+                "updated_at": row["updated_at"],
+                "message_count": int(row["message_count"]),
+            }
+            for row in rows
+        ]

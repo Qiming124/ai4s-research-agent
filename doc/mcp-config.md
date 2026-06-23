@@ -100,7 +100,7 @@ MCP Client 已连接 3 个 Server，共 6 个工具
 | `arxiv` | `server.mcp.servers.arxiv` | `arxiv__search_papers`、`arxiv__get_paper` | arXiv 论文搜索与详情 |
 | `filesystem` | `server.mcp.servers.filesystem` | `filesystem__read_file`、`filesystem__write_file`、`filesystem__list_files` | 受限目录内文件读写 |
 
-实现代码位于 [`server/mcp/servers/`](../server/mcp/servers/)。
+实现代码位于 [`app/server/mcp/servers/`](../app/server/mcp/servers/)。
 
 ### 单独禁用某个 Server
 
@@ -112,7 +112,7 @@ MCP Client 已连接 3 个 Server，共 6 个工具
 
 ### 方式一：自研 Python Server（推荐）
 
-1. 在 `server/mcp/servers/` 下新建模块，使用 FastMCP 声明工具：
+1. 在 `app/server/mcp/servers/` 下新建模块，使用 FastMCP 声明工具：
 
 ```python
 from mcp.server.fastmcp import FastMCP
@@ -175,9 +175,9 @@ if __name__ == "__main__":
 
 相关代码：
 
-- [`server/mcp/client.py`](../server/mcp/client.py) — 连接与调用
-- [`server/agents/base.py`](../server/agents/base.py) — 工具循环
-- [`server/api/mcp.py`](../server/api/mcp.py) — `GET /v1/mcp/status`
+- [`app/server/mcp/client.py`](../app/server/mcp/client.py) — 连接与调用
+- [`app/server/agents/base.py`](../app/server/agents/base.py) — 工具循环
+- [`app/server/api/mcp.py`](../app/server/api/mcp.py) — `GET /v1/mcp/status`
 
 ---
 

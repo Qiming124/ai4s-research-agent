@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from html import unescape
 from urllib.parse import quote_plus
@@ -74,6 +75,34 @@ def _parse_ddg_html(html: str, max_results: int) -> list[dict[str, str]]:
                 })
 
     return results
+
+
+async def _search_tavily(query: str, max_results: int) -> list[dict[str, str]]:
+    api_key = os.environ.get("TAVILY_API_KEY", "").strip()
+    if not api_key:
+        return []
+
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        resp = await client.post(
+            "https://api.tavily.com/search",
+            json={
+                "api_key": api_key,
+                "query": query,
+                "max_results": max_results,
+                "search_depth": "basic",
+            },
+        )
+        resp.raise_for_status()
+        data = resp.json()
+
+    results: list[dict[str, str]] = []
+    for item in data.get("results", []):
+        title = (item.get("title") or "").strip()
+        url = (item.get("url") or "").strip()
+        snippet = (item.get("content") or item.get("snippet") or "").strip()
+        if title or url:
+            results.append({"title": title or url, "url": url, "snippet": snippet[:500]})
+    return results[:max_results]
 
 
 async def _search_ddg_html(query: str, max_results: int) -> list[dict[str, str]]:
@@ -161,6 +190,20 @@ async def search(query: str, max_results: int = 5) -> str:
     """
     max_results = max(1, min(max_results, 10))
     errors: list[str] = []
+
+    # Tavily（需 TAVILY_API_KEY）优先
+    try:
+        tavily_results = await _search_tavily(query, max_results)
+        if tavily_results:
+            return json.dumps(
+                {"query": query, "source": "tavily", "results": tavily_results},
+                ensure_ascii=False,
+                indent=2,
+            )
+    except httpx.HTTPError as exc:
+        errors.append(f"tavily: {_format_http_error(exc)}")
+    except Exception as exc:
+        errors.append(f"tavily: {_format_http_error(exc)}")
 
     for name, coro in (
         ("duckduckgo_html", _search_ddg_html(query, max_results)),

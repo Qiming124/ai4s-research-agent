@@ -1,7 +1,7 @@
 # 环境变量说明
 
 配置文件：`conf/.env`（从 `conf/.env.example` 复制）。  
-加载逻辑：`server/config.py` 中的 `Settings`，大小写不敏感。
+加载逻辑：`app/server/config.py` 中的 `Settings`，大小写不敏感。
 
 ## 必填
 
@@ -59,7 +59,12 @@
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
-| `ORCHESTRATION_BACKEND` | `legacy` | `legacy` 单 GeneralAgent；`langgraph` 多 Agent Supervisor |
+| `ORCHESTRATION_BACKEND` | `legacy` | `legacy`：仅 `GeneralAgent`；`langgraph` 或 `multi`：多 Agent Supervisor + SubAgent |
+| `ROUTER_USE_LLM` | `false` | `true` 时用 LLM 做意图路由，失败时回退关键词规则 |
+
+**说明**：多 Agent 代码已实现，但默认 `legacy` 不会走路由。要启用 general/theory/experiment/literature 分工，请设 `ORCHESTRATION_BACKEND=langgraph`（或 `multi`）。该开关同时决定 MCP 工具循环是否走 LangGraph ReAct 子图。
+
+推荐演示配置：`ORCHESTRATION_BACKEND=langgraph`、`ENABLE_MCP=true`、`ENABLE_RAG=true`。
 
 ## RAG（L3）
 
@@ -73,8 +78,10 @@
 | `RAG_CHUNK_SIZE` | `800` | 分块大小 |
 | `RAG_CHUNK_OVERLAP` | `100` | 分块重叠 |
 | `RAG_RETRIEVAL_TOP_K` | `4` | 检索返回条数 |
-| `RAG_AGENTS` | `literature,theory` | 启用 RAG 的 Agent 列表 |
+| `RAG_AGENTS` | `literature,theory,general` | 启用 RAG 的 Agent；含 `general` 时 legacy 模式也会注入 |
 | `RAG_INDEX_MCP_FILES` | `false` | 启动时索引 MCP 目录下 md/txt |
+| `ROUTER_USE_LLM` | `false` | LLM 意图路由（失败回退规则） |
+| `TAVILY_API_KEY` | 空 | Tavily 搜索 Key；设置后 web_search MCP 优先 Tavily |
 
 ## Docker 容器内推荐路径
 

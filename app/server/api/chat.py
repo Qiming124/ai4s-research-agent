@@ -30,14 +30,14 @@ import json
 import logging
 from collections.abc import AsyncIterator
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 from server.agents.base import get_general_agent
 from server.agents.orchestrator import get_multi_agent_orchestrator
 from server.config import get_settings
 from server.memory.session import get_session_store
-from shared.schemas import ChatRequest, ChatResponse, HealthResponse, SessionResponse
+from shared.schemas import ChatRequest, ChatResponse, HealthResponse, SessionListResponse, SessionResponse, SessionSummary
 
 logger = logging.getLogger(__name__)
 
@@ -139,7 +139,7 @@ async def _stream_generator(request: ChatRequest) -> AsyncIterator[str]:
 
     if _use_multi_agent_orchestrator():
         orchestrator = get_multi_agent_orchestrator()
-        target, route_reason = orchestrator.resolve_target_agent(
+        target, route_reason = await orchestrator.resolve_target_agent(
             request.message,
             agent=request.agent,
             auto_route=request.auto_route,
@@ -220,6 +220,34 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
 
 # ── 会话管理 ─────────────────────────────────────────────────
 
+@router.get("/v1/sessions", response_model=SessionListResponse)
+async def list_sessions() -> SessionListResponse:
+    """列出服务端已持久化的会话（SQLite 后端含 updated_at 与消息条数）。"""
+    store = get_session_store()
+    if hasattr(store, "list_session_summaries"):
+        raw = store.list_session_summaries()
+        sessions = [
+            SessionSummary(
+                session_id=str(item["session_id"]),
+                created_at=item.get("created_at"),
+                updated_at=item.get("updated_at"),
+                message_count=int(item.get("message_count", 0)),
+            )
+            for item in raw
+            if int(item.get("message_count", 0)) > 0
+        ]
+    else:
+        sessions = [
+            SessionSummary(
+                session_id=sid,
+                message_count=len(store.get_messages(sid)),
+            )
+            for sid in store.list_session_ids()
+            if len(store.get_messages(sid)) > 0
+        ]
+    return SessionListResponse(sessions=sessions, total=len(sessions))
+
+
 @router.get("/v1/sessions/{session_id}", response_model=SessionResponse)
 async def get_session(session_id: str) -> SessionResponse:
     """
@@ -241,17 +269,32 @@ async def get_session(session_id: str) -> SessionResponse:
 
 
 @router.delete("/v1/sessions/{session_id}")
-async def delete_session(session_id: str) -> dict[str, str]:
+async def delete_session(
+    session_id: str,
+    purge: bool = Query(
+        default=False,
+        description="true=从存储中删除会话记录；false=仅清空消息（默认，供「清空会话」使用）",
+    ),
+) -> dict[str, str]:
     """
-    清空指定会话的消息列表（保留 session_id，幂等）。
+    会话删除或清空。
 
-    参数:
-        session_id: 会话 ID
-
-    返回:
-        含 status=cleared 与 session_id 的字典
+    - purge=false（默认）：清空消息，保留 session_id（顶栏「清空会话」、CLI /clear）
+    - purge=true：删除会话记录（侧栏「×」移除会话）
     """
     store = get_session_store()
+    if purge:
+        existed = store.delete_session(session_id)
+        if not existed:
+            raise HTTPException(status_code=404, detail=f"会话不存在: {session_id}")
+        try:
+            from server.memory.rag.session_refs import SessionRagRefStore
+
+            SessionRagRefStore().clear_session(session_id)
+        except Exception:
+            logger.exception("清除会话 RAG 引用失败 session_id=%s", session_id)
+        return {"status": "deleted", "session_id": session_id}
+
     store.get_or_create(session_id)
     store.clear_session(session_id)
     return {"status": "cleared", "session_id": session_id}

@@ -2,8 +2,8 @@
  * SSE 流式对话 Hook：管理消息列表、会话 ID、流式状态与 MCP/历史偏好。
  */
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
-import type { ChatMode, HistoryPreference, McpPreference } from "../utils/preferences";
-import { buildHistoryRequestFields, buildMcpRequestFields } from "../utils/preferences";
+import type { ChatMode, HistoryPreference, McpPreference, AgentPreference } from "../utils/preferences";
+import { buildHistoryRequestFields, buildMcpRequestFields, buildAgentRequestFields } from "../utils/preferences";
 import { formatBackendError, waitForBackend } from "../utils/backend";
 import {
   getSessionId,
@@ -334,6 +334,7 @@ export function useChatStream(
   chatMode: ChatMode,
   historyPref: HistoryPreference,
   mcpPref: McpPreference,
+  agentPref: AgentPreference,
 ) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [sessionId, setSessionIdState] = useState(getSessionId);
@@ -488,6 +489,7 @@ export function useChatStream(
           mode: chatMode,
           ...buildHistoryRequestFields(historyPref),
           ...buildMcpRequestFields(mcpPref),
+          ...buildAgentRequestFields(agentPref),
         }),
         signal: controller.signal,
       });
@@ -550,7 +552,7 @@ export function useChatStream(
         pendingSessionIdRef.current = null;
       }
     }
-  }, [isStreaming, chatMode, historyPref, mcpPref, finishStreaming]);
+  }, [isStreaming, chatMode, historyPref, mcpPref, agentPref, finishStreaming]);
 
   const clearSession = useCallback(async () => {
     historyEpochRef.current += 1;

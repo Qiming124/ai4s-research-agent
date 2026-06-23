@@ -49,7 +49,7 @@ export function SessionListSidebar({
                 <span className="session-item-title">{session.title}</span>
                 <span className="session-item-id">{shortSessionId(session.id)}</span>
               </button>
-              {onRemove && sessions.length > 1 && (
+              {onRemove && (
                 <button
                   type="button"
                   className="session-remove-btn"

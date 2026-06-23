@@ -1,11 +1,15 @@
-import type { ChatMode } from "../utils/preferences";
+import type { ChatMode, AgentChoice } from "../utils/preferences";
 import type { McpStatus } from "../hooks/useMcpStatus";
 import type { DocumentInfo } from "../hooks/useDocuments";
 import { DocumentPanel } from "./DocumentPanel";
+import { RagRefsPanel } from "./RagRefsPanel";
+import type { RagRef } from "../hooks/useRagRefs";
 
 interface AgentSettingsSidebarProps {
   chatMode: ChatMode;
   onChatModeChange: (mode: ChatMode) => void;
+  agentChoice: AgentChoice;
+  onAgentChoiceChange: (value: AgentChoice) => void;
   showReasoning: boolean;
   onShowReasoningChange: (value: boolean) => void;
   useServerHistory: boolean;
@@ -30,6 +34,10 @@ interface AgentSettingsSidebarProps {
   onRefreshDocuments: () => void;
   onUploadDocument: (content: string, title?: string) => Promise<boolean>;
   onDeleteDocument: (docId: string) => Promise<boolean>;
+  ragRefs: RagRef[];
+  ragRefsLoading: boolean;
+  ragRefsError: string | null;
+  onRefreshRagRefs: () => void;
 }
 
 function serverStatusLabel(
@@ -45,6 +53,8 @@ function serverStatusLabel(
 export function AgentSettingsSidebar({
   chatMode,
   onChatModeChange,
+  agentChoice,
+  onAgentChoiceChange,
   showReasoning,
   onShowReasoningChange,
   useServerHistory,
@@ -69,6 +79,10 @@ export function AgentSettingsSidebar({
   onRefreshDocuments,
   onUploadDocument,
   onDeleteDocument,
+  ragRefs,
+  ragRefsLoading,
+  ragRefsError,
+  onRefreshRagRefs,
 }: AgentSettingsSidebarProps) {
   const serverEnabled = mcpStatus?.server_enabled ?? false;
   const mcpToggleDisabled = disabled || useServerMcp || !serverEnabled;
@@ -103,6 +117,28 @@ export function AgentSettingsSidebar({
               Math
             </button>
           </div>
+        </section>
+
+        <section className="settings-section">
+          <h3>Agent 路由</h3>
+          <label className="settings-field">
+            目标 Agent
+            <select
+              className="agent-select"
+              value={agentChoice}
+              disabled={disabled}
+              onChange={(e) => onAgentChoiceChange(e.target.value as AgentChoice)}
+            >
+              <option value="auto">自动路由（Supervisor）</option>
+              <option value="general">General — 通用</option>
+              <option value="theory">Theory — 理论推导</option>
+              <option value="experiment">Experiment — 实验分析</option>
+              <option value="literature">Literature — 文献检索</option>
+            </select>
+          </label>
+          <p className="settings-hint">
+            需服务端 ORCHESTRATION_BACKEND=langgraph 或 multi；自动路由时按意图分配 Agent。
+          </p>
         </section>
 
         <section className="settings-section">
@@ -217,6 +253,16 @@ export function AgentSettingsSidebar({
               <p className="settings-hint">未配置 MCP Server</p>
             )}
           </div>
+        </section>
+
+        <section className="settings-section">
+          <RagRefsPanel
+            refs={ragRefs}
+            loading={ragRefsLoading}
+            error={ragRefsError}
+            onRefresh={onRefreshRagRefs}
+            disabled={disabled}
+          />
         </section>
 
         <section className="settings-section">

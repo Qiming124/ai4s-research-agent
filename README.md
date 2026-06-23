@@ -12,7 +12,7 @@
 | L2 会话 | SQLite 持久化，含 reasoning、tool_calls |
 | L1 工作记忆 | 历史截断与可选 LLM 摘要 |
 | MCP | web_search / arxiv / filesystem（stdio） |
-| 多 Agent | `ORCHESTRATION_BACKEND=langgraph` 时 Supervisor 路由 |
+| 多 Agent | `ORCHESTRATION_BACKEND=langgraph`（或 `multi`）时 Supervisor 路由；默认 `legacy` 仅 GeneralAgent |
 | RAG | Chroma 向量库 + `/v1/documents` |
 | Web | 三栏 UI、KaTeX 公式、会话列表 |
 | Docker | 单镜像含前端构建产物与 API |
@@ -26,33 +26,35 @@
 ```
 ┌─────────────────────────────────────────┐
 │  Transport 层（SSE 流式推送）             │
-│  client/cli.py  /  web/src/              │
+│  app/client/cli.py  /  app/web/src/     │
 ├─────────────────────────────────────────┤
 │  Route 层（FastAPI HTTP 端点）            │
-│  server/api/chat.py                      │
+│  app/server/api/chat.py                  │
 ├─────────────────────────────────────────┤
 │  Agent 层（业务编排）                      │
-│  server/agents/base.py                   │
+│  app/server/agents/base.py               │
 ├──────────────┬──────────────────────────┤
 │  Memory 层    │  LLM 层                   │
 │  session.py   │  client.py + prompts.py  │
 ├──────────────┴──────────────────────────┤
-│  Config 层（.env → Settings 单例）        │
-│  server/config.py                        │
+│  Config 层（conf/.env → Settings）       │
+│  app/server/config.py                    │
 ├─────────────────────────────────────────┤
 │  Schema 层（数据模型）                     │
-│  shared/schemas.py                       │
+│  app/shared/schemas.py                   │
 └─────────────────────────────────────────┘
 ```
+
+> **路径说明**：Python 包名仍为 `server`、`client`、`shared`（代码在 `app/` 下）。启动 uvicorn 时需加 `--app-dir app`；根目录不再有 `web/`、`server/` 目录。
 
 ### 一次对话的完整链路
 
 ```
 用户输入 → CLI / Web → POST /v1/chat/stream (SSE)
-  → server/api/chat.py        （路由：校验 + 序列化）
-    → server/agents/base.py   （Agent：读历史 → 拼消息 → 调 LLM）
-      → server/llm/client.py  （DeepSeek API：流式 reasoning + content）
-    → server/memory/session.py（写回 user + assistant 消息）
+  → app/server/api/chat.py        （路由：校验 + 序列化）
+    → app/server/agents/base.py   （Agent：读历史 → 拼消息 → 调 LLM）
+      → app/server/llm/client.py  （DeepSeek API：流式 reasoning + content）
+    → app/server/memory/session.py（写回 user + assistant 消息）
   → SSE 事件流 → 客户端实时渲染
 ```
 
@@ -96,13 +98,16 @@ Python 包名仍为 `server`、`client`、`shared`（位于 `app/` 下），impo
 
 | 分支 | 用途 |
 |------|------|
-| `master` | 主开发分支，最新功能 |
-| `v0.1` | **当前分支**——Phase 1 中间状态存档（可对话 Agent + CLI + Web + 完整中文注释） |
+| **`dev`** | **日常开发分支**（推荐 checkout；含 MCP、RAG、多 Agent、Docker） |
+| `master` | 稳定发布线，定期从 `dev` 合并 |
+| `v0.1` | Phase 1 存档（单 GeneralAgent + CLI + Web） |
+| `v0.2`–`v1.1` | 里程碑存档分支，按需 checkout 回溯 |
 
 切换分支：
 
 ```bash
-git checkout master   # 最新开发版
+git checkout dev      # 日常开发（推荐）
+git checkout master   # 稳定线
 git checkout v0.1     # Phase 1 存档版
 ```
 
@@ -182,7 +187,7 @@ cp conf/.env.example conf/.env
 | `MAX_HISTORY_MESSAGES` | `0` | L1 截断条数，`0` 不限制 |
 | `ENABLE_HISTORY_SUMMARY` | `false` | 截断时 LLM 摘要 |
 | `ENABLE_MCP` | `false` | **启用 MCP 工具** |
-| `ORCHESTRATION_BACKEND` | `legacy` | `legacy` 或 `langgraph` |
+| `ORCHESTRATION_BACKEND` | `legacy` | `legacy` 单 Agent；`langgraph` 或 `multi` 多 Agent 编排 |
 | `ENABLE_RAG` | `false` | 启用 RAG 向量检索 |
 
 MCP、RAG 其余变量见 `conf/.env.example` 与 [`doc/mcp-config.md`](doc/mcp-config.md)。
@@ -270,6 +275,38 @@ cd ../../ && uvicorn server.main:app --host 0.0.0.0 --port 8000 --app-dir app
 | Chat / Math 模式 | 切换对话模式，请求携带 `mode` 字段（math 使用数学推导 prompt） |
 | 清空会话 | 调用 `DELETE /v1/sessions/{id}` 并清空 UI |
 
+### Web 数学公式（KaTeX）
+
+前端代码位于 `app/web/src/components/MarkdownContent.tsx` 与 `app/web/src/utils/preprocessMath.ts`。
+
+| 场景 | 行为 |
+|------|------|
+| 生成中 | 纯文本显示，避免未闭合 LaTeX 触发 KaTeX 报错 |
+| 生成完成 | `remark-math` + `rehype-katex` 渲染 |
+| 自动修复 | 裸 `\begin{cases}...\end{cases}`、缺开头 `$$`、跨行 `$...$`、未闭合 `$` 等会预处理 |
+
+**推荐写法（Math 模式）**：
+
+- 简单符号：行内 `$y$`、`$\hat{y}$`、`$L_{\text{MSE}}$`（**同一行内**，不要换行拆开）
+- 分段函数 / 矩阵 / 多行推导：独立成行的 `$$...$$`，例如：
+
+```latex
+$$
+\begin{cases}
+\frac{1}{2}(y-\hat{y})^2, & |y-\hat{y}| \le \delta \\
+\delta|y-\hat{y}| - \frac{1}{2}\delta^2, & \text{otherwise}
+\end{cases}
+$$
+```
+
+**仍可能显示异常的情况**（预处理无法完全修复）：
+
+- 公式被截断（缺 `\end{cases}`、行末单独 `&` 且无后续行）
+- 只用 `\begin{cases}...\end{cases}$$` 且内容不完整
+- 中文与 `$` 混排时把 `$...$` 拆到多行
+
+**建议**：数学-heavy 问题请切换到 **Math 模式**；若仍异常，可让模型「用完整 `$$...$$` 重写公式块」。渲染失败时以琥珀色保留原文，页面不会崩溃。详见 Web 内「帮助 → 公式显示」。
+
 ### 生产部署
 
 - **Docker**：见 [`doc/docker.md`](doc/docker.md) 与 [`doc/DEPLOY.md`](doc/DEPLOY.md)
@@ -299,7 +336,7 @@ rm -f /etc/nginx/sites-enabled/default
 nginx -t && systemctl reload nginx
 
 # 3. 后台运行（退出终端不挂）
-nohup uvicorn server.main:app --host 127.0.0.1 --port 8000 \
+nohup uvicorn server.main:app --host 127.0.0.1 --port 8000 --app-dir app \
       > /var/log/ai4s-agent.log 2>&1 &
 
 # 4. 用 systemd 守护（推荐生产环境）
@@ -381,12 +418,14 @@ python -m client.cli --no-show-reasoning      # 隐藏推理过程
 | reasoning 为空 | 配置问题 | 确认 `REASONING_EFFORT=max` |
 | 部署后访问白屏 | 浏览器缓存 | Ctrl+Shift+R 硬刷新 |
 | Nginx 访问 502 | 后端未启动 | `systemctl status ai4s-agent` |
+| 公式显示为原文或逐字换行 | LaTeX 不完整或 `$...$` 被换行拆开 | 用 **Math 模式**；复杂公式用 `$$...$$`；见上文「Web 数学公式」 |
+| 找不到 `web/` 或 `server/` 目录 | 已迁移至 `app/` | 前端 `cd app/web`；后端 `--app-dir app` |
 
 ---
 
 ## Phase 2 扩展指引
 
-1. 在 `server/agents/` 继承 `BaseAgent` 新建 Agent（TheoryAgent / ExperimentAgent / LiteratureAgent）
+1. 在 `app/server/agents/` 继承 `BaseAgent` 新建 Agent（TheoryAgent / ExperimentAgent / LiteratureAgent）
 2. 定义专用 `system_prompt`
 3. 实现 `async def run(...)` 方法
 4. 通过 LangGraph router 按用户意图分发
@@ -406,7 +445,7 @@ class TheoryAgent(BaseAgent):
 
 见 `pyproject.toml`。核心：`fastapi`、`uvicorn`、`openai`、`pydantic-settings`、`httpx`、`httpx-sse`、`rich`、`prompt-toolkit`。
 
-前端：`react`、`vite`、`react-markdown`、`remark-gfm`、`rehype-katex`、`rehype-highlight`。
+前端：`react`、`vite`、`react-markdown`、`remark-math`、`remark-gfm`、`rehype-katex`、`rehype-highlight`（均在 `app/web/`）。
 
 ---
 

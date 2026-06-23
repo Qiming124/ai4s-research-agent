@@ -119,6 +119,6 @@ location / {
 | 现象 | 处理 |
 |------|------|
 | MCP 未启用 | `.env` 设 `ENABLE_MCP=true` 且启动时带 `--env-file` |
-| 页面 404 | 确认镜像含 `web/dist`（需 build 阶段 `npm run build`） |
+| 页面 404 | 确认镜像含 `app/web/dist`（build 阶段在 `app/web` 执行 `npm run build`） |
 | 会话丢失 | 挂载 `data/` 卷；`SESSION_STORE_BACKEND=sqlite` |
 | Docker Hub 超时 | 配置 `registry-mirrors`，见 doc/docker.md |

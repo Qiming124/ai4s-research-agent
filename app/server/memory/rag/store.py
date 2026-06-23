@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import sqlite3
 import threading
@@ -20,6 +21,14 @@ from server.memory.rag.embeddings import get_embedding_function
 logger = logging.getLogger(__name__)
 
 _COLLECTION_NAME = "ai4s_documents"
+
+
+def doc_id_from_file_path(path: Path) -> str:
+    """由文件绝对路径生成稳定 doc_id，重启索引时覆盖而非重复插入。"""
+    resolved = path.resolve()
+    digest = hashlib.sha256(str(resolved).encode("utf-8")).hexdigest()[:32]
+    return f"file-{digest}"
+
 
 _REGISTRY_SCHEMA = """
 CREATE TABLE IF NOT EXISTS rag_documents (
@@ -104,7 +113,13 @@ class RagStore:
 
         resolved_id = doc_id or str(uuid.uuid4())
         resolved_title = (title or source or resolved_id).strip() or resolved_id
-        created_at = self._now_iso()
+
+        with self._lock:
+            row = self._registry_conn.execute(
+                "SELECT created_at FROM rag_documents WHERE doc_id = ?",
+                (resolved_id,),
+            ).fetchone()
+            created_at = row["created_at"] if row else self._now_iso()
 
         ids = [f"{resolved_id}::{idx}" for idx in range(len(chunks))]
         metadatas = [
@@ -153,12 +168,33 @@ class RagStore:
             created_at=created_at,
         )
 
+    def _cleanup_legacy_file_duplicates(self, resolved: Path, stable_id: str) -> None:
+        """删除同一物理文件在旧逻辑下产生的 UUID doc_id 副本。"""
+        with self._lock:
+            rows = self._registry_conn.execute(
+                "SELECT doc_id, source FROM rag_documents WHERE doc_id != ?",
+                (stable_id,),
+            ).fetchall()
+        for row in rows:
+            source = row["source"]
+            if not source:
+                continue
+            try:
+                if Path(source).resolve() == resolved:
+                    self.delete_document(row["doc_id"])
+            except OSError:
+                continue
+
     def add_file(self, path: Path, *, title: str | None = None) -> DocumentRecord:
-        text = path.read_text(encoding="utf-8")
+        resolved = path.resolve()
+        stable_id = doc_id_from_file_path(resolved)
+        self._cleanup_legacy_file_duplicates(resolved, stable_id)
+        text = resolved.read_text(encoding="utf-8")
         return self.add_document(
             text,
-            title=title or path.name,
-            source=str(path),
+            title=title or resolved.name,
+            source=str(resolved),
+            doc_id=stable_id,
         )
 
     def list_documents(self) -> list[DocumentRecord]:

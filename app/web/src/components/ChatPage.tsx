@@ -6,6 +6,7 @@ import { useTokenStats } from "../hooks/useTokenStats";
 import { waitForBackend } from "../utils/backend";
 import {
   getChatMode,
+  getAgentChoice,
   getEnableHistorySummary,
   getEnableMcp,
   getMaxHistoryMessages,
@@ -13,6 +14,7 @@ import {
   getUseServerHistoryDefault,
   getUseServerMcpDefault,
   setChatMode,
+  setAgentChoice,
   setEnableHistorySummary,
   setEnableMcp,
   setMaxHistoryMessages,
@@ -20,10 +22,15 @@ import {
   setUseServerHistoryDefault,
   setUseServerMcpDefault,
   type ChatMode,
+  type AgentChoice,
 } from "../utils/preferences";
+import { useRagRefs } from "../hooks/useRagRefs";
 import {
   createNewSession,
+  fetchServerSessions,
   getSessionList,
+  readSessionList,
+  syncSessionListWithServer,
   removeSessionFromList,
   type SessionMeta,
 } from "../utils/session";
@@ -36,6 +43,7 @@ import { TopStatusBar } from "./TopStatusBar";
 
 export function ChatPage() {
   const [chatMode, setChatModeState] = useState<ChatMode>(getChatMode);
+  const [agentChoice, setAgentChoiceState] = useState<AgentChoice>(getAgentChoice);
   const [showReasoning, setShowReasoningState] = useState(getShowReasoning);
   const [useServerHistory, setUseServerHistoryState] = useState(getUseServerHistoryDefault);
   const [maxHistoryMessages, setMaxHistoryMessagesState] = useState(getMaxHistoryMessages);
@@ -54,6 +62,8 @@ export function ChatPage() {
     useServerDefault: useServerMcp,
     enableMcp,
   };
+
+  const agentPref = { agent: agentChoice };
 
   const {
     status: mcpStatus,
@@ -76,7 +86,16 @@ export function ChatPage() {
     reloadHistory,
     switchSession,
     createSession,
-  } = useChatStream(chatMode, historyPref, mcpPref);
+  } = useChatStream(chatMode, historyPref, mcpPref, agentPref);
+
+  const sessionIdRef = useRef(sessionId);
+
+  const {
+    refs: ragRefs,
+    loading: ragRefsLoading,
+    error: ragRefsError,
+    refresh: refreshRagRefs,
+  } = useRagRefs(sessionId, !backendOffline);
 
   const { stats: tokenStats, loading: tokenLoading, refresh: refreshTokens } = useTokenStats(
     sessionId,
@@ -98,14 +117,30 @@ export function ChatPage() {
   const [retryingBackend, setRetryingBackend] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
 
-  const refreshSessions = useCallback(() => {
-    setSessions(getSessionList());
+  useEffect(() => {
+    sessionIdRef.current = sessionId;
+  }, [sessionId]);
+
+  const refreshSessions = useCallback(async (currentId?: string) => {
+    const cid = currentId ?? sessionIdRef.current;
+    try {
+      const server = await fetchServerSessions();
+      setSessions(syncSessionListWithServer(server, cid));
+    } catch {
+      setSessions(getSessionList());
+    }
   }, []);
 
   // 仅随 session 变化刷新列表，不依赖 messages（避免 SSE 流式时连锁重渲染）
   useEffect(() => {
-    refreshSessions();
+    refreshSessions(sessionId);
   }, [sessionId, refreshSessions]);
+
+  useEffect(() => {
+    if (!isStreaming) {
+      refreshRagRefs();
+    }
+  }, [isStreaming, refreshRagRefs]);
 
   useEffect(() => {
     refreshMcp();
@@ -119,11 +154,13 @@ export function ChatPage() {
     el.scrollTop = el.scrollHeight;
   }, [messages]);
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!input.trim()) return;
-    sendMessage(input);
+    const text = input;
     setInput("");
+    await sendMessage(text);
     refreshTokens();
+    await refreshSessions();
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -136,6 +173,11 @@ export function ChatPage() {
   const handleModeChange = (mode: ChatMode) => {
     setChatModeState(mode);
     setChatMode(mode);
+  };
+
+  const handleAgentChoiceChange = (value: AgentChoice) => {
+    setAgentChoiceState(value);
+    setAgentChoice(value);
   };
 
   const handleShowReasoningChange = (checked: boolean) => {
@@ -191,27 +233,39 @@ export function ChatPage() {
   const handleNewSession = async () => {
     const newId = createNewSession();
     await createSession(newId);
-    refreshSessions();
+    await refreshSessions(newId);
   };
 
   const handleSelectSession = async (id: string) => {
     await switchSession(id);
-    refreshSessions();
+    await refreshSessions(id);
     refreshTokens();
+  };
+
+  const handleClearSession = async () => {
+    await clearSession();
+    await refreshSessions();
   };
 
   const handleRemoveSession = async (id: string) => {
     if (isStreaming) return;
-    await fetch(`/v1/sessions/${id}`, { method: "DELETE" });
+    await fetch(`/v1/sessions/${id}?purge=true`, { method: "DELETE" });
     removeSessionFromList(id);
-    const remaining = getSessionList();
-    if (remaining.length === 0) {
-      const newId = createNewSession();
-      await createSession(newId);
-    } else if (id === sessionId) {
-      await switchSession(remaining[0].id);
+
+    if (id === sessionId) {
+      const remaining = readSessionList();
+      if (remaining.length === 0) {
+        const newId = createNewSession();
+        await createSession(newId);
+        await refreshSessions(newId);
+      } else {
+        const nextId = remaining[0].id;
+        await switchSession(nextId);
+        await refreshSessions(nextId);
+      }
+    } else {
+      await refreshSessions();
     }
-    refreshSessions();
   };
 
   return (
@@ -236,7 +290,7 @@ export function ChatPage() {
           <button type="button" className="btn-secondary" onClick={() => setHelpOpen(true)}>
             帮助
           </button>
-          <button type="button" className="btn-secondary" onClick={clearSession} disabled={isStreaming}>
+          <button type="button" className="btn-secondary" onClick={handleClearSession} disabled={isStreaming}>
             清空会话
           </button>
         </div>
@@ -303,6 +357,8 @@ export function ChatPage() {
             disabled={isStreaming}
             chatMode={chatMode}
             onChatModeChange={handleModeChange}
+            agentChoice={agentChoice}
+            onAgentChoiceChange={handleAgentChoiceChange}
             showReasoning={showReasoning}
             onShowReasoningChange={handleShowReasoningChange}
             useServerHistory={useServerHistory}
@@ -326,6 +382,10 @@ export function ChatPage() {
             onRefreshDocuments={refreshDocuments}
             onUploadDocument={uploadDocument}
             onDeleteDocument={deleteDocument}
+            ragRefs={ragRefs}
+            ragRefsLoading={ragRefsLoading}
+            ragRefsError={ragRefsError}
+            onRefreshRagRefs={refreshRagRefs}
           />
         </ErrorBoundary>
       </div>

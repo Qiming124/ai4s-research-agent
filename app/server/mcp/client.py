@@ -185,6 +185,15 @@ def reset_mcp_client() -> None:
     _mcp_client = None
 
 
+async def reload_mcp_client() -> MCPClient:
+    """断开并重新加载 MCP 配置（热重载）。"""
+    global _mcp_client
+    if _mcp_client is not None:
+        await _mcp_client.close()
+    _mcp_client = None
+    return await get_mcp_client()
+
+
 async def build_mcp_status() -> "MCPStatusResponse":
     """
     构建 GET /v1/mcp/status 的响应体。

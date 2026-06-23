@@ -51,7 +51,7 @@
 ## Web 前端
 
 - 开发：`app/web/` Vite + React，5173 代理 8000
-- 生产：`npm run build` → `app/web/dist`，由 `server/main.py` 托管
+- 生产：`npm run build` → `app/web/dist`，由 `app/server/main.py` 托管
 - 状态：会话列表 localStorage；消息从 `GET /v1/sessions/{id}` 恢复
 
 ## 关键目录
