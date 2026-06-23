@@ -5,6 +5,7 @@ interface TopStatusBarProps {
   sessionId: string;
   backendOffline: boolean;
   activeAgentName: string | null;
+  activeToolName?: string | null;
   isStreaming: boolean;
   tokenStats: TokenStats;
   tokenLoading: boolean;
@@ -17,6 +18,7 @@ export function TopStatusBar({
   sessionId,
   backendOffline,
   activeAgentName,
+  activeToolName = null,
   isStreaming,
   tokenStats,
   tokenLoading,
@@ -38,6 +40,11 @@ export function TopStatusBar({
       {activeAgentName && (
         <span className="status-pill status-agent" title="当前 Agent">
           {activeAgentName}
+        </span>
+      )}
+      {isStreaming && activeToolName && (
+        <span className="status-pill status-tool" title="正在执行的工具">
+          {activeToolName}
         </span>
       )}
       <span className="status-pill status-tokens" title="本会话 token 用量">

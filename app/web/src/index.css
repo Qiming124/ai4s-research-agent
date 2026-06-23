@@ -94,6 +94,11 @@ body {
   color: #4338ca;
 }
 
+.status-tool {
+  background: #fff7ed;
+  color: #c2410c;
+}
+
 .status-tokens {
   background: #f0fdf4;
   color: #15803d;
@@ -749,6 +754,13 @@ body {
 }
 
 /* 流式生成：纯文本，避免半成品 LaTeX 触发 KaTeX 报错 */
+.streaming-placeholder {
+  margin: 0 0 8px;
+  font-size: 0.9rem;
+  color: #64748b;
+  font-style: italic;
+}
+
 .streaming-plain {
   margin: 0;
   padding: 0;

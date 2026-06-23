@@ -13,7 +13,7 @@ interface MarkdownContentProps {
   isStreaming?: boolean;
 }
 
-const MAX_MARKDOWN_CHARS = 12000;
+const MAX_MARKDOWN_CHARS = 50000;
 
 const remarkPlugins: PluggableList = [remarkMath, remarkGfm];
 const rehypePlugins: PluggableList = [
@@ -23,7 +23,8 @@ const rehypePlugins: PluggableList = [
 function safePreprocess(content: string): string {
   try {
     return preprocessMathContent(content);
-  } catch {
+  } catch (err) {
+    console.warn("preprocessMathContent failed, using raw content:", err);
     return content;
   }
 }
@@ -74,15 +75,15 @@ export function MarkdownContent({
   const safeClass = className.trim();
 
   const processed = useMemo(() => {
-    if (!content || isStreaming) return content ?? "";
+    if (!content) return "";
     if (content.length > MAX_MARKDOWN_CHARS) return content;
     return safePreprocess(content);
-  }, [content, isStreaming]);
+  }, [content]);
 
   if (!content) return null;
 
   if (isStreaming) {
-    return <PlainText content={content} className={`streaming-plain ${safeClass}`} />;
+    return <PlainText content={processed} className={`streaming-plain ${safeClass}`} />;
   }
 
   if (content.length > MAX_MARKDOWN_CHARS) {

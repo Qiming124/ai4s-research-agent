@@ -19,6 +19,15 @@ npm run dev
 
 打开 http://localhost:5173。Vite 将 `/v1` 等 API 代理到 8000。
 
+### SSE 流式（开发模式）
+
+`POST /v1/chat/stream` 使用 `text/event-stream`。开发代理已在 [`vite.config.ts`](../app/web/vite.config.ts) 中对 SSE 响应设置 `X-Accel-Buffering: no`，避免 http-proxy 缓冲导致前端「整轮结束才收到事件」。若流式仍异常，可对比：
+
+- 直连后端：`curl -N -X POST http://127.0.0.1:8000/v1/chat/stream ...`
+- 经 Vite：`curl -N -X POST http://127.0.0.1:5173/v1/chat/stream ...`
+
+生产环境由 FastAPI 直接托管静态资源，或 Nginx 反代时需 `proxy_buffering off`（见 [`DEPLOY.md`](DEPLOY.md)）。
+
 ## 生产构建
 
 ```bash
@@ -57,7 +66,7 @@ Docker 镜像在 build 阶段自动执行 `npm run build`（工作目录 `app/we
 | 流式生成中 | 纯文本，不跑 KaTeX |
 | 生成完成后 | 经 `preprocessMath.ts` 修复后渲染 |
 
-**自动修复**（`preprocessMath.ts`）：裸 `\begin{cases}...`、缺开头 `$$`、跨行 `$...$`、未闭合 `$` / `\end{cases}` 等。
+**自动修复**（`preprocessMath.ts`）：裸 `\begin{cases}...`、缺开头 `$$`、跨行 `$...$`、未闭合 `$` / `\end{cases}`、模型误用 `\sum{m}` / `\lambda{\max}` / `\hat{y}k` 等下标写法、重复「代入得：」、标题与公式粘连等。
 
 **推荐写法**：
 

@@ -80,6 +80,7 @@ export function ChatPage() {
     historyError,
     backendOffline,
     activeAgentName,
+    activeToolName,
     sendMessage,
     stopGeneration,
     clearSession,
@@ -279,6 +280,7 @@ export function ChatPage() {
           sessionId={sessionId}
           backendOffline={backendOffline}
           activeAgentName={activeAgentName}
+          activeToolName={activeToolName}
           isStreaming={isStreaming}
           tokenStats={tokenStats}
           tokenLoading={tokenLoading}
