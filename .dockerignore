@@ -14,6 +14,7 @@ app/web/node_modules
 app/web/dist
 data
 log
+.env
 conf/.env
 *.md
 !README.md

@@ -6,7 +6,12 @@ from server.memory.rag.retrieval import (
     format_rag_context,
     retrieve_for_query,
 )
-from server.memory.rag.store import DocumentRecord, RagStore, get_rag_store, reset_rag_store
+from server.memory.rag.store import (
+    DocumentRecord,
+    RagStore,
+    get_rag_store,
+    reset_rag_store,
+)
 
 __all__ = [
     "chunk_text",

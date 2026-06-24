@@ -10,6 +10,7 @@ interface DocumentPanelProps {
   onRefresh: () => void;
   onUpload: (content: string, title?: string) => Promise<boolean>;
   onDelete: (docId: string) => Promise<boolean>;
+  onClearAll?: () => Promise<boolean>;
 }
 
 export function DocumentPanel({
@@ -21,6 +22,7 @@ export function DocumentPanel({
   onRefresh,
   onUpload,
   onDelete,
+  onClearAll,
 }: DocumentPanelProps) {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
@@ -50,9 +52,25 @@ export function DocumentPanel({
     <div className="document-panel">
       <div className="settings-section-head">
         <h3>RAG 文档</h3>
-        <button type="button" className="btn-link" onClick={onRefresh} disabled={loading}>
-          {loading ? "刷新中…" : "刷新"}
-        </button>
+        <div className="doc-list-actions">
+          {onClearAll && documents.length > 0 && (
+            <button
+              type="button"
+              className="btn-link doc-clear-all-btn"
+              onClick={() => {
+                if (window.confirm("确定清空全部 RAG 索引文档？")) {
+                  void onClearAll();
+                }
+              }}
+              disabled={disabled}
+            >
+              清空全部
+            </button>
+          )}
+          <button type="button" className="btn-link" onClick={onRefresh} disabled={loading}>
+            {loading ? "刷新中…" : "刷新"}
+          </button>
+        </div>
       </div>
 
       <label className="settings-field doc-upload-field">
@@ -107,6 +125,9 @@ export function DocumentPanel({
       </div>
 
       {error && <p className="settings-error">{error}</p>}
+      <p className="settings-hint">
+        来自 MCP 目录的自动索引文件，删除或「清空全部」后重启不会再次索引；手动上传可重新加入。
+      </p>
 
       <ul className="doc-list">
         {documents.length === 0 && !loading && (

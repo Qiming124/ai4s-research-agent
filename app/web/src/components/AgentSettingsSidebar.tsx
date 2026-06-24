@@ -34,6 +34,7 @@ interface AgentSettingsSidebarProps {
   onRefreshDocuments: () => void;
   onUploadDocument: (content: string, title?: string) => Promise<boolean>;
   onDeleteDocument: (docId: string) => Promise<boolean>;
+  onClearAllDocuments?: () => Promise<boolean>;
   ragRefs: RagRef[];
   ragRefsLoading: boolean;
   ragRefsError: string | null;
@@ -79,6 +80,7 @@ export function AgentSettingsSidebar({
   onRefreshDocuments,
   onUploadDocument,
   onDeleteDocument,
+  onClearAllDocuments,
   ragRefs,
   ragRefsLoading,
   ragRefsError,
@@ -275,6 +277,7 @@ export function AgentSettingsSidebar({
             onRefresh={onRefreshDocuments}
             onUpload={onUploadDocument}
             onDelete={onDeleteDocument}
+            onClearAll={onClearAllDocuments}
           />
         </section>
       </div>

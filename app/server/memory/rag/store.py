@@ -38,6 +38,11 @@ CREATE TABLE IF NOT EXISTS rag_documents (
     chunk_count  INTEGER NOT NULL DEFAULT 0,
     created_at   TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS rag_deleted_sources (
+    source_path TEXT PRIMARY KEY,
+    deleted_at  TEXT NOT NULL
+);
 """
 
 
@@ -71,6 +76,7 @@ class RagStore:
         self._settings = settings or get_settings()
         self._chroma_path = Path(self._settings.rag_chroma_path)
         self._chroma_path.mkdir(parents=True, exist_ok=True)
+        self._check_chroma_writable()
         self._registry_path = self._chroma_path / "registry.db"
         self._embedding_fn = get_embedding_function(
             self._settings,
@@ -94,6 +100,80 @@ class RagStore:
 
     def _now_iso(self) -> str:
         return datetime.now(timezone.utc).isoformat()
+
+    def _check_chroma_writable(self) -> None:
+        probe = self._chroma_path / ".write_probe"
+        try:
+            probe.touch()
+            probe.unlink(missing_ok=True)
+        except OSError:
+            logger.error(
+                "RAG 目录不可写: %s；删除/索引会失败。请停止服务后执行 "
+                "sudo chown -R $(whoami):$(whoami) %s 或 sudo rm -rf %s",
+                self._chroma_path,
+                self._chroma_path,
+                self._chroma_path,
+            )
+
+    def _normalize_source_path(self, source: str) -> str | None:
+        if not source.strip():
+            return None
+        try:
+            return str(Path(source).resolve())
+        except OSError:
+            return source.strip()
+
+    def _mark_source_deleted(self, source: str) -> None:
+        normalized = self._normalize_source_path(source)
+        if not normalized:
+            return
+        with self._lock:
+            self._registry_conn.execute(
+                """
+                INSERT OR REPLACE INTO rag_deleted_sources (source_path, deleted_at)
+                VALUES (?, ?)
+                """,
+                (normalized, self._now_iso()),
+            )
+            self._registry_conn.commit()
+
+    def _unmark_source_deleted(self, source: str) -> None:
+        normalized = self._normalize_source_path(source)
+        if not normalized:
+            return
+        with self._lock:
+            self._registry_conn.execute(
+                "DELETE FROM rag_deleted_sources WHERE source_path = ?",
+                (normalized,),
+            )
+            self._registry_conn.commit()
+
+    def _is_source_deleted(self, path: Path) -> bool:
+        normalized = str(path.resolve())
+        with self._lock:
+            row = self._registry_conn.execute(
+                "SELECT 1 FROM rag_deleted_sources WHERE source_path = ?",
+                (normalized,),
+            ).fetchone()
+        return row is not None
+
+    def _iter_mcp_file_paths(self) -> list[Path]:
+        allowed = self._settings.mcp_allowed_dirs
+        roots = [Path(p.strip()) for p in allowed.split(":") if p.strip()]
+        paths: list[Path] = []
+        patterns = ("*.md", "*.txt", "*.markdown")
+        for root in roots:
+            if not root.exists():
+                continue
+            for pattern in patterns:
+                for path in root.rglob(pattern):
+                    if path.is_file():
+                        paths.append(path)
+        return paths
+
+    def _mark_all_mcp_sources_deleted(self) -> None:
+        for path in self._iter_mcp_file_paths():
+            self._mark_source_deleted(str(path))
 
     def add_document(
         self,
@@ -134,9 +214,7 @@ class RagStore:
 
         with self._lock:
             # 若 doc_id 已存在，先删除旧 chunk
-            existing = self._collection.get(where={"doc_id": resolved_id})
-            if existing["ids"]:
-                self._collection.delete(ids=existing["ids"])
+            self._delete_chroma_chunks(resolved_id)
 
             self._collection.add(
                 ids=ids,
@@ -188,6 +266,7 @@ class RagStore:
     def add_file(self, path: Path, *, title: str | None = None) -> DocumentRecord:
         resolved = path.resolve()
         stable_id = doc_id_from_file_path(resolved)
+        self._unmark_source_deleted(str(resolved))
         self._cleanup_legacy_file_duplicates(resolved, stable_id)
         text = resolved.read_text(encoding="utf-8")
         return self.add_document(
@@ -236,25 +315,67 @@ class RagStore:
             created_at=row["created_at"],
         )
 
+    def _delete_chroma_chunks(self, doc_id: str) -> None:
+        """删除 Chroma 中某文档的全部 chunk；失败时记录日志但不阻断 registry 清理。"""
+        try:
+            existing = self._collection.get(where={"doc_id": doc_id})
+            if existing["ids"]:
+                self._collection.delete(ids=existing["ids"])
+        except Exception:
+            logger.exception(
+                "RAG Chroma 删除 chunk 失败 doc_id=%s，将继续清理 registry",
+                doc_id,
+            )
+
+    def _recreate_collection(self) -> None:
+        try:
+            self._client.delete_collection(_COLLECTION_NAME)
+        except Exception:
+            logger.debug("RAG collection 不存在或删除失败，将直接重建", exc_info=True)
+        self._collection = self._client.get_or_create_collection(
+            name=_COLLECTION_NAME,
+            embedding_function=self._embedding_fn,
+            metadata={"hnsw:space": "cosine"},
+        )
+
     def delete_document(self, doc_id: str) -> bool:
         with self._lock:
             row = self._registry_conn.execute(
-                "SELECT 1 FROM rag_documents WHERE doc_id = ?",
+                """
+                SELECT doc_id, title, source, chunk_count, created_at
+                FROM rag_documents WHERE doc_id = ?
+                """,
                 (doc_id,),
             ).fetchone()
             if row is None:
                 return False
 
-            existing = self._collection.get(where={"doc_id": doc_id})
-            if existing["ids"]:
-                self._collection.delete(ids=existing["ids"])
+            source = row["source"]
+            self._delete_chroma_chunks(doc_id)
 
             self._registry_conn.execute(
                 "DELETE FROM rag_documents WHERE doc_id = ?",
                 (doc_id,),
             )
             self._registry_conn.commit()
+
+        if source:
+            self._mark_source_deleted(source)
         return True
+
+    def clear_all_documents(self) -> int:
+        """清空全部 RAG 文档（Chroma collection + registry）。"""
+        with self._lock:
+            row = self._registry_conn.execute(
+                "SELECT COUNT(*) AS n FROM rag_documents",
+            ).fetchone()
+            count = int(row["n"]) if row else 0
+            self._recreate_collection()
+            self._registry_conn.execute("DELETE FROM rag_documents")
+            self._registry_conn.commit()
+        self._mark_all_mcp_sources_deleted()
+        logger.info("RAG 已清空全部文档 count=%d", count)
+        return count
 
     def retrieve(self, query: str, *, top_k: int | None = None) -> list[RetrievedSnippet]:
         normalized = query.strip()
@@ -288,22 +409,22 @@ class RagStore:
         return snippets
 
     def index_mcp_files(self) -> list[DocumentRecord]:
-        """索引 MCP_ALLOWED_DIRS 下的 .md / .txt 文件。"""
-        allowed = self._settings.mcp_allowed_dirs
-        roots = [Path(p.strip()) for p in allowed.split(":") if p.strip()]
+        """索引 MCP_ALLOWED_DIRS 下的 .md / .txt 文件（跳过用户已删除的源文件）。"""
         indexed: list[DocumentRecord] = []
-        patterns = ("*.md", "*.txt", "*.markdown")
+        skipped = 0
 
-        for root in roots:
-            if not root.exists():
+        for path in self._iter_mcp_file_paths():
+            if self._is_source_deleted(path):
+                skipped += 1
+                logger.debug("RAG 跳过已删除的 MCP 文件: %s", path)
                 continue
-            for pattern in patterns:
-                for path in root.rglob(pattern):
-                    if path.is_file():
-                        try:
-                            indexed.append(self.add_file(path))
-                        except Exception:
-                            logger.exception("RAG 索引文件失败: %s", path)
+            try:
+                indexed.append(self.add_file(path))
+            except Exception:
+                logger.exception("RAG 索引文件失败: %s", path)
+
+        if skipped:
+            logger.info("RAG 启动索引跳过 %d 个已删除 MCP 文件", skipped)
         return indexed
 
 

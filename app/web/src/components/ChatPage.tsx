@@ -111,6 +111,7 @@ export function ChatPage() {
     refresh: refreshDocuments,
     uploadDocument,
     deleteDocument,
+    clearAllDocuments,
   } = useDocuments(!backendOffline);
 
   const [input, setInput] = useState("");
@@ -384,6 +385,7 @@ export function ChatPage() {
             onRefreshDocuments={refreshDocuments}
             onUploadDocument={uploadDocument}
             onDeleteDocument={deleteDocument}
+            onClearAllDocuments={clearAllDocuments}
             ragRefs={ragRefs}
             ragRefsLoading={ragRefsLoading}
             ragRefsError={ragRefsError}

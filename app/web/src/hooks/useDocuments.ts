@@ -82,6 +82,21 @@ export function useDocuments(enabled = true) {
     [refresh],
   );
 
+  const clearAllDocuments = useCallback(async () => {
+    setError(null);
+    try {
+      const res = await fetch("/v1/documents?purge=true", { method: "DELETE" });
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+      }
+      await refresh();
+      return true;
+    } catch (err) {
+      setError(formatBackendError(err));
+      return false;
+    }
+  }, [refresh]);
+
   return {
     documents,
     loading,
@@ -90,5 +105,6 @@ export function useDocuments(enabled = true) {
     refresh,
     uploadDocument,
     deleteDocument,
+    clearAllDocuments,
   };
 }

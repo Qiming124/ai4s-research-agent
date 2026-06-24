@@ -4,6 +4,7 @@
 # 端点：
 #     POST   /v1/documents           — 上传/索引文档
 #     GET    /v1/documents           — 列出已索引文档
+#     DELETE /v1/documents           — purge=true 时清空全部 RAG 文档
 #     DELETE /v1/documents/{doc_id}  — 删除文档及向量
 #     GET    /v1/sessions/{id}/rag-refs — 会话 RAG 引用（doc_id + snippet）
 # =============================================================================
@@ -12,11 +13,11 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
 from server.config import get_settings
 from server.memory.rag.session_refs import SessionRagRefStore
-from server.memory.rag.store import get_rag_store
+from server.memory.rag.store import get_rag_store, reset_rag_store
 from shared.schemas import (
     DocumentInfo,
     DocumentListResponse,
@@ -92,6 +93,34 @@ async def list_documents() -> DocumentListResponse:
     records = get_rag_store().list_documents()
     docs = [_to_info(r) for r in records]
     return DocumentListResponse(documents=docs, total=len(docs))
+
+
+@router.delete("/v1/documents")
+async def purge_all_documents(
+    purge: bool = Query(
+        False,
+        description="purge=true 时清空全部 RAG 文档与向量",
+    ),
+) -> dict[str, str | int]:
+    """
+    清空全部 RAG 文档（需 purge=true）。
+
+    返回:
+        status=cleared 与 deleted 数量
+    """
+    if not purge:
+        raise HTTPException(
+            status_code=400,
+            detail="请使用 ?purge=true 确认清空全部 RAG 文档",
+        )
+
+    settings = get_settings()
+    if not settings.enable_rag:
+        raise HTTPException(status_code=400, detail="RAG 未启用（ENABLE_RAG=false）")
+
+    deleted = get_rag_store().clear_all_documents()
+    reset_rag_store()
+    return {"status": "cleared", "deleted": deleted}
 
 
 @router.delete("/v1/documents/{doc_id}")

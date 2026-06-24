@@ -89,7 +89,7 @@ curl -s 'http://localhost:8000/v1/stats/tokens?agent_name=literature&day=2026-06
 
 ## Docker 中的 MCP
 
-MCP 服务在同一容器内以 Python 子进程运行（`mcp_servers.json`）。将实验日志放在宿主机的 `data/mcp_files/` 下，容器内对应路径为 `/app/data/mcp_files`。
+MCP 服务在同一容器内以 Python 子进程运行（`mcp_servers.json`）。将实验日志放在宿主机的 `data/mcp_files/` 下，容器内对应路径为 `/repo/data/mcp_files`。
 
 无需单独的 Chroma 服务 — 应用使用 `data/chroma` 下的 Chroma `PersistentClient`。
 
@@ -97,6 +97,12 @@ MCP 服务在同一容器内以 Python 子进程运行（`mcp_servers.json`）�
 
 ```bash
 docker compose --progress=plain -f docker/docker-compose.yml build
+```
+
+默认使用 `chroma_default` 嵌入，不安装 `sentence-transformers` / `torch`，构建更快。若需 `RAG_EMBEDDING_PROVIDER=sentence_transformers`：
+
+```bash
+INSTALL_RAG_EXTRA=1 docker compose --progress=plain -f docker/docker-compose.yml build
 ```
 
 ## 停止
