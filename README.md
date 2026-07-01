@@ -11,9 +11,11 @@
 | 对话 | DeepSeek V4 Pro 流式 reasoning + content（SSE） |
 | L2 会话 | SQLite 持久化，含 reasoning、tool_calls |
 | L1 工作记忆 | 历史截断与可选 LLM 摘要 |
-| MCP | web_search / arxiv / filesystem（stdio） |
-| 多 Agent | `ORCHESTRATION_BACKEND=langgraph`（或 `multi`）时 Supervisor 路由；默认 `legacy` 仅 GeneralAgent |
-| RAG | Chroma 向量库 + `/v1/documents` |
+| MCP | web_search / arxiv / filesystem / **sympy / rag**（stdio） |
+| 多 Agent | `ORCHESTRATION_BACKEND=langgraph` 时 Supervisor 路由（**推荐**） |
+| RAG | Chroma 向量库 + `/v1/documents` + **rag MCP 按需检索** |
+| L4 记忆 | 定理/引理结构化存储 + **theory 自动注入/持久化** |
+| Theory 闭环 | 分阶段 CoT → SymPy 验证 → `verification_result` SSE |
 | Web | 三栏 UI、KaTeX 公式、会话列表 |
 | Docker | 单镜像含前端构建产物与 API |
 

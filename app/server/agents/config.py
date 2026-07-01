@@ -25,7 +25,7 @@ _AGENT_PROMPTS: dict[AgentName, str] = {
 # 内置默认白名单（可被 mcp_tool_whitelist.json agents 覆盖）
 _AGENT_DEFAULT_WHITELIST: dict[AgentName, list[str]] = {
     "general": ["*"],
-    "theory": ["sympy__*"],
+    "theory": ["sympy__*", "rag__*"],
     "experiment": ["filesystem__*"],
     "literature": ["arxiv__*", "web_search__*"],
 }

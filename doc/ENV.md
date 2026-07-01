@@ -80,6 +80,7 @@
 | `RAG_RETRIEVAL_TOP_K` | `4` | 检索返回条数 |
 | `RAG_AGENTS` | `literature,theory,general` | 启用 RAG 的 Agent；含 `general` 时 legacy 模式也会注入 |
 | `RAG_INDEX_MCP_FILES` | `false` | 启动时索引 MCP 目录下 md/txt |
+| `STRUCTURED_MEMORY_AGENTS` | `theory` | 启用 L4 结构化记忆注入的 Agent |
 | `ROUTER_USE_LLM` | `false` | LLM 意图路由（失败回退规则） |
 | `TAVILY_API_KEY` | 空 | Tavily 搜索 Key；设置后 web_search MCP 优先 Tavily |
 

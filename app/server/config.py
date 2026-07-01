@@ -222,6 +222,13 @@ class Settings(BaseSettings):
         description="启动时是否索引 MCP_ALLOWED_DIRS 下的 markdown/text 文件",
     )
 
+    # ── L4 结构化记忆注入（v0.3） ─────────────────────────────
+
+    structured_memory_agents: str = Field(
+        default="theory",
+        description="启用 L4 结构化记忆注入的 Agent 列表（逗号分隔）",
+    )
+
     # ── 校验器 ───────────────────────────────────────────────
 
     @field_validator("deepseek_api_key")
@@ -292,6 +299,14 @@ class Settings(BaseSettings):
         return [
             part.strip().lower()
             for part in self.rag_agents.split(",")
+            if part.strip()
+        ]
+
+    def structured_memory_agent_names(self) -> list[str]:
+        """解析 STRUCTURED_MEMORY_AGENTS 为 Agent 名称列表。"""
+        return [
+            part.strip().lower()
+            for part in self.structured_memory_agents.split(",")
             if part.strip()
         ]
 

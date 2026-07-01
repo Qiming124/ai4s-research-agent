@@ -2,7 +2,7 @@
   "global": [],
   "agents": {
     "general": ["*"],
-    "theory": ["__none__"],
+    "theory": ["sympy__*", "rag__*"],
     "experiment": ["filesystem__*"],
     "literature": ["arxiv__*", "web_search__*"]
   }

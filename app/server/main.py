@@ -114,7 +114,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="AI4S Research Agent",
         description="深度学习损失函数极小值理论 — 科研辅助多智能体系统 Phase 2A/2B",
-        version="0.2.0",
+        version="0.3.0",
         lifespan=lifespan,
     )
 

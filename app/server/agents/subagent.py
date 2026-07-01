@@ -27,12 +27,16 @@ from server.agents.config import AgentName, get_agent_prompt
 from server.config import Settings, get_settings
 from server.graph.react import build_react_graph, messages_from_api_dicts
 from server.graph.streaming import stream_react_graph
+from server.graph.theory_pipeline import stream_theory_verification
 from server.langchain.llm import get_chat_model
 from server.langchain.tools import mcp_tools_to_langchain
 from server.llm.client import DeepSeekClient, get_deepseek_client
 from server.memory.base import BaseSessionStore
 from server.memory.manager import MemoryManager, get_memory_manager
 from server.memory.rag.retrieval import build_rag_augmented_prompt
+from server.memory.structured.extract import persist_extracted_entries
+from server.memory.structured.injection import build_structured_augmented_prompt
+from server.memory.structured.store import get_structured_memory_store
 from server.memory.session import SessionStore, get_session_store
 from server.mcp.client import MCPClient, get_mcp_client
 from server.mcp.truncation import truncate_tool_result
@@ -276,6 +280,39 @@ class SubAgent:
 
         yield self._with_agent(StreamChunk(type="done", content="", usage=usage), a2a_task_id=a2a_task_id)
 
+    async def _theory_post_process(
+        self,
+        full_content: str,
+        tool_records: list[PersistedToolCall],
+        mcp: MCPClient | None,
+        session_id: str,
+        *,
+        a2a_task_id: str | None = None,
+    ) -> AsyncIterator[StreamChunk]:
+        """Theory Agent：SymPy 验证 + 自动持久化引理/定理。"""
+        if self.name != "theory":
+            return
+
+        if mcp is not None and mcp.is_connected and full_content.strip():
+            async for chunk in stream_theory_verification(
+                mcp,
+                full_content,
+                tool_records,
+                agent_name=self.name,
+                a2a_task_id=a2a_task_id,
+            ):
+                yield self._with_agent(chunk, a2a_task_id=a2a_task_id)
+
+        if full_content.strip():
+            store = get_structured_memory_store()
+            saved = persist_extracted_entries(full_content, session_id, store)
+            if saved:
+                logger.info(
+                    "Theory 自动持久化 %d 条结构化记忆 session=%s",
+                    len(saved),
+                    session_id,
+                )
+
     async def run(
         self,
         message: str,
@@ -324,6 +361,13 @@ class SubAgent:
                 sid,
                 self._settings,
             )
+
+        system_prompt = build_structured_augmented_prompt(
+            system_prompt,
+            sid,
+            self.name,
+            self._settings,
+        )
 
         full_history = self._sessions.get_messages(sid)
         history = await self._memory.get_llm_context(
@@ -385,6 +429,14 @@ class SubAgent:
                     full_reasoning += chunk.content
                     yield chunk
                 elif chunk.type == "done":
+                    async for post_chunk in self._theory_post_process(
+                        full_content,
+                        persisted_tool_calls,
+                        mcp,
+                        sid,
+                        a2a_task_id=a2a_task_id,
+                    ):
+                        yield post_chunk
                     if persist_session:
                         self._sessions.append_message(sid, ChatMessage(role="user", content=message))
                         self._sessions.append_message(
@@ -422,6 +474,14 @@ class SubAgent:
                 yield self._with_agent(chunk, a2a_task_id=a2a_task_id)
                 return
             elif chunk.type == "done":
+                async for post_chunk in self._theory_post_process(
+                    full_content,
+                    [],
+                    mcp,
+                    sid,
+                    a2a_task_id=a2a_task_id,
+                ):
+                    yield post_chunk
                 if persist_session:
                     self._sessions.append_message(sid, ChatMessage(role="user", content=message))
                     self._sessions.append_message(

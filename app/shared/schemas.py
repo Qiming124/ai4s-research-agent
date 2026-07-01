@@ -147,6 +147,7 @@ class StreamChunk(BaseModel):
         "tool_call_result" — 工具调用成功返回（content 为结果文本）
         "tool_call_error"  — 工具调用失败（content 为错误信息）
         "agent_handoff"    — 多 Agent 路由切换（from_agent → to_agent）
+        "verification_result" — 理论推导 SymPy 验证结果（JSON）
 
     元数据字段（仅在特定事件类型中填充）：
         agent_name: 产出该 chunk 的 Agent 名称
@@ -166,6 +167,7 @@ class StreamChunk(BaseModel):
         "tool_call_result",
         "tool_call_error",
         "agent_handoff",
+        "verification_result",
     ]
     content: str = ""
     usage: dict[str, Any] | None = None

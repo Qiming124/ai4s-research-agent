@@ -9,6 +9,8 @@
 | [API 参考](API.md) | HTTP 端点、SSE 事件、请求/响应字段 |
 | [部署指南](DEPLOY.md) | 本地开发、Docker、云服务器、镜像仓库 |
 | [MCP 配置](mcp-config.md) | MCP Server 启用、扩展与白名单 |
+| [开发辅助工具清单](dev-tooling-checklist.md) | MCP / Skills / Rules 推荐与勾选清单（含项目侧） |
+| [Cursor IDE 安装清单](cursor-ide-tooling-checklist.md) | **仅 Cursor 编辑器**：MCP / Skills / Rules / Hooks |
 | [代码注释规范](CODE_STYLE.md) | Python/TS 中文 docstring 约定 |
 | [Docker 部署](docker.md) | 镜像构建与 compose |
 | [前端开发](web.md) | Vite + React 构建说明 |

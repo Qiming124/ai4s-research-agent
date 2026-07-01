@@ -24,5 +24,10 @@
     "command": "python",
     "args": ["-m", "server.mcp.servers.sympy"],
     "enabled": true
+  },
+  "rag": {
+    "command": "python",
+    "args": ["-m", "server.mcp.servers.rag"],
+    "enabled": true
   }
 }

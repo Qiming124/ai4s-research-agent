@@ -99,6 +99,8 @@ MCP Client 已连接 3 个 Server，共 6 个工具
 | `web_search` | `server.mcp.servers.web_search` | `web_search__search` | DuckDuckGo 网页搜索，无需 API Key |
 | `arxiv` | `server.mcp.servers.arxiv` | `arxiv__search_papers`、`arxiv__get_paper` | arXiv 论文搜索与详情 |
 | `filesystem` | `server.mcp.servers.filesystem` | `filesystem__read_file`、`filesystem__write_file`、`filesystem__list_files` | 受限目录内文件读写 |
+| `sympy` | `server.mcp.servers.sympy` | `sympy__simplify_expression`、`sympy__differentiate`、`sympy__hessian_eigenvalues`、`sympy__taylor_expand` 等 | 符号计算 |
+| `rag` | `server.mcp.servers.rag` | `rag__retrieve` | L3 向量库按需检索 |
 
 实现代码位于 [`app/server/mcp/servers/`](../app/server/mcp/servers/)。
 
