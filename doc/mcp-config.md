@@ -210,7 +210,7 @@ python -m server.mcp.servers.filesystem  # stdio 模式，需 MCP 客户端配�
 | 侧边栏工具列表为空 | 确认 `ENABLE_MCP=true`；点击「刷新」；检查启动日志是否有连接错误 |
 | 修改 json 不生效 | 必须重启 uvicorn（当前无热重载 API） |
 | `filesystem` 读写失败 | 路径须在 `MCP_ALLOWED_DIRS` 内；目录需存在或可创建 |
-| `web_search` / `arxiv` 失败 | 检查服务器出站网络；arxiv 需能访问 `export.arxiv.org`；web_search 依次尝试 DuckDuckGo 与 Wikipedia，部分地区需代理 |
+| `web_search` / `arxiv` 失败 | **国内网络**：DuckDuckGo/Wikipedia 常超时，请在 `conf/.env` 配置 `TAVILY_API_KEY`（https://tavily.com）；或有代理时设置 `HTTPS_PROXY` / `WEB_SEARCH_HTTP_PROXY`。arxiv 需能访问 `export.arxiv.org` |
 | 工具从不被调用 | 问题需明确需要外部信息；或侧边栏启用 MCP；模型可能直接回答 |
 
 ---

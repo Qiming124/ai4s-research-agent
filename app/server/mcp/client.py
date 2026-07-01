@@ -12,7 +12,7 @@ from mcp import ClientSession
 
 from server.config import Settings, get_settings
 from server.langchain.mcp import create_multiserver_client
-from server.mcp.config import load_mcp_servers
+from server.mcp.config import load_mcp_servers, sync_mcp_runtime_env
 from server.mcp.registry import ToolRegistry
 from server.mcp.whitelist import filter_openai_tools
 from server.observability.structured import log_event
@@ -61,6 +61,7 @@ class MCPClient:
         if self._connected:
             return
 
+        sync_mcp_runtime_env(self._settings)
         configs = load_mcp_servers(self._settings.mcp_config_path)
         if not configs:
             logger.warning("MCP 配置文件为空或不存在: %s", self._settings.mcp_config_path)
@@ -188,6 +189,7 @@ def reset_mcp_client() -> None:
 async def reload_mcp_client() -> MCPClient:
     """断开并重新加载 MCP 配置（热重载）。"""
     global _mcp_client
+    sync_mcp_runtime_env(get_settings())
     if _mcp_client is not None:
         await _mcp_client.close()
     _mcp_client = None

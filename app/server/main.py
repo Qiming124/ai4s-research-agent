@@ -73,12 +73,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.info("  会话存储: memory（重启后会话丢失）")
     if settings.enable_mcp:
         logger.info("  MCP: 已启用 (%s)", settings.mcp_config_path)
+        from server.mcp.config import sync_mcp_runtime_env
+
+        sync_mcp_runtime_env(settings)
         import os
 
-        if not os.environ.get("MCP_ALLOWED_DIRS"):
-            os.environ["MCP_ALLOWED_DIRS"] = settings.mcp_allowed_dirs
-        if settings.tavily_api_key and not os.environ.get("TAVILY_API_KEY"):
-            os.environ["TAVILY_API_KEY"] = settings.tavily_api_key
+        if not settings.tavily_api_key and not os.environ.get("TAVILY_API_KEY"):
+            logger.warning(
+                "未配置 TAVILY_API_KEY：web_search MCP 将尝试 DuckDuckGo/Wikipedia，"
+                "国内网络通常超时；请在 conf/.env 设置 TAVILY_API_KEY（https://tavily.com）"
+            )
         await get_mcp_client()
     else:
         logger.info("  MCP: 未启用")

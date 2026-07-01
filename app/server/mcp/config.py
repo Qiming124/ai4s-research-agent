@@ -54,6 +54,20 @@ def _expand_env(value: str) -> str:
     return re.sub(r"\$\{([^}]+)\}", replacer, value)
 
 
+def sync_mcp_runtime_env(settings: "Settings | None" = None) -> None:
+    """
+    将 conf/.env 中的 MCP 相关配置同步到 os.environ，
+    供 mcp_servers.json 的 ${VAR} 展开及 stdio 子进程继承。
+    """
+    from server.config import get_settings
+
+    s = settings or get_settings()
+    if not os.environ.get("MCP_ALLOWED_DIRS"):
+        os.environ["MCP_ALLOWED_DIRS"] = s.mcp_allowed_dirs
+    if s.tavily_api_key and not os.environ.get("TAVILY_API_KEY"):
+        os.environ["TAVILY_API_KEY"] = s.tavily_api_key
+
+
 def load_mcp_servers(config_path: str | Path) -> dict[str, MCPServerConfig]:
     """
     从 mcp_servers.json 加载全部已启用 Server 配置。
@@ -114,7 +128,9 @@ def build_multiserver_connections(
             "args": list(cfg.args),
         }
         if cfg.env:
-            connection["env"] = dict(cfg.env)
+            filtered_env = {k: v for k, v in cfg.env.items() if v}
+            if filtered_env:
+                connection["env"] = filtered_env
         connections[name] = connection
 
     return connections

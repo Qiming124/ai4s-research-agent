@@ -28,7 +28,7 @@ def test_literature_whitelist():
     assert "filesystem__read_file" not in names
 
 
-def test_theory_sympy_whitelist():
+def test_theory_tool_whitelist():
     settings = Settings(
         deepseek_api_key="sk-test",
         mcp_tool_whitelist="",
@@ -36,4 +36,4 @@ def test_theory_sympy_whitelist():
     )
     filtered = filter_openai_tools(_sample_tools(), settings, "theory")
     names = {t["function"]["name"] for t in filtered}
-    assert names == {"sympy__simplify_expression"}
+    assert names == {"sympy__simplify_expression", "web_search__search"}

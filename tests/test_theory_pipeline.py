@@ -26,10 +26,11 @@ def test_mode_math_routes_to_theory():
     assert reason == "mode=math"
 
 
-def test_theory_default_whitelist_includes_sympy_and_rag():
+def test_theory_default_whitelist_includes_sympy_rag_and_web_search():
     patterns = get_agent_default_whitelist("theory")
     assert "sympy__*" in patterns
     assert "rag__*" in patterns
+    assert "web_search__*" in patterns
 
 
 def test_theory_whitelist_from_json(tmp_path):

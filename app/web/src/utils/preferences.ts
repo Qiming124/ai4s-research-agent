@@ -74,7 +74,7 @@ export function setUseServerMcpDefault(value: boolean): void {
 
 export function getEnableMcp(): boolean {
   const raw = localStorage.getItem(ENABLE_MCP_KEY);
-  if (raw === null) return false;
+  if (raw === null) return true;
   return raw === "true";
 }
 
