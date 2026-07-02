@@ -1,0 +1,11 @@
+name: width_scaling_hessian
+description: 不同隐藏层宽度下的 Hessian 最小特征值采样
+network: [784, 128, 10]
+loss: mse
+metrics:
+  - loss
+  - grad_norm
+  - hessian_min_eig
+seeds: [0, 1, 2]
+learning_rate: 0.01
+max_steps: 100

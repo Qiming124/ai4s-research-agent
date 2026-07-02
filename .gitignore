@@ -37,5 +37,10 @@ benchmarks/
 app/web/node_modules/
 app/web/dist/
 
-# 运行时数据
-data/
+# 运行时数据（种子工作区 data/theory、data/experiments/configs 纳入版本库）
+data/chroma/
+data/*.db
+data/mcp_files/*
+!data/mcp_files/.gitkeep
+data/experiments/logs/*
+!data/experiments/logs/.gitkeep
