@@ -2,8 +2,22 @@
  * SSE 流式对话 Hook：管理消息列表、会话 ID、流式状态与 MCP/历史偏好。
  */
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
-import type { ChatMode, HistoryPreference, McpPreference, AgentPreference } from "../utils/preferences";
-import { buildHistoryRequestFields, buildMcpRequestFields, buildAgentRequestFields } from "../utils/preferences";
+import type {
+  ChatMode,
+  CotMode,
+  HistoryPreference,
+  McpPreference,
+  AgentPreference,
+  ReasoningPreference,
+} from "../utils/preferences";
+import {
+  buildHistoryRequestFields,
+  buildMcpRequestFields,
+  buildAgentRequestFields,
+  buildReasoningRequestFields,
+  buildCotModeRequestField,
+} from "../utils/preferences";
+import { parseCotSections } from "../utils/cotParse";
 import { formatBackendError, waitForBackend } from "../utils/backend";
 import {
   getSessionId,
@@ -26,9 +40,27 @@ export interface AgentHandoffEvent {
   reason?: string;
 }
 
+export interface WorkflowStepEvent {
+  id: string;
+  stepKind: "plan" | "tool" | "verify" | "synthesize";
+  status: "running" | "done" | "pass" | "fail" | "skipped" | "error";
+  title: string;
+  detail?: string;
+  toolName?: string;
+  toolCallId?: string;
+}
+
+export interface CotStepData {
+  step: number;
+  title: string;
+  body: string;
+}
+
 export type TimelineEntry =
   | { kind: "tool"; event: ToolCallEvent }
-  | { kind: "handoff"; event: AgentHandoffEvent };
+  | { kind: "handoff"; event: AgentHandoffEvent }
+  | { kind: "workflow"; event: WorkflowStepEvent }
+  | { kind: "verify"; event: WorkflowStepEvent };
 
 export interface ChatMessage {
   id: string;
@@ -41,7 +73,11 @@ export interface ChatMessage {
   toolCalls?: ToolCallEvent[];
   handoffs?: AgentHandoffEvent[];
   timeline?: TimelineEntry[];
+  cotSteps?: CotStepData[];
   agentName?: string;
+  vizData?: import("../components/LossLandscapeViz").VizData;
+  memoryWarnings?: string[];
+  pipelineStages?: string[];
 }
 
 interface SseEvent {
@@ -56,6 +92,19 @@ interface SseEvent {
   from_agent?: string;
   to_agent?: string;
   route_reason?: string;
+  step_kind?: "plan" | "tool" | "verify" | "synthesize";
+  status?: "running" | "done" | "pass" | "fail" | "skipped" | "error";
+  title?: string;
+  detail?: string;
+}
+
+interface ServerWorkflowStep {
+  step_kind: string;
+  status: string;
+  title: string;
+  detail?: string;
+  tool_name?: string;
+  tool_call_id?: string;
 }
 
 interface ServerToolCall {
@@ -72,6 +121,44 @@ interface ServerMessage {
   content: string;
   reasoning_content?: string | null;
   tool_calls?: ServerToolCall[] | null;
+  workflow_steps?: ServerWorkflowStep[] | null;
+}
+
+function mapWorkflowSteps(
+  raw: ServerWorkflowStep[] | null | undefined,
+): TimelineEntry[] {
+  if (!raw?.length) return [];
+  return raw.map((step, idx) => {
+    const event: WorkflowStepEvent = {
+      id: step.tool_call_id ?? `${step.step_kind}-${idx}`,
+      stepKind: step.step_kind as WorkflowStepEvent["stepKind"],
+      status: step.status as WorkflowStepEvent["status"],
+      title: step.title,
+      detail: step.detail,
+      toolName: step.tool_name,
+      toolCallId: step.tool_call_id,
+    };
+    const kind = step.step_kind === "verify" ? ("verify" as const) : ("workflow" as const);
+    return { kind, event };
+  });
+}
+
+function mergeTimelineFromWorkflow(
+  timeline: TimelineEntry[],
+  step: WorkflowStepEvent,
+  kind: "workflow" | "verify",
+): TimelineEntry[] {
+  const idx = timeline.findIndex(
+    (e) =>
+      (e.kind === "workflow" || e.kind === "verify") &&
+      e.event.id === step.id,
+  );
+  if (idx === -1) {
+    return [...timeline, { kind, event: step }];
+  }
+  const next = [...timeline];
+  next[idx] = { kind, event: step };
+  return next;
 }
 
 function mapPersistedToolCalls(raw: ServerToolCall[] | null | undefined): ToolCallEvent[] | undefined {
@@ -90,17 +177,18 @@ function mapServerMessages(raw: ServerMessage[]): ChatMessage[] {
     .filter((m) => m.role === "user" || m.role === "assistant")
     .map((m) => {
       const toolCalls = mapPersistedToolCalls(m.tool_calls);
-      const timeline: TimelineEntry[] | undefined = toolCalls?.map((event) => ({
-        kind: "tool" as const,
-        event,
-      }));
+      const workflowTimeline = mapWorkflowSteps(m.workflow_steps);
+      const toolTimeline: TimelineEntry[] =
+        toolCalls?.map((event) => ({ kind: "tool" as const, event })) ?? [];
+      const timeline = [...workflowTimeline, ...toolTimeline];
       return {
         id: crypto.randomUUID(),
         role: m.role as "user" | "assistant",
         content: m.content,
         reasoning: m.reasoning_content ?? undefined,
         toolCalls,
-        timeline,
+        timeline: timeline.length ? timeline : undefined,
+        cotSteps: parseCotSections(m.content),
       };
     });
 }
@@ -247,7 +335,141 @@ function applyStreamEvent(
             ? { kind: "tool" as const, event: updated[idx] }
             : entry,
         );
-        return { ...m, toolCalls: updated, timeline };
+        let vizData = m.vizData;
+        if (ev.tool_name?.includes("loss_landscape_2d") || ev.tool_name?.includes("sgd_trajectory")) {
+          try {
+            const parsed = JSON.parse(safeContent) as { viz_type?: string };
+            if (parsed.viz_type) {
+              vizData = parsed as import("../components/LossLandscapeViz").VizData;
+            }
+          } catch {
+            /* ignore */
+          }
+        }
+        return { ...m, toolCalls: updated, timeline, vizData };
+      });
+  }
+
+  if (ev.type === "workflow_step") {
+    const stepKind = (ev.step_kind ?? "plan") as WorkflowStepEvent["stepKind"];
+    const step: WorkflowStepEvent = {
+      id: ev.tool_call_id ?? `${stepKind}-${ev.title ?? stepKind}`,
+      stepKind,
+      status: (ev.status ?? "running") as WorkflowStepEvent["status"],
+      title: ev.title ?? stepKind,
+      detail: ev.detail ?? ev.content,
+      toolName: ev.tool_name,
+      toolCallId: ev.tool_call_id,
+    };
+    const kind = stepKind === "verify" ? ("verify" as const) : ("workflow" as const);
+    return (prev) =>
+      prev.map((m) =>
+        m.id === assistantId
+          ? {
+              ...m,
+              timeline: mergeTimelineFromWorkflow(m.timeline ?? [], step, kind),
+            }
+          : m,
+      );
+  }
+
+  if (ev.type === "verification_result") {
+    let detail = ev.content ?? "";
+    let status: WorkflowStepEvent["status"] = "done";
+    try {
+      const parsed = JSON.parse(detail) as { status?: string; reason?: string };
+      if (parsed.status === "pass") status = "pass";
+      else if (parsed.status === "fail") status = "fail";
+      else if (parsed.status === "skipped") status = "skipped";
+      if (parsed.reason) detail = parsed.reason;
+    } catch {
+      /* 保留原始 JSON 文本 */
+    }
+    const step: WorkflowStepEvent = {
+      id: "verify-sympy",
+      stepKind: "verify",
+      status,
+      title: "SymPy 符号验证",
+      detail,
+    };
+    return (prev) =>
+      prev.map((m) =>
+        m.id === assistantId
+          ? {
+              ...m,
+              timeline: mergeTimelineFromWorkflow(m.timeline ?? [], step, "verify"),
+            }
+          : m,
+      );
+  }
+
+  if (ev.type === "numerical_verification_result") {
+    let detail = ev.content ?? "";
+    let status: WorkflowStepEvent["status"] = "done";
+    try {
+      const parsed = JSON.parse(detail) as { status?: string; reason?: string };
+      if (parsed.status === "pass") status = "pass";
+      else if (parsed.status === "fail") status = "fail";
+      else if (parsed.status === "skipped") status = "skipped";
+      if (parsed.reason) detail = parsed.reason;
+    } catch {
+      /* keep raw */
+    }
+    const step: WorkflowStepEvent = {
+      id: "verify-numerical",
+      stepKind: "verify",
+      status,
+      title: "数值验证",
+      detail,
+    };
+    return (prev) =>
+      prev.map((m) =>
+        m.id === assistantId
+          ? {
+              ...m,
+              timeline: mergeTimelineFromWorkflow(m.timeline ?? [], step, "verify"),
+            }
+          : m,
+      );
+  }
+
+  if (ev.type === "pipeline_stage") {
+    const stage = ev.content ?? ev.title ?? "stage";
+    return (prev) =>
+      prev.map((m) =>
+        m.id === assistantId
+          ? { ...m, pipelineStages: [...(m.pipelineStages ?? []), stage] }
+          : m,
+      );
+  }
+
+  if (ev.type === "memory_warning") {
+    const warning = ev.content ?? "";
+    return (prev) =>
+      prev.map((m) =>
+        m.id === assistantId
+          ? { ...m, memoryWarnings: [...(m.memoryWarnings ?? []), warning] }
+          : m,
+      );
+  }
+
+  if (ev.type === "cot_step") {
+    let stepData: CotStepData | null = null;
+    try {
+      stepData = JSON.parse(ev.content ?? "{}") as CotStepData;
+    } catch {
+      return null;
+    }
+    if (!stepData?.title) return null;
+    return (prev) =>
+      prev.map((m) => {
+        if (m.id !== assistantId) return m;
+        const existing = m.cotSteps ?? [];
+        const filtered = existing.filter((s) => s.step !== stepData!.step);
+        return {
+          ...m,
+          cotSteps: [...filtered, stepData!].sort((a, b) => a.step - b.step),
+        };
       });
   }
 
@@ -335,6 +557,8 @@ export function useChatStream(
   historyPref: HistoryPreference,
   mcpPref: McpPreference,
   agentPref: AgentPreference,
+  reasoningPref: ReasoningPreference,
+  cotMode: CotMode,
 ) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [sessionId, setSessionIdState] = useState(getSessionId);
@@ -457,6 +681,7 @@ export function useChatStream(
       streaming: true,
       toolCalls: [],
       handoffs: [],
+      cotSteps: [],
       timeline: [],
     };
 
@@ -490,6 +715,8 @@ export function useChatStream(
           ...buildHistoryRequestFields(historyPref),
           ...buildMcpRequestFields(mcpPref),
           ...buildAgentRequestFields(agentPref),
+          ...buildReasoningRequestFields(reasoningPref),
+          ...buildCotModeRequestField(cotMode, chatMode),
         }),
         signal: controller.signal,
       });
@@ -552,7 +779,7 @@ export function useChatStream(
         pendingSessionIdRef.current = null;
       }
     }
-  }, [isStreaming, chatMode, historyPref, mcpPref, agentPref, finishStreaming]);
+  }, [isStreaming, chatMode, historyPref, mcpPref, agentPref, reasoningPref, cotMode, finishStreaming]);
 
   const clearSession = useCallback(async () => {
     historyEpochRef.current += 1;

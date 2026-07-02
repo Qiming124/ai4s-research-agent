@@ -23,8 +23,14 @@ services:
       PORT: "8000"
       LOG_FORMAT: json
       SESSION_DB_PATH: /repo/data/sessions.db
-      MCP_ALLOWED_DIRS: /repo/data/mcp_files
+      MCP_ALLOWED_DIRS: /repo/data/mcp_files:/repo/data/theory:/repo/data/experiments
       RAG_CHROMA_PATH: /repo/data/chroma
+      THEORY_WORKSPACE_PATH: /repo/data/theory
+      EXPERIMENTS_PATH: /repo/data/experiments
+      STRUCTURED_MEMORY_AGENTS: theory,experiment,review
+      RAG_AGENTS: literature,theory,experiment,general
+      GLOBAL_MEMORY_SYNC: "true"
+      PDF_INGEST_ENABLED: "true"
       MCP_CONFIG_PATH: /repo/conf/mcp_servers.json
       MCP_TOOL_WHITELIST_PATH: /repo/conf/mcp_tool_whitelist.json
     volumes:

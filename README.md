@@ -274,6 +274,9 @@ cd ../../ && uvicorn server.main:app --host 0.0.0.0 --port 8000 --app-dir app
 | 历史恢复 | 刷新页面后自动从 `GET /v1/sessions/{id}` 回填消息（需 `SESSION_STORE_BACKEND=sqlite`） |
 | 停止生成 | 流式过程中点击「停止」，保留已生成内容 |
 | 思考过程开关 | 顶栏勾选控制是否显示 ReasoningPanel，偏好存 localStorage |
+| 推理强度 / 深度思考 | 设置面板可覆盖 `enable_thinking`、`reasoning_effort`（默认读服务端） |
+| 思维链模式 | `cot_mode`：标准三节或严格 Markdown；Math 模式默认 strict |
+| 工作流时间线 | 规划 → 工具 → 验证 → 综合回答，Theory 含 SymPy 验证节点 |
 | Chat / Math 模式 | 切换对话模式，请求携带 `mode` 字段（math 使用数学推导 prompt） |
 | 清空会话 | 调用 `DELETE /v1/sessions/{id}` 并清空 UI |
 
@@ -385,9 +388,9 @@ curl -N -X POST http://127.0.0.1:8000/v1/chat/stream \
   -d '{"message":"简要解释 SGD 收敛性","session_id":"test","mode":"math"}'
 ```
 
-请求体可选字段：`session_id`、`system_prompt`、`mode`（`chat` 或 `math`，默认 `chat`）。
+请求体可选字段：`session_id`、`system_prompt`、`mode`（`chat` 或 `math`）、`enable_thinking`、`reasoning_effort`（`high`/`max`）、`cot_mode`（`off`/`standard`/`strict`）。
 
-SSE 事件 type：`meta`（会话ID）→ `reasoning` → `content` → `done`（结束）
+SSE 事件 type：`meta` → `workflow_step`（规划/验证/综合）→ `tool_call_*` → `reasoning` → `cot_step` → `content` → `verification_result`（Theory）→ `done`
 
 ### GET /v1/sessions/{id} | DELETE /v1/sessions/{id}
 

@@ -11,6 +11,9 @@ CONF_ROOT = PROJECT_ROOT / "conf"
 DOC_ROOT = PROJECT_ROOT / "doc"
 LOG_ROOT = PROJECT_ROOT / "log"
 DATA_ROOT = PROJECT_ROOT / "data"
+THEORY_DIR = DATA_ROOT / "theory"
+EXPERIMENTS_DIR = DATA_ROOT / "experiments"
+MCP_FILES_DIR = DATA_ROOT / "mcp_files"
 
 
 def resolve_env_file() -> Path:

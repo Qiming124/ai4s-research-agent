@@ -28,6 +28,8 @@ dependencies = [
     "langgraph-checkpoint-sqlite>=2.0.0,<3",
     "chromadb>=0.5.0,<0.6",
     "sympy>=1.13.0",
+    "numpy>=1.26.0",
+    "scipy>=1.11.0",
 ]
 
 [project.optional-dependencies]
@@ -37,6 +39,12 @@ dev = [
 ]
 rag = [
     "sentence-transformers>=3.0.0,<4",
+]
+numerical = [
+    "torch>=2.2.0",
+]
+pdf = [
+    "pypdf>=4.0.0",
 ]
 
 [project.scripts]

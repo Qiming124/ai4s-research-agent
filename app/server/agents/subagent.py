@@ -30,9 +30,13 @@ from server.graph.streaming import stream_react_graph
 from server.graph.theory_pipeline import stream_theory_verification
 from server.langchain.llm import get_chat_model
 from server.langchain.tools import mcp_tools_to_langchain
+from server.graph.workflow import cot_step_chunks, workflow_step_chunk, workflow_step_record
 from server.llm.client import DeepSeekClient, get_deepseek_client
+from server.llm.cot_prompt import apply_cot_prompt
+from server.llm.reasoning_options import ResolvedReasoningOptions, resolve_reasoning_options
 from server.memory.base import BaseSessionStore
 from server.memory.manager import MemoryManager, get_memory_manager
+from server.memory.rag.context import reset_rag_session_id, set_rag_session_id
 from server.memory.rag.retrieval import build_rag_augmented_prompt
 from server.memory.structured.extract import persist_extracted_entries
 from server.memory.structured.injection import build_structured_augmented_prompt
@@ -117,16 +121,48 @@ class SubAgent:
         mcp: MCPClient,
         tool_call_records: list[PersistedToolCall],
         *,
+        reasoning: ResolvedReasoningOptions,
+        workflow_records: list[dict],
         a2a_task_id: str | None = None,
     ) -> AsyncIterator[StreamChunk]:
         lc_tools = mcp_tools_to_langchain(mcp, agent_name=self.name)
         if not lc_tools:
-            async for chunk in self._llm.stream_chat(api_messages):
+            async for chunk in self._llm.stream_chat(
+                api_messages,
+                enable_thinking=reasoning.enable_thinking,
+                reasoning_effort=reasoning.reasoning_effort,
+            ):
                 yield self._with_agent(chunk, a2a_task_id=a2a_task_id)
             return
 
-        tool_model = get_chat_model(self._settings, enable_thinking=False)
-        final_model = get_chat_model(self._settings, enable_thinking=True)
+        yield self._with_agent(
+            workflow_step_chunk(
+                "plan",
+                status="running",
+                title="分析问题并规划工具调用",
+                agent_name=self.name,
+                a2a_task_id=a2a_task_id,
+            ),
+            a2a_task_id=a2a_task_id,
+        )
+        workflow_records.append(
+            workflow_step_record(
+                "plan",
+                status="running",
+                title="分析问题并规划工具调用",
+            ),
+        )
+
+        tool_model = get_chat_model(
+            self._settings,
+            enable_thinking=False,
+            reasoning_effort=reasoning.reasoning_effort,
+        )
+        final_model = get_chat_model(
+            self._settings,
+            enable_thinking=reasoning.enable_thinking,
+            reasoning_effort=reasoning.reasoning_effort,
+        )
         graph = build_react_graph(
             tool_model,
             lc_tools,
@@ -145,6 +181,7 @@ class SubAgent:
             final_model=final_model,
             agent_name=self.name,
             max_tool_rounds=self._settings.mcp_max_tool_rounds,
+            workflow_records=workflow_records,
         ):
             if records:
                 tool_call_records.extend(records)
@@ -157,10 +194,30 @@ class SubAgent:
         mcp: MCPClient,
         tool_call_records: list[PersistedToolCall],
         *,
+        reasoning: ResolvedReasoningOptions,
+        workflow_records: list[dict],
         a2a_task_id: str | None = None,
     ) -> AsyncIterator[StreamChunk]:
         usage: dict[str, Any] | None = None
         max_result_chars = self._settings.mcp_tool_result_max_chars
+
+        yield self._with_agent(
+            workflow_step_chunk(
+                "plan",
+                status="running",
+                title="分析问题并规划工具调用",
+                agent_name=self.name,
+                a2a_task_id=a2a_task_id,
+            ),
+            a2a_task_id=a2a_task_id,
+        )
+        workflow_records.append(
+            workflow_step_record(
+                "plan",
+                status="running",
+                title="分析问题并规划工具调用",
+            ),
+        )
 
         for _round in range(self._settings.mcp_max_tool_rounds):
             result = await self._llm.chat_with_tools(
@@ -258,9 +315,34 @@ class SubAgent:
                 self._settings.mcp_max_tool_rounds,
             )
 
+        workflow_records.append(
+            workflow_step_record("plan", status="done", title="工具规划完成"),
+        )
+        yield self._with_agent(
+            workflow_step_chunk(
+                "synthesize",
+                status="running",
+                title="综合信息并生成回答",
+                agent_name=self.name,
+                a2a_task_id=a2a_task_id,
+            ),
+            a2a_task_id=a2a_task_id,
+        )
+        workflow_records.append(
+            workflow_step_record(
+                "synthesize",
+                status="running",
+                title="综合信息并生成回答",
+            ),
+        )
+
         full_content = ""
         full_reasoning = ""
-        async for chunk in self._llm.stream_chat(api_messages):
+        async for chunk in self._llm.stream_chat(
+            api_messages,
+            enable_thinking=reasoning.enable_thinking,
+            reasoning_effort=reasoning.reasoning_effort,
+        ):
             if chunk.type == "reasoning":
                 full_reasoning += chunk.content
                 yield self._with_agent(chunk, a2a_task_id=a2a_task_id)
@@ -279,7 +361,13 @@ class SubAgent:
                 )
                 return
 
-        yield self._with_agent(StreamChunk(type="done", content="", usage=usage), a2a_task_id=a2a_task_id)
+        workflow_records.append(
+            workflow_step_record("synthesize", status="done", title="回答生成完成"),
+        )
+        yield self._with_agent(
+            StreamChunk(type="done", content="", usage=usage),
+            a2a_task_id=a2a_task_id,
+        )
 
     async def _theory_post_process(
         self,
@@ -289,6 +377,7 @@ class SubAgent:
         session_id: str,
         *,
         a2a_task_id: str | None = None,
+        workflow_records: list[dict] | None = None,
     ) -> AsyncIterator[StreamChunk]:
         """Theory Agent：SymPy 验证 + 自动持久化引理/定理。"""
         if self.name != "theory":
@@ -301,17 +390,25 @@ class SubAgent:
                 tool_records,
                 agent_name=self.name,
                 a2a_task_id=a2a_task_id,
+                workflow_records=workflow_records,
             ):
                 yield self._with_agent(chunk, a2a_task_id=a2a_task_id)
 
         if full_content.strip():
             store = get_structured_memory_store()
-            saved = persist_extracted_entries(full_content, session_id, store)
+            saved, warnings = persist_extracted_entries(full_content, session_id, store)
             if saved:
                 logger.info(
                     "Theory 自动持久化 %d 条结构化记忆 session=%s",
                     len(saved),
                     session_id,
+                )
+            for warning in warnings:
+                yield StreamChunk(
+                    type="memory_warning",
+                    content=warning,
+                    agent_name=self.name,
+                    a2a_task_id=a2a_task_id,
                 )
 
     async def run(
@@ -323,6 +420,9 @@ class SubAgent:
         max_history_messages: int | None = None,
         enable_history_summary: bool | None = None,
         enable_tools: bool | None = None,
+        enable_thinking: bool | None = None,
+        reasoning_effort: str | None = None,
+        cot_mode: str = "standard",
         a2a_task_id: str | None = None,
         persist_session: bool = True,
     ) -> AsyncIterator[StreamChunk]:
@@ -350,7 +450,47 @@ class SubAgent:
         sid = self._sessions.get_or_create(session_id)
         set_session_id(sid)
         set_agent_name(self.name)
+        rag_token = set_rag_session_id(sid)
+        try:
+            async for chunk in self._run_impl(
+                sid,
+                message,
+                system_prompt_override=system_prompt_override,
+                max_history_messages=max_history_messages,
+                enable_history_summary=enable_history_summary,
+                enable_tools=enable_tools,
+                enable_thinking=enable_thinking,
+                reasoning_effort=reasoning_effort,
+                cot_mode=cot_mode,
+                a2a_task_id=a2a_task_id,
+                persist_session=persist_session,
+            ):
+                yield chunk
+        finally:
+            reset_rag_session_id(rag_token)
+
+    async def _run_impl(
+        self,
+        sid: str,
+        message: str,
+        *,
+        system_prompt_override: str | None = None,
+        max_history_messages: int | None = None,
+        enable_history_summary: bool | None = None,
+        enable_tools: bool | None = None,
+        enable_thinking: bool | None = None,
+        reasoning_effort: str | None = None,
+        cot_mode: str = "standard",
+        a2a_task_id: str | None = None,
+        persist_session: bool = True,
+    ) -> AsyncIterator[StreamChunk]:
+        reasoning = resolve_reasoning_options(
+            self._settings,
+            enable_thinking=enable_thinking,
+            reasoning_effort=reasoning_effort,  # type: ignore[arg-type]
+        )
         system_prompt = system_prompt_override or self.system_prompt
+        system_prompt = apply_cot_prompt(system_prompt, cot_mode, self.name)  # type: ignore[arg-type]
 
         if (
             self._settings.enable_rag
@@ -409,20 +549,31 @@ class SubAgent:
         full_content = ""
         full_reasoning = ""
         persisted_tool_calls: list[PersistedToolCall] = []
+        workflow_records: list[dict] = []
 
         if effective_tools and mcp is not None:
             use_langgraph = self._settings.orchestration_backend == "langgraph"
             if use_langgraph:
-                tool_loop = self._run_langgraph_tool_loop
-                tool_loop_args = (api_messages, mcp, persisted_tool_calls)
+                tool_iter = self._run_langgraph_tool_loop(
+                    api_messages,
+                    mcp,
+                    persisted_tool_calls,
+                    reasoning=reasoning,
+                    workflow_records=workflow_records,
+                    a2a_task_id=a2a_task_id,
+                )
             else:
-                tool_loop = self._run_legacy_tool_loop
-                tool_loop_args = (api_messages, tools, mcp, persisted_tool_calls)
+                tool_iter = self._run_legacy_tool_loop(
+                    api_messages,
+                    tools,
+                    mcp,
+                    persisted_tool_calls,
+                    reasoning=reasoning,
+                    workflow_records=workflow_records,
+                    a2a_task_id=a2a_task_id,
+                )
 
-            async for chunk in tool_loop(
-                *tool_loop_args,
-                a2a_task_id=a2a_task_id,
-            ):
+            async for chunk in tool_iter:
                 if chunk.type == "content":
                     full_content += chunk.content
                     yield chunk
@@ -430,12 +581,15 @@ class SubAgent:
                     full_reasoning += chunk.content
                     yield chunk
                 elif chunk.type == "done":
+                    for cot_chunk in cot_step_chunks(full_content, agent_name=self.name):
+                        yield self._with_agent(cot_chunk, a2a_task_id=a2a_task_id)
                     async for post_chunk in self._theory_post_process(
                         full_content,
                         persisted_tool_calls,
                         mcp,
                         sid,
                         a2a_task_id=a2a_task_id,
+                        workflow_records=workflow_records,
                     ):
                         yield post_chunk
                     if persist_session:
@@ -447,6 +601,7 @@ class SubAgent:
                                 content=full_content,
                                 reasoning_content=full_reasoning or None,
                                 tool_calls=persisted_tool_calls or None,
+                                workflow_steps=workflow_records or None,
                             ),
                         )
                     usage = chunk.usage or {}
@@ -464,7 +619,11 @@ class SubAgent:
                     yield chunk
             return
 
-        async for chunk in self._llm.stream_chat(api_messages):
+        async for chunk in self._llm.stream_chat(
+            api_messages,
+            enable_thinking=reasoning.enable_thinking,
+            reasoning_effort=reasoning.reasoning_effort,
+        ):
             if chunk.type == "reasoning":
                 full_reasoning += chunk.content
                 yield self._with_agent(chunk, a2a_task_id=a2a_task_id)
@@ -475,12 +634,15 @@ class SubAgent:
                 yield self._with_agent(chunk, a2a_task_id=a2a_task_id)
                 return
             elif chunk.type == "done":
+                for cot_chunk in cot_step_chunks(full_content, agent_name=self.name):
+                    yield self._with_agent(cot_chunk, a2a_task_id=a2a_task_id)
                 async for post_chunk in self._theory_post_process(
                     full_content,
                     [],
                     mcp,
                     sid,
                     a2a_task_id=a2a_task_id,
+                    workflow_records=workflow_records,
                 ):
                     yield post_chunk
                 if persist_session:
@@ -491,6 +653,7 @@ class SubAgent:
                             role="assistant",
                             content=full_content,
                             reasoning_content=full_reasoning or None,
+                            workflow_steps=workflow_records or None,
                         ),
                     )
                 usage = chunk.usage or {}

@@ -225,8 +225,35 @@ class Settings(BaseSettings):
     # ── L4 结构化记忆注入（v0.3） ─────────────────────────────
 
     structured_memory_agents: str = Field(
-        default="theory",
+        default="theory,experiment,review",
         description="启用 L4 结构化记忆注入的 Agent 列表（逗号分隔）",
+    )
+
+    # ── 理论工作区与研究流水线（v0.4） ─────────────────────────
+
+    theory_workspace_path: str = Field(
+        default=str(DATA_ROOT / "theory"),
+        description="理论工作区根目录（symbols.md、assumptions.md 等）",
+    )
+    experiments_path: str = Field(
+        default=str(DATA_ROOT / "experiments"),
+        description="实验工作区根目录",
+    )
+    research_pipeline_mode: str = Field(
+        default="single",
+        description="研究流水线模式：single=单次路由，auto=多跳 literature→theory→experiment→review",
+    )
+    enable_numerical_mcp: bool = Field(
+        default=True,
+        description="是否在 MCP 配置中启用 numerical 数值验证服务",
+    )
+    global_memory_sync: bool = Field(
+        default=True,
+        description="启动时是否将 data/theory/lemmas/ 同步到 L4 全局记忆",
+    )
+    pdf_ingest_enabled: bool = Field(
+        default=True,
+        description="是否启用 PDF 文档解析入库",
     )
 
     # ── 校验器 ───────────────────────────────────────────────

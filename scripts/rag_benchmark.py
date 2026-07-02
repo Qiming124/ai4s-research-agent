@@ -70,12 +70,14 @@ def run_benchmark(
             settings.rag_embedding_provider = provider
 
         store = RagStore(settings, embedding_provider=provider or settings.rag_embedding_provider)
+        benchmark_session = "__benchmark__"
 
         index_start = time.perf_counter()
         indexed: list[dict] = []
         for doc in cases["documents"]:
             record = store.add_document(
                 doc["content"],
+                session_id=benchmark_session,
                 title=doc.get("title"),
                 doc_id=doc.get("doc_id"),
             )
@@ -98,7 +100,7 @@ def run_benchmark(
 
         for q in cases["queries"]:
             q_start = time.perf_counter()
-            snippets = store.retrieve(q["query"], top_k=top_k)
+            snippets = store.retrieve(q["query"], session_id=benchmark_session, top_k=top_k)
             q_latency_ms = (time.perf_counter() - q_start) * 1000
             retrieve_latencies.append(q_latency_ms)
 

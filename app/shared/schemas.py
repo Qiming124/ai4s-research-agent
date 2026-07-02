@@ -70,6 +70,10 @@ class ChatMessage(BaseModel):
         default=None,
         description="assistant 消息关联的 MCP 工具调用记录",
     )
+    workflow_steps: list[dict[str, Any]] | None = Field(
+        default=None,
+        description="工作流时间线节点（plan/tool/verify/synthesize）",
+    )
 
 
 class ChatRequest(BaseModel):
@@ -105,13 +109,25 @@ class ChatRequest(BaseModel):
         default=None,
         description="是否启用 MCP 工具；None 为服务端 ENABLE_MCP 默认值",
     )
-    agent: Literal["general", "theory", "experiment", "literature"] | None = Field(
+    agent: Literal["general", "theory", "experiment", "literature", "review"] | None = Field(
         default=None,
         description="指定 Agent；省略时按 auto_route 自动路由",
     )
     auto_route: bool = Field(
         default=True,
         description="未指定 agent 时是否自动意图路由；False 则固定 general",
+    )
+    enable_thinking: bool | None = Field(
+        default=None,
+        description="是否启用 DeepSeek thinking（None=默认开启，仅影响最终回答）",
+    )
+    reasoning_effort: Literal["high", "max"] | None = Field(
+        default=None,
+        description="推理强度覆盖；None 为服务端 REASONING_EFFORT 默认",
+    )
+    cot_mode: Literal["off", "standard", "strict"] = Field(
+        default="standard",
+        description="结构化思维链模式：off=关闭，standard=三节，strict=强制 Markdown 小节",
     )
 
 
@@ -168,6 +184,11 @@ class StreamChunk(BaseModel):
         "tool_call_error",
         "agent_handoff",
         "verification_result",
+        "numerical_verification_result",
+        "pipeline_stage",
+        "memory_warning",
+        "cot_step",
+        "workflow_step",
     ]
     content: str = ""
     usage: dict[str, Any] | None = None
@@ -178,6 +199,16 @@ class StreamChunk(BaseModel):
     route_reason: str | None = Field(default=None, description="路由原因（meta/handoff）")
     from_agent: str | None = Field(default=None, description="handoff 来源 Agent")
     to_agent: str | None = Field(default=None, description="handoff 目标 Agent")
+    step_kind: Literal["plan", "tool", "verify", "synthesize"] | None = Field(
+        default=None,
+        description="workflow_step 节点类型",
+    )
+    status: Literal["running", "done", "pass", "fail", "skipped", "error"] | None = Field(
+        default=None,
+        description="workflow_step / verification 状态",
+    )
+    title: str | None = Field(default=None, description="workflow_step 标题")
+    detail: str | None = Field(default=None, description="workflow_step 详情")
 
 
 # ── 会话管理 ─────────────────────────────────────────────────
@@ -257,8 +288,9 @@ class MCPStatusResponse(BaseModel):
 # ── RAG 文档 ─────────────────────────────────────────────────
 
 class DocumentUploadRequest(BaseModel):
-    """POST /v1/documents 请求体：上传文档到 RAG 向量库。"""
+    """POST /v1/documents 请求体：上传文档到指定会话的 RAG 向量库。"""
 
+    session_id: str = Field(..., min_length=1, description="目标会话 ID（RAG 按会话隔离）")
     content: str = Field(..., min_length=1, description="文档正文（markdown 或纯文本）")
     title: str | None = Field(default=None, description="文档标题")
     source: str = Field(default="", description="来源路径或 URL")
@@ -268,6 +300,7 @@ class DocumentUploadRequest(BaseModel):
 class DocumentInfo(BaseModel):
     """已索引文档的元数据。"""
     doc_id: str
+    session_id: str
     title: str
     source: str = ""
     chunk_count: int = 0
@@ -352,3 +385,74 @@ class StructuredMemoryListResponse(BaseModel):
 
     entries: list[StructuredMemoryEntry] = Field(default_factory=list)
     total: int = 0
+
+
+class MemoryEdge(BaseModel):
+    """知识图谱边。"""
+
+    id: int | None = None
+    from_id: int
+    to_id: int
+    relation: Literal["depends_on", "contradicts", "supports", "cites"] = "depends_on"
+    created_at: str | None = None
+
+
+class MemoryGraphResponse(BaseModel):
+    """GET /v1/memory/structured/graph 响应。"""
+
+    nodes: list[StructuredMemoryEntry] = Field(default_factory=list)
+    edges: list[MemoryEdge] = Field(default_factory=list)
+
+
+class MemoryEdgeCreateRequest(BaseModel):
+    """POST /v1/memory/structured/{id}/edges 请求体。"""
+
+    to_id: int
+    relation: Literal["depends_on", "contradicts", "supports", "cites"] = "depends_on"
+
+
+class WorkspaceFileInfo(BaseModel):
+    """理论工作区文件条目。"""
+
+    path: str
+    kind: str = "file"
+
+
+class WorkspaceListResponse(BaseModel):
+    """GET /v1/theory/workspace 响应。"""
+
+    files: list[WorkspaceFileInfo] = Field(default_factory=list)
+
+
+class ExperimentRunInfo(BaseModel):
+    """实验运行记录。"""
+
+    run_id: str
+    name: str = ""
+    config_path: str = ""
+    status: str = "completed"
+    log_path: str = ""
+    created_at: str | None = None
+    summary: dict[str, Any] = Field(default_factory=dict)
+
+
+class ExperimentRunsResponse(BaseModel):
+    """GET /v1/experiments/runs 响应。"""
+
+    runs: list[ExperimentRunInfo] = Field(default_factory=list)
+    total: int = 0
+
+
+class LatexExportRequest(BaseModel):
+    """POST /v1/export/latex 请求体。"""
+
+    session_id: str | None = None
+    title: str = "Theory Export"
+    include_global: bool = True
+
+
+class LatexExportResponse(BaseModel):
+    """POST /v1/export/latex 响应。"""
+
+    latex: str
+    path: str | None = None

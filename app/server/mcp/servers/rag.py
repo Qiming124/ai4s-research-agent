@@ -1,4 +1,4 @@
-# MCP Server：RAG 按需检索（封装 L3 向量库）。
+# MCP Server：RAG 按需检索（按 session_id 隔离）。
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from mcp.server.fastmcp import FastMCP
 mcp = FastMCP("rag")
 
 
-def _retrieve(query: str, top_k: int) -> str:
+def _retrieve(query: str, top_k: int, session_id: str) -> str:
     from server.config import get_settings
     from server.memory.rag.retrieval import retrieve_for_query
 
@@ -20,10 +20,25 @@ def _retrieve(query: str, top_k: int) -> str:
             ensure_ascii=False,
         )
 
-    snippets = retrieve_for_query(query, settings, top_k=top_k)
+    session_id = session_id.strip()
+    if not session_id:
+        return json.dumps(
+            {
+                "error": "缺少 session_id。rag__retrieve 需要会话 ID 以隔离检索范围。",
+            },
+            ensure_ascii=False,
+        )
+
+    snippets = retrieve_for_query(
+        query,
+        settings,
+        session_id=session_id,
+        top_k=top_k,
+    )
     return json.dumps(
         {
             "query": query,
+            "session_id": session_id,
             "count": len(snippets),
             "results": [
                 {
@@ -41,14 +56,15 @@ def _retrieve(query: str, top_k: int) -> str:
 
 
 @mcp.tool()
-async def retrieve(query: str, top_k: int = 4) -> str:
-    """从本地 RAG 向量库检索与 query 相关的文档片段。
+async def retrieve(query: str, top_k: int = 4, session_id: str = "") -> str:
+    """从**当前会话** RAG 向量库检索与 query 相关的文档片段。
 
     Args:
         query: 检索问题或关键词
         top_k: 返回片段数量（默认 4）
+        session_id: 会话 ID（必填，仅检索该会话上传/索引的文档）
     """
-    return _retrieve(query, top_k)
+    return _retrieve(query, top_k, session_id)
 
 
 def main() -> None:

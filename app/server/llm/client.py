@@ -227,7 +227,14 @@ class DeepSeekClient:
             usage=usage,
         )
 
-    async def stream_chat(self, messages: list[dict[str, Any]]) -> AsyncIterator[StreamChunk]:
+    async def stream_chat(
+        self,
+        messages: list[dict[str, Any]],
+        *,
+        reasoning_effort: str | None = None,
+        max_tokens: int | None = None,
+        enable_thinking: bool = True,
+    ) -> AsyncIterator[StreamChunk]:
         # 流式对话：发起流式请求，逐 chunk 产出推理过程与最终回答。
         #
         # 参数：
@@ -247,7 +254,13 @@ class DeepSeekClient:
         # Debug：
         #     - 只有 content 无 reasoning → 确认 reasoning_effort="max" + thinking.enabled
         #     - 流中断 → 网络或 API 限流，查看服务端日志
-        kwargs = self._build_create_kwargs(messages, stream=True)
+        kwargs = self._build_create_kwargs(
+            messages,
+            stream=True,
+            reasoning_effort=reasoning_effort,
+            max_tokens=max_tokens,
+            enable_thinking=enable_thinking,
+        )
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug(
                 "DeepSeek 流式请求: model=%s, messages=%d 条",

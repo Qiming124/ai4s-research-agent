@@ -81,6 +81,10 @@ class SQLiteSessionStore(BaseSessionStore):
             self._conn.execute(
                 "ALTER TABLE messages ADD COLUMN tool_calls TEXT"
             )
+        if "workflow_steps" not in cols:
+            self._conn.execute(
+                "ALTER TABLE messages ADD COLUMN workflow_steps TEXT"
+            )
         self._conn.commit()
 
     def _serialize_tool_calls(
@@ -104,6 +108,15 @@ class SQLiteSessionStore(BaseSessionStore):
             return None
         return [PersistedToolCall.model_validate(item) for item in data]
 
+    def _deserialize_workflow_steps(self, raw: str | None) -> list[dict] | None:
+        if not raw:
+            return None
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            return None
+        return data if isinstance(data, list) else None
+
     def create_session_id(self) -> str:
         return str(uuid.uuid4())
 
@@ -122,7 +135,8 @@ class SQLiteSessionStore(BaseSessionStore):
         with self._lock:
             rows = self._conn.execute(
                 """
-                SELECT role, content, reasoning_content, tool_calls FROM messages
+                SELECT role, content, reasoning_content, tool_calls, workflow_steps
+                FROM messages
                 WHERE session_id = ?
                 ORDER BY seq
                 """,
@@ -134,6 +148,7 @@ class SQLiteSessionStore(BaseSessionStore):
                 content=row["content"],
                 reasoning_content=row["reasoning_content"],
                 tool_calls=self._deserialize_tool_calls(row["tool_calls"]),
+                workflow_steps=self._deserialize_workflow_steps(row["workflow_steps"]),
             )
             for row in rows
         ]
@@ -151,8 +166,8 @@ class SQLiteSessionStore(BaseSessionStore):
             next_seq = int(row["max_seq"]) + 1
             self._conn.execute(
                 """
-                INSERT INTO messages (session_id, role, content, seq, reasoning_content, tool_calls)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO messages (session_id, role, content, seq, reasoning_content, tool_calls, workflow_steps)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     session_id,
@@ -161,6 +176,9 @@ class SQLiteSessionStore(BaseSessionStore):
                     next_seq,
                     message.reasoning_content,
                     self._serialize_tool_calls(message.tool_calls),
+                    json.dumps(message.workflow_steps, ensure_ascii=False)
+                    if message.workflow_steps
+                    else None,
                 ),
             )
             self._conn.execute(

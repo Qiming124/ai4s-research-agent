@@ -1,8 +1,11 @@
 import type { ChatMessage } from "../hooks/useChatStream";
+import { parseCotSections } from "../utils/cotParse";
+import { CotStepsPanel } from "./CotStepsPanel";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { MarkdownContent } from "./MarkdownContent";
 import { ReasoningPanel } from "./ReasoningPanel";
-import { ToolTimeline } from "./ToolTimeline";
+import { WorkflowTimeline } from "./WorkflowTimeline";
+import { LossLandscapeViz } from "./LossLandscapeViz";
 
 interface MessageBubbleProps {
   message: ChatMessage;
@@ -15,6 +18,15 @@ function streamingPlaceholder(message: ChatMessage): string | null {
   if (message.reasoning) return "正在思考…";
 
   const timeline = message.timeline ?? [];
+  const runningWorkflow = timeline.find(
+    (entry) =>
+      (entry.kind === "workflow" || entry.kind === "verify") &&
+      entry.event.status === "running",
+  );
+  if (runningWorkflow && (runningWorkflow.kind === "workflow" || runningWorkflow.kind === "verify")) {
+    return `${runningWorkflow.event.title}…`;
+  }
+
   const runningTool = timeline.find(
     (entry) => entry.kind === "tool" && entry.event.status === "running",
   );
@@ -28,6 +40,12 @@ function streamingPlaceholder(message: ChatMessage): string | null {
 export function MessageBubble({ message, showReasoning = true }: MessageBubbleProps) {
   const isUser = message.role === "user";
   const placeholder = !isUser ? streamingPlaceholder(message) : null;
+  const cotSteps =
+    message.cotSteps && message.cotSteps.length > 0
+      ? message.cotSteps
+      : !message.streaming
+        ? parseCotSections(message.content)
+        : [];
 
   const body = (
     <div className={`message-row ${isUser ? "message-user" : "message-assistant"}`}>
@@ -40,13 +58,23 @@ export function MessageBubble({ message, showReasoning = true }: MessageBubblePr
             {message.error && (
               <div className="message-error">错误：{message.error}</div>
             )}
-            <ToolTimeline timeline={message.timeline} />
+            <WorkflowTimeline timeline={message.timeline} />
+            {message.memoryWarnings?.map((w, i) => (
+              <div key={i} className="memory-warning">⚠ {w}</div>
+            ))}
+            {message.pipelineStages && message.pipelineStages.length > 0 && (
+              <div className="pipeline-stages">
+                流水线: {message.pipelineStages.join(" → ")}
+              </div>
+            )}
+            {message.vizData && <LossLandscapeViz data={message.vizData} />}
             {showReasoning && (
               <ReasoningPanel
                 reasoning={message.reasoning ?? ""}
                 isStreaming={!!message.streaming}
               />
             )}
+            <CotStepsPanel steps={cotSteps} />
             {placeholder && (
               <div className="streaming-placeholder" aria-live="polite">
                 {placeholder}

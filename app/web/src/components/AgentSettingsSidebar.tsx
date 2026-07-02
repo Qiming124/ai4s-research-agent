@@ -1,9 +1,17 @@
-import type { ChatMode, AgentChoice } from "../utils/preferences";
+import type { ChatMode, AgentChoice, CotMode, ReasoningEffort } from "../utils/preferences";
 import type { McpStatus } from "../hooks/useMcpStatus";
 import type { DocumentInfo } from "../hooks/useDocuments";
-import { DocumentPanel } from "./DocumentPanel";
-import { RagRefsPanel } from "./RagRefsPanel";
 import type { RagRef } from "../hooks/useRagRefs";
+import { DocumentPanel } from "./DocumentPanel";
+import { ExperimentLogPanel } from "./ExperimentLogPanel";
+import { KnowledgeGraphPanel } from "./KnowledgeGraphPanel";
+import { RagRefsPanel } from "./RagRefsPanel";
+import { TheoremLibraryPanel } from "./TheoremLibraryPanel";
+import { WorkspacePanel } from "./WorkspacePanel";
+import type { ExperimentRun } from "../hooks/useExperimentLogs";
+import type { MemoryEdge } from "../hooks/useMemoryGraph";
+import type { StructuredMemoryEntry } from "../hooks/useStructuredMemory";
+import type { WorkspaceFile } from "../hooks/useWorkspaceFiles";
 
 interface AgentSettingsSidebarProps {
   chatMode: ChatMode;
@@ -12,6 +20,15 @@ interface AgentSettingsSidebarProps {
   onAgentChoiceChange: (value: AgentChoice) => void;
   showReasoning: boolean;
   onShowReasoningChange: (value: boolean) => void;
+  useServerReasoning: boolean;
+  onUseServerReasoningChange: (value: boolean) => void;
+  enableThinking: boolean;
+  onEnableThinkingChange: (value: boolean) => void;
+  reasoningEffort: ReasoningEffort;
+  onReasoningEffortChange: (value: ReasoningEffort) => void;
+  serverReasoningEffort: ReasoningEffort;
+  cotMode: CotMode;
+  onCotModeChange: (value: CotMode) => void;
   useServerHistory: boolean;
   onUseServerHistoryChange: (value: boolean) => void;
   maxHistoryMessages: number;
@@ -39,6 +56,23 @@ interface AgentSettingsSidebarProps {
   ragRefsLoading: boolean;
   ragRefsError: string | null;
   onRefreshRagRefs: () => void;
+  structuredEntries: StructuredMemoryEntry[];
+  structuredLoading: boolean;
+  structuredError: string | null;
+  onRefreshStructured: () => void;
+  graphNodes: StructuredMemoryEntry[];
+  graphEdges: MemoryEdge[];
+  graphLoading: boolean;
+  graphError: string | null;
+  onRefreshGraph: () => void;
+  experimentRuns: ExperimentRun[];
+  experimentLoading: boolean;
+  experimentError: string | null;
+  onRefreshExperiments: () => void;
+  workspaceFiles: WorkspaceFile[];
+  workspaceLoading: boolean;
+  workspaceError: string | null;
+  onRefreshWorkspace: () => void;
 }
 
 function serverStatusLabel(
@@ -58,6 +92,15 @@ export function AgentSettingsSidebar({
   onAgentChoiceChange,
   showReasoning,
   onShowReasoningChange,
+  useServerReasoning,
+  onUseServerReasoningChange,
+  enableThinking,
+  onEnableThinkingChange,
+  reasoningEffort,
+  onReasoningEffortChange,
+  serverReasoningEffort,
+  cotMode,
+  onCotModeChange,
   useServerHistory,
   onUseServerHistoryChange,
   maxHistoryMessages,
@@ -85,6 +128,23 @@ export function AgentSettingsSidebar({
   ragRefsLoading,
   ragRefsError,
   onRefreshRagRefs,
+  structuredEntries,
+  structuredLoading,
+  structuredError,
+  onRefreshStructured,
+  graphNodes,
+  graphEdges,
+  graphLoading,
+  graphError,
+  onRefreshGraph,
+  experimentRuns,
+  experimentLoading,
+  experimentError,
+  onRefreshExperiments,
+  workspaceFiles,
+  workspaceLoading,
+  workspaceError,
+  onRefreshWorkspace,
 }: AgentSettingsSidebarProps) {
   const serverEnabled = mcpStatus?.server_enabled ?? false;
   const mcpToggleDisabled = disabled || useServerMcp || !serverEnabled;
@@ -136,6 +196,7 @@ export function AgentSettingsSidebar({
               <option value="theory">Theory — 理论推导</option>
               <option value="experiment">Experiment — 实验分析</option>
               <option value="literature">Literature — 文献检索</option>
+              <option value="review">Review — 审稿</option>
             </select>
           </label>
           <p className="settings-hint">
@@ -144,7 +205,7 @@ export function AgentSettingsSidebar({
         </section>
 
         <section className="settings-section">
-          <h3>显示</h3>
+          <h3>显示与思维链</h3>
           <label className="pref-toggle">
             <input
               type="checkbox"
@@ -152,8 +213,59 @@ export function AgentSettingsSidebar({
               onChange={(e) => onShowReasoningChange(e.target.checked)}
               disabled={disabled}
             />
-            显示思考过程
+            显示思考过程（模型内部推理）
           </label>
+          <label className="pref-toggle">
+            <input
+              type="checkbox"
+              checked={useServerReasoning}
+              onChange={(e) => onUseServerReasoningChange(e.target.checked)}
+              disabled={disabled}
+            />
+            推理策略：服务端默认
+          </label>
+          <label className="pref-toggle">
+            <input
+              type="checkbox"
+              checked={enableThinking}
+              onChange={(e) => onEnableThinkingChange(e.target.checked)}
+              disabled={disabled || useServerReasoning}
+            />
+            启用深度思考（DeepSeek thinking）
+          </label>
+          <label className="settings-field">
+            推理强度
+            <select
+              className="agent-select"
+              value={reasoningEffort}
+              disabled={disabled || useServerReasoning}
+              onChange={(e) => onReasoningEffortChange(e.target.value as ReasoningEffort)}
+            >
+              <option value="high">high — 较快</option>
+              <option value="max">max — 更深</option>
+            </select>
+          </label>
+          {!useServerReasoning && (
+            <p className="settings-hint">
+              服务端默认推理强度：{serverReasoningEffort}。max 消耗更多 token。
+            </p>
+          )}
+          <label className="settings-field">
+            思维链模式（回答结构）
+            <select
+              className="agent-select"
+              value={cotMode}
+              disabled={disabled}
+              onChange={(e) => onCotModeChange(e.target.value as CotMode)}
+            >
+              <option value="off">关闭</option>
+              <option value="standard">标准（问题分析 → 推理 → 结论）</option>
+              <option value="strict">严格（强制 Markdown 三节）</option>
+            </select>
+          </label>
+          <p className="settings-hint">
+            Math 模式自动使用严格思维链。Theory Agent 使用专用五阶段推导。
+          </p>
         </section>
 
         <section className="settings-section">
@@ -264,6 +376,43 @@ export function AgentSettingsSidebar({
             error={ragRefsError}
             onRefresh={onRefreshRagRefs}
             disabled={disabled}
+          />
+        </section>
+
+        <section className="settings-section">
+          <TheoremLibraryPanel
+            entries={structuredEntries}
+            loading={structuredLoading}
+            error={structuredError}
+            onRefresh={onRefreshStructured}
+          />
+        </section>
+
+        <section className="settings-section">
+          <KnowledgeGraphPanel
+            nodes={graphNodes}
+            edges={graphEdges}
+            loading={graphLoading}
+            error={graphError}
+            onRefresh={onRefreshGraph}
+          />
+        </section>
+
+        <section className="settings-section">
+          <ExperimentLogPanel
+            runs={experimentRuns}
+            loading={experimentLoading}
+            error={experimentError}
+            onRefresh={onRefreshExperiments}
+          />
+        </section>
+
+        <section className="settings-section">
+          <WorkspacePanel
+            files={workspaceFiles}
+            loading={workspaceLoading}
+            error={workspaceError}
+            onRefresh={onRefreshWorkspace}
           />
         </section>
 

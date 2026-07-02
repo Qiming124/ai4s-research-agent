@@ -72,7 +72,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--agent",
-        choices=["general", "theory", "experiment", "literature"],
+        choices=["general", "theory", "experiment", "literature", "review"],
         default=None,
         help="指定 Agent；省略则按 --auto-route 自动路由",
     )

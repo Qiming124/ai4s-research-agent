@@ -29,5 +29,10 @@
     "command": "python",
     "args": ["-m", "server.mcp.servers.rag"],
     "enabled": true
+  },
+  "numerical": {
+    "command": "python",
+    "args": ["-m", "server.mcp.servers.numerical"],
+    "enabled": true
   }
 }

@@ -23,6 +23,19 @@ CREATE TABLE IF NOT EXISTS structured_memory (
 
 CREATE INDEX IF NOT EXISTS idx_structured_session ON structured_memory(session_id);
 CREATE INDEX IF NOT EXISTS idx_structured_kind ON structured_memory(kind);
+
+CREATE TABLE IF NOT EXISTS memory_edges (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    from_id     INTEGER NOT NULL,
+    to_id       INTEGER NOT NULL,
+    relation    TEXT NOT NULL CHECK(relation IN ('depends_on','contradicts','supports','cites')),
+    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (from_id) REFERENCES structured_memory(id),
+    FOREIGN KEY (to_id) REFERENCES structured_memory(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_edges_from ON memory_edges(from_id);
+CREATE INDEX IF NOT EXISTS idx_edges_to ON memory_edges(to_id);
 """
 
 
@@ -69,10 +82,13 @@ class StructuredMemoryStore:
         session_id: str | None = None,
         kind: str | None = None,
         limit: int = 50,
+        global_only: bool = False,
     ) -> list[dict[str, Any]]:
         clauses: list[str] = []
         params: list[Any] = []
-        if session_id:
+        if global_only:
+            clauses.append("session_id IS NULL")
+        elif session_id is not None:
             clauses.append("session_id = ?")
             params.append(session_id)
         if kind:
@@ -87,6 +103,76 @@ class StructuredMemoryStore:
         with self._lock:
             rows = self._conn.execute(sql, params).fetchall()
         return [self._row_to_dict(row) for row in rows]
+
+    def create_edge(
+        self,
+        *,
+        from_id: int,
+        to_id: int,
+        relation: str = "depends_on",
+    ) -> dict[str, Any]:
+        with self._lock:
+            cursor = self._conn.execute(
+                """
+                INSERT INTO memory_edges (from_id, to_id, relation)
+                VALUES (?, ?, ?)
+                """,
+                (from_id, to_id, relation),
+            )
+            row_id = cursor.lastrowid
+            row = self._conn.execute(
+                "SELECT * FROM memory_edges WHERE id = ?",
+                (row_id,),
+            ).fetchone()
+            self._conn.commit()
+        return {
+            "id": row["id"],
+            "from_id": row["from_id"],
+            "to_id": row["to_id"],
+            "relation": row["relation"],
+            "created_at": row["created_at"],
+        }
+
+    def list_edges(self, *, session_id: str | None = None) -> list[dict[str, Any]]:
+        """列出与会话相关的边（端点属于该会话或全局）。"""
+        with self._lock:
+            if session_id:
+                rows = self._conn.execute(
+                    """
+                    SELECT e.* FROM memory_edges e
+                    JOIN structured_memory m1 ON e.from_id = m1.id
+                    JOIN structured_memory m2 ON e.to_id = m2.id
+                    WHERE m1.session_id = ? OR m2.session_id = ?
+                       OR m1.session_id IS NULL OR m2.session_id IS NULL
+                    ORDER BY e.created_at DESC
+                    """,
+                    (session_id, session_id),
+                ).fetchall()
+            else:
+                rows = self._conn.execute(
+                    "SELECT * FROM memory_edges ORDER BY created_at DESC"
+                ).fetchall()
+        return [
+            {
+                "id": r["id"],
+                "from_id": r["from_id"],
+                "to_id": r["to_id"],
+                "relation": r["relation"],
+                "created_at": r["created_at"],
+            }
+            for r in rows
+        ]
+
+    def get_graph(self, *, session_id: str | None = None) -> dict[str, Any]:
+        """返回节点 + 边（知识图谱）。"""
+        nodes = self.list_entries(session_id=session_id, limit=200)
+        global_nodes = self.list_entries(global_only=True, limit=100)
+        seen_ids = {n["id"] for n in nodes}
+        for gn in global_nodes:
+            if gn["id"] not in seen_ids:
+                nodes.append(gn)
+        edges = self.list_edges(session_id=session_id)
+        return {"nodes": nodes, "edges": edges}
 
     def _row_to_dict(self, row: sqlite3.Row) -> dict[str, Any]:
         metadata_raw = row["metadata"] or "{}"

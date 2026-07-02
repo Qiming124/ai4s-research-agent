@@ -118,6 +118,12 @@ class MCPClient:
 
         start = time.perf_counter()
         try:
+            if qualified_name == "rag__retrieve":
+                from server.memory.rag.context import get_rag_session_id
+
+                sid = get_rag_session_id()
+                if sid and not arguments.get("session_id"):
+                    arguments = {**arguments, "session_id": sid}
             result = await session.call_tool(registered.tool_name, arguments)
         except Exception as exc:
             latency_ms = (time.perf_counter() - start) * 1000

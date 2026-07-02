@@ -4,6 +4,7 @@
 
 | 文档 | 说明 |
 |------|------|
+| [系统架构图](SYSTEM_ARCHITECTURE.md) | 按功能模块绘制的分层架构、数据流、记忆与 CoT 全景图 |
 | [架构说明](ARCHITECTURE.md) | 分层结构、数据流、多 Agent / MCP / RAG |
 | [环境变量](ENV.md) | `conf/.env` 全量配置说明 |
 | [API 参考](API.md) | HTTP 端点、SSE 事件、请求/响应字段 |

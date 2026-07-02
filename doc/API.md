@@ -34,6 +34,9 @@ curl -s http://127.0.0.1:8000/health
 | `enable_tools` | bool? | 是否启用 MCP，null 用 `ENABLE_MCP` |
 | `agent` | string? | `general` / `theory` / `experiment` / `literature` |
 | `auto_route` | bool | 是否自动路由（默认 true） |
+| `enable_thinking` | bool? | 是否启用 DeepSeek thinking（null=默认开启，仅最终回答） |
+| `reasoning_effort` | `high` \| `max`? | 推理强度，null 用 `REASONING_EFFORT` |
+| `cot_mode` | `off` \| `standard` \| `strict` | 结构化思维链（Math 模式默认 strict） |
 
 **返回** `ChatResponse`：`session_id`、`content`、`reasoning`、`usage`。
 
@@ -52,6 +55,9 @@ SSE 流式对话，`Content-Type: text/event-stream`。
 | `tool_call_result` | 工具成功结果 |
 | `tool_call_error` | 工具失败 |
 | `agent_handoff` | 多 Agent 切换，`from_agent`、`to_agent` |
+| `workflow_step` | 工作流节点：`step_kind`（plan/tool/verify/synthesize）、`status`、`title` |
+| `cot_step` | 结构化思维链小节（JSON：`step`、`title`、`body`） |
+| `verification_result` | Theory SymPy 验证结果（JSON） |
 | `done` | 结束，含 `usage` |
 | `error` | 错误信息 |
 
@@ -67,7 +73,7 @@ curl -N -X POST http://127.0.0.1:8000/v1/chat/stream \
 
 ### `GET /v1/sessions/{session_id}`
 
-返回 `SessionResponse`：历史消息列表（含 `reasoning_content`、`tool_calls`）。
+返回 `SessionResponse`：历史消息列表（含 `reasoning_content`、`tool_calls`、`workflow_steps`）。
 
 ### `DELETE /v1/sessions/{session_id}`
 

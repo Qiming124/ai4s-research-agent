@@ -15,6 +15,7 @@ _AGENT_DESCRIPTIONS: dict[str, str] = {
     "theory": "数学推导、定理证明与损失函数理论",
     "experiment": "实验日志、训练指标与过拟合分析",
     "literature": "文献检索、论文综述与引用整理",
+    "review": "理论推导审稿与清单检查",
 }
 
 

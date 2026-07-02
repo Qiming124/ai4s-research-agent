@@ -44,6 +44,13 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["chat"])
 
 
+def _effective_cot_mode(request: ChatRequest) -> str:
+    """Math 模式默认使用 strict 思维链。"""
+    if request.mode == "math" and request.cot_mode == "standard":
+        return "strict"
+    return request.cot_mode
+
+
 # ── 健康检查 ─────────────────────────────────────────────────
 
 @router.get("/health", response_model=HealthResponse)
@@ -95,6 +102,9 @@ async def chat(request: ChatRequest) -> ChatResponse:
                 max_history_messages=request.max_history_messages,
                 enable_history_summary=request.enable_history_summary,
                 enable_tools=request.enable_tools,
+                enable_thinking=request.enable_thinking,
+                reasoning_effort=request.reasoning_effort,
+                cot_mode=_effective_cot_mode(request),
             )
         else:
             agent = get_general_agent(math_mode=(request.mode == "math"))
@@ -105,6 +115,9 @@ async def chat(request: ChatRequest) -> ChatResponse:
                 max_history_messages=request.max_history_messages,
                 enable_history_summary=request.enable_history_summary,
                 enable_tools=request.enable_tools,
+                enable_thinking=request.enable_thinking,
+                reasoning_effort=request.reasoning_effort,
+                cot_mode=_effective_cot_mode(request),
             )
     except Exception as exc:
         logger.exception("非流式对话失败")
@@ -163,6 +176,9 @@ async def _stream_generator(request: ChatRequest) -> AsyncIterator[str]:
                 max_history_messages=request.max_history_messages,
                 enable_history_summary=request.enable_history_summary,
                 enable_tools=request.enable_tools,
+                enable_thinking=request.enable_thinking,
+                reasoning_effort=request.reasoning_effort,
+                cot_mode=_effective_cot_mode(request),
             ):
                 payload = chunk.model_dump()
                 yield _sse_event(payload)
@@ -186,6 +202,9 @@ async def _stream_generator(request: ChatRequest) -> AsyncIterator[str]:
             max_history_messages=request.max_history_messages,
             enable_history_summary=request.enable_history_summary,
             enable_tools=request.enable_tools,
+            enable_thinking=request.enable_thinking,
+            reasoning_effort=request.reasoning_effort,
+            cot_mode=_effective_cot_mode(request),
         ):
             payload = chunk.model_dump()
             yield _sse_event(payload)
@@ -283,16 +302,19 @@ async def delete_session(
     - purge=true：删除会话记录（侧栏「×」移除会话）
     """
     store = get_session_store()
+    settings = get_settings()
     if purge:
         existed = store.delete_session(session_id)
         if not existed:
             raise HTTPException(status_code=404, detail=f"会话不存在: {session_id}")
         try:
             from server.memory.rag.session_refs import SessionRagRefStore
+            from server.memory.rag.store import get_rag_store
 
-            SessionRagRefStore().clear_session(session_id)
+            SessionRagRefStore(settings.session_db_path).clear_session(session_id)
+            get_rag_store().clear_session_documents(session_id)
         except Exception:
-            logger.exception("清除会话 RAG 引用失败 session_id=%s", session_id)
+            logger.exception("清除会话 RAG 数据失败 session_id=%s", session_id)
         return {"status": "deleted", "session_id": session_id}
 
     store.get_or_create(session_id)

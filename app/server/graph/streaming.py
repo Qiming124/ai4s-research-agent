@@ -22,6 +22,7 @@ from typing import Any
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage
 
+from server.graph.workflow import workflow_step_chunk, workflow_step_record
 from shared.schemas import PersistedToolCall, StreamChunk
 
 logger = logging.getLogger(__name__)
@@ -72,6 +73,7 @@ async def stream_react_graph(
     final_model: BaseChatModel,
     agent_name: str,
     max_tool_rounds: int,
+    workflow_records: list[dict] | None = None,
 ) -> AsyncIterator[tuple[StreamChunk, list[PersistedToolCall] | None]]:
     """
     运行 ReAct 工具子图，流式产出 SSE StreamChunk。
@@ -101,6 +103,24 @@ async def stream_react_graph(
     messages: list[BaseMessage] = list(inputs.get("messages", []))
     usage: dict[str, Any] | None = None
     early_content: str | None = None  # 工具轮次中可能已有 content（无 tool_calls 子图终止）
+    wf_records = workflow_records if workflow_records is not None else []
+
+    yield (
+        workflow_step_chunk(
+            "plan",
+            status="running",
+            title="分析问题并规划工具调用",
+            agent_name=agent_name,
+        ),
+        None,
+    )
+    wf_records.append(
+        workflow_step_record(
+            "plan",
+            status="running",
+            title="分析问题并规划工具调用",
+        ),
+    )
 
     # ── 第一步：流式运行 ReAct 子图（call_model ↔ execute_tools） ──
     async for update in graph.astream(inputs, stream_mode="updates"):
@@ -184,7 +204,28 @@ async def stream_react_graph(
             max_tool_rounds,
         )
 
+    wf_records.append(
+        workflow_step_record("plan", status="done", title="工具规划完成"),
+    )
+
     # ── 第三步：用 final_model 流式生成最终回答（含 reasoning） ──
+    yield (
+        workflow_step_chunk(
+            "synthesize",
+            status="running",
+            title="综合信息并生成回答",
+            agent_name=agent_name,
+        ),
+        None,
+    )
+    wf_records.append(
+        workflow_step_record(
+            "synthesize",
+            status="running",
+            title="综合信息并生成回答",
+        ),
+    )
+
     full_content = ""
     full_reasoning = ""
     async for chunk in final_model.astream(messages):
@@ -217,6 +258,10 @@ async def stream_react_graph(
         elif isinstance(chunk, AIMessage):
             # 最终 message 可能含 token 用量
             usage = _usage_from_message(chunk) or usage
+
+    wf_records.append(
+        workflow_step_record("synthesize", status="done", title="回答生成完成"),
+    )
 
     # ── 第四步：发送 done 事件（含累积工具记录与 token 用量） ──
     yield (

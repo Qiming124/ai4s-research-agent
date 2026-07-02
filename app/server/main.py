@@ -34,7 +34,10 @@ from server.api.chat import router as chat_router
 from server.api.documents import router as documents_router
 from server.api.mcp import router as mcp_router
 from server.api.stats import router as stats_router
+from server.api.export import router as export_router
+from server.api.experiments import router as experiments_router
 from server.api.structured_memory import router as structured_memory_router
+from server.api.theory import router as theory_router
 from server.config import get_settings, setup_logging
 from server.mcp.client import get_mcp_client, reset_mcp_client
 from server.observability.middleware import RequestContextMiddleware
@@ -87,14 +90,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     else:
         logger.info("  MCP: 未启用")
     if settings.enable_rag:
-        logger.info("  RAG: 已启用 (%s)", settings.rag_chroma_path)
-        if settings.rag_index_mcp_files:
-            from server.memory.rag.store import get_rag_store
-
-            indexed = get_rag_store().index_mcp_files()
-            logger.info("  RAG: 已索引 MCP 文件 %d 篇", len(indexed))
+        logger.info("  RAG: 已启用 (%s)，按 session_id 隔离", settings.rag_chroma_path)
     else:
         logger.info("  RAG: 未启用")
+    if settings.global_memory_sync:
+        from server.memory.structured.graph import sync_workspace_to_l4
+
+        synced = sync_workspace_to_l4(settings)
+        if synced:
+            logger.info("  L4 全局记忆: 已同步 %d 条引理", synced)
     logger.info("=" * 50)
 
     yield
@@ -139,6 +143,9 @@ def create_app() -> FastAPI:
     app.include_router(documents_router)
     app.include_router(stats_router)
     app.include_router(structured_memory_router)
+    app.include_router(theory_router)
+    app.include_router(experiments_router)
+    app.include_router(export_router)
 
     # 生产模式：dist 存在时托管 web/dist 静态文件与首页。
     # 开发模式 dist 不存在则跳过（用 Vite :5173 + proxy）

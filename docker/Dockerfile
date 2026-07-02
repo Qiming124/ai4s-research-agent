@@ -34,9 +34,9 @@ COPY app/shared/ ./app/shared/
 COPY conf/ ./conf/
 
 RUN if [ "$INSTALL_RAG_EXTRA" = "1" ]; then \
-      pip install ".[rag]"; \
+      pip install ".[rag,pdf]"; \
     else \
-      pip install .; \
+      pip install ".[pdf]"; \
     fi
 
 # 预下载 chroma_default 嵌入模型，避免容器首次启动长时间阻塞健康检查
@@ -44,7 +44,8 @@ RUN python -c "from chromadb.utils.embedding_functions import DefaultEmbeddingFu
 
 COPY --from=web-build /web/dist ./app/web/dist
 
-RUN mkdir -p /repo/data/mcp_files /repo/data/chroma /repo/log
+RUN mkdir -p /repo/data/mcp_files /repo/data/chroma /repo/data/theory /repo/data/experiments/log /repo/log
+COPY data/theory/ ./data/theory/
 
 EXPOSE 8000
 

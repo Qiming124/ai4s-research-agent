@@ -1,21 +1,27 @@
 # =============================================================================
-# 文档 ingestion API — L3 RAG 向量记忆。
+# 文档 ingestion API — L3 RAG 向量记忆（按 session_id 隔离）。
 #
 # 端点：
-#     POST   /v1/documents           — 上传/索引文档
-#     GET    /v1/documents           — 列出已索引文档
+#     POST   /v1/documents           — 上传/索引文档到指定会话
+#     GET    /v1/documents           — 列出某会话已索引文档（?session_id=）
 #     DELETE /v1/documents           — purge=true 时清空全部 RAG 文档
-#     DELETE /v1/documents/{doc_id}  — 删除文档及向量
+#     DELETE /v1/documents/{doc_id}  — 删除文档及向量（?session_id=）
 #     GET    /v1/sessions/{id}/rag-refs — 会话 RAG 引用（doc_id + snippet）
 # =============================================================================
 
 from __future__ import annotations
 
 import logging
+import re
 
-from fastapi import APIRouter, HTTPException, Query
+import httpx
+from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 
 from server.config import get_settings
+from server.memory.rag.pdf_ingest import (
+    build_literature_metadata,
+    extract_text_from_pdf,
+)
 from server.memory.rag.session_refs import SessionRagRefStore
 from server.memory.rag.store import get_rag_store, reset_rag_store
 from shared.schemas import (
@@ -36,6 +42,7 @@ def _to_info(record) -> DocumentInfo:
     """将 RagStore 的 DocumentRecord 转为 API 用的 DocumentInfo。"""
     return DocumentInfo(
         doc_id=record.doc_id,
+        session_id=record.session_id,
         title=record.title,
         source=record.source,
         chunk_count=record.chunk_count,
@@ -46,17 +53,13 @@ def _to_info(record) -> DocumentInfo:
 @router.post("/v1/documents", response_model=DocumentUploadResponse)
 async def upload_document(request: DocumentUploadRequest) -> DocumentUploadResponse:
     """
-    上传文档正文并写入 Chroma 向量库。
+    上传文档正文并写入指定会话的 Chroma 向量库。
 
     参数:
-        request: 含 content、title、source、可选 doc_id
+        request: 含 session_id、content、title、source、可选 doc_id
 
     返回:
         DocumentUploadResponse，含索引后的 document 元数据
-
-    异常:
-        HTTPException 400: RAG 未启用或内容无效
-        HTTPException 500: 索引过程失败
     """
     settings = get_settings()
     if not settings.enable_rag:
@@ -65,6 +68,7 @@ async def upload_document(request: DocumentUploadRequest) -> DocumentUploadRespo
     try:
         record = get_rag_store().add_document(
             request.content,
+            session_id=request.session_id,
             title=request.title,
             source=request.source,
             doc_id=request.doc_id,
@@ -78,19 +82,100 @@ async def upload_document(request: DocumentUploadRequest) -> DocumentUploadRespo
     return DocumentUploadResponse(document=_to_info(record))
 
 
-@router.get("/v1/documents", response_model=DocumentListResponse)
-async def list_documents() -> DocumentListResponse:
-    """
-    列出已索引的 RAG 文档（ENABLE_RAG=false 时返回空列表）。
+@router.post("/v1/documents/upload", response_model=DocumentUploadResponse)
+async def upload_document_file(
+    session_id: str = Form(...),
+    file: UploadFile = File(...),
+    title: str | None = Form(default=None),
+    arxiv_id: str | None = Form(default=None),
+) -> DocumentUploadResponse:
+    """上传 PDF 文件并解析入库。"""
+    settings = get_settings()
+    if not settings.enable_rag:
+        raise HTTPException(status_code=400, detail="RAG 未启用（ENABLE_RAG=false）")
+    if not settings.pdf_ingest_enabled:
+        raise HTTPException(status_code=400, detail="PDF 入库未启用")
 
-    返回:
-        DocumentListResponse: documents 与 total
+    data = await file.read()
+    filename = file.filename or "upload.pdf"
+    if filename.lower().endswith(".pdf"):
+        try:
+            content = extract_text_from_pdf(data)
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=f"PDF 解析失败: {exc}") from exc
+        source = f"pdf:{filename}"
+    else:
+        content = data.decode("utf-8", errors="replace")
+        source = f"file:{filename}"
+
+    if not content.strip():
+        raise HTTPException(status_code=400, detail="文件内容为空")
+
+    _meta = build_literature_metadata(arxiv_id=arxiv_id)
+    source = f"{source}|meta:{arxiv_id or ''}"
+    try:
+        record = get_rag_store().add_document(
+            content,
+            session_id=session_id,
+            title=title or filename,
+            source=source,
+        )
+    except Exception as exc:
+        logger.exception("文档索引失败")
+        raise HTTPException(status_code=500, detail=f"索引失败: {exc}") from exc
+
+    return DocumentUploadResponse(document=_to_info(record))
+
+
+@router.post("/v1/documents/from-arxiv", response_model=DocumentUploadResponse)
+async def ingest_from_arxiv(
+    session_id: str = Query(..., min_length=1),
+    arxiv_id: str = Query(..., min_length=1, description="如 2301.00001"),
+    title: str | None = Query(default=None),
+) -> DocumentUploadResponse:
+    """从 arXiv 下载 PDF 并入库。"""
+    settings = get_settings()
+    if not settings.enable_rag:
+        raise HTTPException(status_code=400, detail="RAG 未启用")
+    if not settings.pdf_ingest_enabled:
+        raise HTTPException(status_code=400, detail="PDF 入库未启用")
+
+    aid = arxiv_id.strip().replace("arXiv:", "")
+    pdf_url = f"https://arxiv.org/pdf/{aid}.pdf"
+    try:
+        async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
+            resp = await client.get(pdf_url)
+            resp.raise_for_status()
+            content = extract_text_from_pdf(resp.content)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"arXiv 下载失败: {exc}") from exc
+
+    if not content.strip():
+        raise HTTPException(status_code=400, detail="PDF 无文本内容")
+
+    _meta = build_literature_metadata(arxiv_id=aid, relation_to_project="arxiv ingest")
+    record = get_rag_store().add_document(
+        content,
+        session_id=session_id,
+        title=title or f"arXiv:{aid}",
+        source=f"{pdf_url}|meta:{aid}",
+        doc_id=f"arxiv-{aid}",
+    )
+    return DocumentUploadResponse(document=_to_info(record))
+
+
+@router.get("/v1/documents", response_model=DocumentListResponse)
+async def list_documents(
+    session_id: str = Query(..., min_length=1, description="会话 ID"),
+) -> DocumentListResponse:
+    """
+    列出指定会话已索引的 RAG 文档（ENABLE_RAG=false 时返回空列表）。
     """
     settings = get_settings()
     if not settings.enable_rag:
         return DocumentListResponse(documents=[], total=0)
 
-    records = get_rag_store().list_documents()
+    records = get_rag_store().list_documents(session_id)
     docs = [_to_info(r) for r in records]
     return DocumentListResponse(documents=docs, total=len(docs))
 
@@ -102,12 +187,7 @@ async def purge_all_documents(
         description="purge=true 时清空全部 RAG 文档与向量",
     ),
 ) -> dict[str, str | int]:
-    """
-    清空全部 RAG 文档（需 purge=true）。
-
-    返回:
-        status=cleared 与 deleted 数量
-    """
+    """清空全部 RAG 文档（需 purge=true，跨会话）。"""
     if not purge:
         raise HTTPException(
             status_code=400,
@@ -123,41 +203,40 @@ async def purge_all_documents(
     return {"status": "cleared", "deleted": deleted}
 
 
-@router.delete("/v1/documents/{doc_id}")
-async def delete_document(doc_id: str) -> dict[str, str]:
-    """
-    删除指定文档及其向量 chunk。
-
-    参数:
-        doc_id: 文档唯一 ID
-
-    返回:
-        status=deleted 与 doc_id
-
-    异常:
-        HTTPException 400/404: RAG 未启用或文档不存在
-    """
+@router.delete("/v1/documents/session/{session_id}")
+async def clear_session_documents(session_id: str) -> dict[str, str | int]:
+    """清空指定会话的全部 RAG 文档。"""
     settings = get_settings()
     if not settings.enable_rag:
         raise HTTPException(status_code=400, detail="RAG 未启用（ENABLE_RAG=false）")
 
-    deleted = get_rag_store().delete_document(doc_id)
+    deleted = get_rag_store().clear_session_documents(session_id)
+    try:
+        SessionRagRefStore(settings.session_db_path).clear_session(session_id)
+    except Exception:
+        logger.exception("清除会话 RAG 引用失败 session_id=%s", session_id)
+    return {"status": "cleared", "session_id": session_id, "deleted": deleted}
+
+
+@router.delete("/v1/documents/{doc_id}")
+async def delete_document(
+    doc_id: str,
+    session_id: str = Query(..., min_length=1, description="会话 ID"),
+) -> dict[str, str]:
+    """删除指定会话内的文档及其向量 chunk。"""
+    settings = get_settings()
+    if not settings.enable_rag:
+        raise HTTPException(status_code=400, detail="RAG 未启用（ENABLE_RAG=false）")
+
+    deleted = get_rag_store().delete_document(doc_id, session_id=session_id)
     if not deleted:
         raise HTTPException(status_code=404, detail=f"文档不存在: {doc_id}")
-    return {"status": "deleted", "doc_id": doc_id}
+    return {"status": "deleted", "doc_id": doc_id, "session_id": session_id}
 
 
 @router.get("/v1/sessions/{session_id}/rag-refs", response_model=SessionRagRefsResponse)
 async def get_session_rag_refs(session_id: str) -> SessionRagRefsResponse:
-    """
-    查询某会话检索过的 RAG 文档引用（doc_id + 片段预览）。
-
-    参数:
-        session_id: 会话 ID
-
-    返回:
-        SessionRagRefsResponse
-    """
+    """查询某会话检索过的 RAG 文档引用（doc_id + 片段预览）。"""
     settings = get_settings()
     store = SessionRagRefStore(settings.session_db_path)
     refs = [

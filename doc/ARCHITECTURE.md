@@ -36,54 +36,77 @@
 | L3 RAG | `memory/rag/store.py` | Chroma 向量库，全局共享 |
 | L4 结构化记忆 | `memory/structured/store.py` | 定理/假设/引理 SQLite，可注入 theory prompt |
 
-## Theory 推导闭环（v0.3）
+## Theory 推导闭环（v0.4）
 
 ```
 mode=math / theory Agent
-  → RAG 注入（symbols/assumptions）
-  → L4 注入（已证引理）
-  → LangGraph ReAct（SymPy / rag MCP）
-  → verification_result（SymPy 自动验证）
-  → 自动抽取 ## 引理/定理 → L4 持久化
+  → 理论工作区注入（data/theory/symbols.md、assumptions.md）
+  → L4 知识图谱注入（引理/假设 + memory_edges）
+  → LangGraph ReAct（SymPy + numerical + rag MCP）
+  → verification_result（SymPy）+ numerical_verification_result（fallback）
+  → 自动抽取 ## 引理/定理 → L4 + 矛盾检测 memory_warning
 ```
 
-- 分阶段 CoT prompt：`app/server/llm/prompts.py` → `THEORY_AGENT_PROMPT`
-- 验证逻辑：`app/server/graph/theory_pipeline.py`
-- 理论工作区：`data/theory/`（symbols、assumptions、workflows）
+## 研究流水线（RESEARCH_PIPELINE_MODE=auto）
+
+`app/server/graph/research_pipeline.py`：
+
+literature → theory → experiment（条件） → review
+
+## Agent 角色（v0.4）
+
+| Agent | 职责 |
+|-------|------|
+| general | 通用问答 |
+| theory | 数学推导 + 双验证 |
+| experiment | 数值实验 + numerical MCP |
+| literature | 文献检索 + PDF/arXiv 入库 |
+| review | 审稿清单检查 |
+
+## MCP（v0.4）
+
+内置 Server：web_search、arxiv、filesystem、sympy、rag、**numerical**
+
+## 新增 API
+
+| 端点 | 说明 |
+|------|------|
+| `GET /v1/memory/structured/graph` | 知识图谱 |
+| `GET /v1/theory/workspace` | 理论工作区文件列表 |
+| `GET /v1/experiments/runs` | 实验日志 |
+| `POST /v1/documents/upload` | PDF 上传 |
+| `POST /v1/documents/from-arxiv` | arXiv 入库 |
+| `POST /v1/export/latex` | LaTeX 导出 |
+
+## Web 科研工作台（v0.4）
+
+右栏：定理库、知识图谱、实验日志、理论工作区、LossLandscapeViz（消息内嵌）
 
 ## 编排后端
 
 | `ORCHESTRATION_BACKEND` | 行为 |
 |-------------------------|------|
 | `legacy` | `GeneralAgent` + 自研 tool loop |
-| `langgraph` | `MultiAgentOrchestrator` → theory / experiment / literature 子 Agent |
+| `langgraph` | `MultiAgentOrchestrator` → 五 Agent + 可选 ResearchPipeline |
 
-## MCP
+## MCP 配置
 
 - 配置：`conf/mcp_servers.json`
-- 运行时：`MCPClient` 拉起 stdio 子进程（web_search、arxiv、filesystem、sympy、rag）
-- 工具名：`{server}__{tool}`，如 `filesystem__list_files`
+- 运行时：`MCPClient` 拉起 stdio 子进程
 - 详见 [mcp-config.md](mcp-config.md)
 
 ## Web 前端
 
 - 开发：`app/web/` Vite + React，5173 代理 8000
 - 生产：`npm run build` → `app/web/dist`，由 `app/server/main.py` 托管
-- 状态：会话列表 localStorage；消息从 `GET /v1/sessions/{id}` 恢复
 
 ## 关键目录
 
 | 路径 | 职责 |
 |------|------|
-| `app/shared/schemas.py` | 请求/响应模型 |
-| `app/shared/paths.py` | 目录布局常量 |
-| `app/server/config.py` | `conf/.env` → Settings |
-| `app/server/agents/` | Agent 与编排 |
-| `app/server/mcp/` | MCP Client、Registry、内置 Server |
-| `app/server/graph/` | LangGraph ReAct 子图、theory 验证 |
-| `app/server/memory/rag/` | RAG 入库与检索 |
-| `app/server/memory/structured/` | L4 结构化记忆与注入 |
-| `app/server/observability/` | 结构化日志、token 统计 |
-| `app/web/src/` | React UI |
-| `conf/` | 环境变量模板与 MCP JSON |
-| `data/` | 会话 DB、Chroma、MCP 文件、**theory 工作区** |
+| `data/theory/` | 符号表、假设、引理、反例 |
+| `data/experiments/` | 配置、日志、notebook |
+| `app/server/experiments/` | 实验 runner |
+| `app/server/memory/theory_workspace.py` | 工作区加载与注入 |
+| `app/server/memory/structured/graph.py` | L4 知识图谱 |
+| `app/server/graph/research_pipeline.py` | 多跳研究流水线 |

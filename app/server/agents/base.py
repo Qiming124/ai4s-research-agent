@@ -18,10 +18,14 @@ from server.graph.streaming import stream_react_graph
 from server.langchain.llm import get_chat_model
 from server.langchain.tools import mcp_tools_to_langchain
 from server.llm.client import DeepSeekClient, get_deepseek_client
+from server.llm.cot_prompt import apply_cot_prompt
 from server.llm.prompts import DEFAULT_SYSTEM_PROMPT, MATH_MODE_SYSTEM_PROMPT
+from server.llm.reasoning_options import ResolvedReasoningOptions, resolve_reasoning_options
+from server.graph.workflow import cot_step_chunks, workflow_step_chunk, workflow_step_record
 from server.memory.base import BaseSessionStore
 from server.memory.manager import MemoryManager, get_memory_manager
 from server.memory.session import SessionStore, get_session_store
+from server.memory.rag.context import reset_rag_session_id, set_rag_session_id
 from server.memory.rag.retrieval import build_rag_augmented_prompt
 from server.mcp.client import MCPClient, get_mcp_client
 from server.mcp.truncation import truncate_tool_result
@@ -107,6 +111,9 @@ class GeneralAgent(BaseAgent):
         tools: list[dict[str, Any]],
         mcp: MCPClient,
         tool_call_records: list[PersistedToolCall],
+        *,
+        reasoning: ResolvedReasoningOptions,
+        workflow_records: list[dict],
     ) -> AsyncIterator[StreamChunk]:
         """
         Legacy 工具调用循环（自研，非 LangGraph）。
@@ -129,6 +136,22 @@ class GeneralAgent(BaseAgent):
         """
         usage: dict[str, Any] | None = None
         max_result_chars = self._settings.mcp_tool_result_max_chars
+
+        yield self._with_agent(
+            workflow_step_chunk(
+                "plan",
+                status="running",
+                title="分析问题并规划工具调用",
+                agent_name=self.name,
+            ),
+        )
+        workflow_records.append(
+            workflow_step_record(
+                "plan",
+                status="running",
+                title="分析问题并规划工具调用",
+            ),
+        )
 
         # ── 工具循环（多轮 function calling） ──────────────────────
         for _round in range(self._settings.mcp_max_tool_rounds):
@@ -221,11 +244,34 @@ class GeneralAgent(BaseAgent):
                 self._settings.mcp_max_tool_rounds,
             )
 
+        workflow_records.append(
+            workflow_step_record("plan", status="done", title="工具规划完成"),
+        )
+
+        yield self._with_agent(
+            workflow_step_chunk(
+                "synthesize",
+                status="running",
+                title="综合信息并生成回答",
+                agent_name=self.name,
+            ),
+        )
+        workflow_records.append(
+            workflow_step_record(
+                "synthesize",
+                status="running",
+                title="综合信息并生成回答",
+            ),
+        )
+
         # 最终流式回答（含 reasoning）
         full_content = ""
         full_reasoning = ""
-        # 最终流式回答（含 reasoning，thinking=enabled）
-        async for chunk in self._llm.stream_chat(api_messages):
+        async for chunk in self._llm.stream_chat(
+            api_messages,
+            enable_thinking=reasoning.enable_thinking,
+            reasoning_effort=reasoning.reasoning_effort,
+        ):
             if chunk.type == "reasoning":
                 full_reasoning += chunk.content
                 yield self._with_agent(chunk)
@@ -243,6 +289,9 @@ class GeneralAgent(BaseAgent):
                 )
                 return
 
+        workflow_records.append(
+            workflow_step_record("synthesize", status="done", title="回答生成完成"),
+        )
         yield self._with_agent(StreamChunk(type="done", content="", usage=usage))
 
     async def _run_langgraph_tool_loop(
@@ -250,18 +299,46 @@ class GeneralAgent(BaseAgent):
         api_messages: list[dict[str, Any]],
         mcp: MCPClient,
         tool_call_records: list[PersistedToolCall],
+        *,
+        reasoning: ResolvedReasoningOptions,
+        workflow_records: list[dict],
     ) -> AsyncIterator[StreamChunk]:
         lc_tools = mcp_tools_to_langchain(mcp, agent_name=self.name)
         if not lc_tools:
-            async for chunk in self._llm.stream_chat(api_messages):
+            async for chunk in self._llm.stream_chat(
+                api_messages,
+                enable_thinking=reasoning.enable_thinking,
+                reasoning_effort=reasoning.reasoning_effort,
+            ):
                 yield self._with_agent(chunk)
             return
+
+        yield self._with_agent(
+            workflow_step_chunk(
+                "plan",
+                status="running",
+                title="分析问题并规划工具调用",
+                agent_name=self.name,
+            ),
+        )
+        workflow_records.append(
+            workflow_step_record(
+                "plan",
+                status="running",
+                title="分析问题并规划工具调用",
+            ),
+        )
 
         tool_model = get_chat_model(
             self._settings,
             enable_thinking=False,
+            reasoning_effort=reasoning.reasoning_effort,
         )
-        final_model = get_chat_model(self._settings, enable_thinking=True)
+        final_model = get_chat_model(
+            self._settings,
+            enable_thinking=reasoning.enable_thinking,
+            reasoning_effort=reasoning.reasoning_effort,
+        )
         graph = build_react_graph(
             tool_model,
             lc_tools,
@@ -280,6 +357,7 @@ class GeneralAgent(BaseAgent):
             final_model=final_model,
             agent_name=self.name,
             max_tool_rounds=self._settings.mcp_max_tool_rounds,
+            workflow_records=workflow_records,
         ):
             if records:
                 tool_call_records.extend(records)
@@ -294,6 +372,9 @@ class GeneralAgent(BaseAgent):
         max_history_messages: int | None = None,
         enable_history_summary: bool | None = None,
         enable_tools: bool | None = None,
+        enable_thinking: bool | None = None,
+        reasoning_effort: str | None = None,
+        cot_mode: str = "standard",
     ) -> AsyncIterator[StreamChunk]:
         """
         Agent 主入口：处理用户消息并流式产出回复。
@@ -324,7 +405,43 @@ class GeneralAgent(BaseAgent):
         sid = self._sessions.get_or_create(session_id)
         set_session_id(sid)
         set_agent_name(self.name)
+        rag_token = set_rag_session_id(sid)
+        try:
+            async for chunk in self._run_impl(
+                sid,
+                message,
+                system_prompt_override=system_prompt_override,
+                max_history_messages=max_history_messages,
+                enable_history_summary=enable_history_summary,
+                enable_tools=enable_tools,
+                enable_thinking=enable_thinking,
+                reasoning_effort=reasoning_effort,
+                cot_mode=cot_mode,
+            ):
+                yield chunk
+        finally:
+            reset_rag_session_id(rag_token)
+
+    async def _run_impl(
+        self,
+        sid: str,
+        message: str,
+        *,
+        system_prompt_override: str | None = None,
+        max_history_messages: int | None = None,
+        enable_history_summary: bool | None = None,
+        enable_tools: bool | None = None,
+        enable_thinking: bool | None = None,
+        reasoning_effort: str | None = None,
+        cot_mode: str = "standard",
+    ) -> AsyncIterator[StreamChunk]:
+        reasoning = resolve_reasoning_options(
+            self._settings,
+            enable_thinking=enable_thinking,
+            reasoning_effort=reasoning_effort,  # type: ignore[arg-type]
+        )
         system_prompt = system_prompt_override or self.system_prompt
+        system_prompt = apply_cot_prompt(system_prompt, cot_mode, self.name)  # type: ignore[arg-type]
 
         if (
             self._settings.enable_rag
@@ -376,20 +493,28 @@ class GeneralAgent(BaseAgent):
         full_content = ""
         full_reasoning = ""
         persisted_tool_calls: list[PersistedToolCall] = []
+        workflow_records: list[dict] = []
 
         if effective_tools and mcp is not None:
             use_langgraph = self._settings.orchestration_backend == "langgraph"
-            tool_loop = (
-                self._run_langgraph_tool_loop
-                if use_langgraph
-                else self._run_tool_loop
-            )
-            tool_loop_args = (
-                (api_messages, mcp, persisted_tool_calls)
-                if use_langgraph
-                else (api_messages, tools, mcp, persisted_tool_calls)
-            )
-            async for chunk in tool_loop(*tool_loop_args):
+            if use_langgraph:
+                tool_iter = self._run_langgraph_tool_loop(
+                    api_messages,
+                    mcp,
+                    persisted_tool_calls,
+                    reasoning=reasoning,
+                    workflow_records=workflow_records,
+                )
+            else:
+                tool_iter = self._run_tool_loop(
+                    api_messages,
+                    tools,
+                    mcp,
+                    persisted_tool_calls,
+                    reasoning=reasoning,
+                    workflow_records=workflow_records,
+                )
+            async for chunk in tool_iter:
                 if chunk.type == "content":
                     full_content += chunk.content
                     yield chunk
@@ -397,6 +522,8 @@ class GeneralAgent(BaseAgent):
                     full_reasoning += chunk.content
                     yield chunk
                 elif chunk.type == "done":
+                    for cot_chunk in cot_step_chunks(full_content, agent_name=self.name):
+                        yield self._with_agent(cot_chunk)
                     self._sessions.append_message(sid, ChatMessage(role="user", content=message))
                     self._sessions.append_message(
                         sid,
@@ -405,6 +532,7 @@ class GeneralAgent(BaseAgent):
                             content=full_content,
                             reasoning_content=full_reasoning or None,
                             tool_calls=persisted_tool_calls or None,
+                            workflow_steps=workflow_records or None,
                         ),
                     )
                     usage = chunk.usage or {}
@@ -421,7 +549,11 @@ class GeneralAgent(BaseAgent):
                     yield chunk
             return
 
-        async for chunk in self._llm.stream_chat(api_messages):
+        async for chunk in self._llm.stream_chat(
+            api_messages,
+            enable_thinking=reasoning.enable_thinking,
+            reasoning_effort=reasoning.reasoning_effort,
+        ):
             if chunk.type == "reasoning":
                 full_reasoning += chunk.content
                 yield self._with_agent(chunk)
@@ -432,6 +564,8 @@ class GeneralAgent(BaseAgent):
                 yield self._with_agent(chunk)
                 return
             elif chunk.type == "done":
+                for cot_chunk in cot_step_chunks(full_content, agent_name=self.name):
+                    yield self._with_agent(cot_chunk)
                 self._sessions.append_message(sid, ChatMessage(role="user", content=message))
                 self._sessions.append_message(
                     sid,
@@ -439,6 +573,7 @@ class GeneralAgent(BaseAgent):
                         role="assistant",
                         content=full_content,
                         reasoning_content=full_reasoning or None,
+                        workflow_steps=workflow_records or None,
                     ),
                 )
                 usage = chunk.usage or {}
@@ -455,10 +590,13 @@ class GeneralAgent(BaseAgent):
         max_history_messages: int | None = None,
         enable_history_summary: bool | None = None,
         enable_tools: bool | None = None,
+        enable_thinking: bool | None = None,
+        reasoning_effort: str | None = None,
+        cot_mode: str = "standard",
     ) -> tuple[str, str, str, dict | None]:
         sid = self._sessions.get_or_create(session_id)
         content = ""
-        reasoning = ""
+        reasoning_text = ""
         usage: dict | None = None
 
         async for chunk in self.run(
@@ -468,15 +606,18 @@ class GeneralAgent(BaseAgent):
             max_history_messages=max_history_messages,
             enable_history_summary=enable_history_summary,
             enable_tools=enable_tools,
+            enable_thinking=enable_thinking,
+            reasoning_effort=reasoning_effort,
+            cot_mode=cot_mode,
         ):
             if chunk.type == "reasoning":
-                reasoning += chunk.content
+                reasoning_text += chunk.content
             elif chunk.type == "content":
                 content += chunk.content
             elif chunk.type == "done":
                 usage = chunk.usage
 
-        return sid, content, reasoning or "", usage
+        return sid, content, reasoning_text or "", usage
 
 
 _general_agent: GeneralAgent | None = None

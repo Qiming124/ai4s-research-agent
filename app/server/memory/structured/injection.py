@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from server.config import Settings, get_settings
 from server.memory.structured.store import StructuredMemoryStore
+from server.memory.theory_workspace import format_workspace_context
 
 
 def format_structured_context(entries: list[dict]) -> str:
@@ -38,12 +39,23 @@ def build_structured_augmented_prompt(
 ) -> str:
     """检索 L4 记忆并注入 system prompt。"""
     cfg = settings or get_settings()
-    if not session_id:
-        return base_prompt
-
     allowed = cfg.structured_memory_agent_names()
     if allowed and agent_name not in allowed:
         return base_prompt
+
+    parts = [base_prompt]
+    if agent_name in ("theory", "review"):
+        workspace_ctx = format_workspace_context(cfg)
+        if workspace_ctx:
+            parts.append(workspace_ctx)
+    if agent_name == "review":
+        from server.memory.theory_workspace import load_review_checklist
+        checklist = load_review_checklist(cfg)
+        if checklist:
+            parts.append("### 审稿清单\n" + checklist)
+
+    if not session_id:
+        return "\n\n".join(parts) if len(parts) > 1 else base_prompt
 
     store = StructuredMemoryStore(cfg.session_db_path)
     entries: list[dict] = []
@@ -55,6 +67,8 @@ def build_structured_augmented_prompt(
     entries = entries[:limit]
 
     context = format_structured_context(entries)
-    if not context:
+    if context:
+        parts.append(context)
+    if len(parts) == 1:
         return base_prompt
-    return f"{base_prompt}\n\n{context}"
+    return "\n\n".join(parts)

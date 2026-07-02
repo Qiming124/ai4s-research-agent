@@ -7,24 +7,38 @@ import { waitForBackend } from "../utils/backend";
 import {
   getChatMode,
   getAgentChoice,
+  getCotMode,
   getEnableHistorySummary,
   getEnableMcp,
+  getEnableThinking,
   getMaxHistoryMessages,
+  getReasoningEffort,
   getShowReasoning,
   getUseServerHistoryDefault,
   getUseServerMcpDefault,
+  getUseServerReasoningDefault,
   setChatMode,
   setAgentChoice,
+  setCotMode,
   setEnableHistorySummary,
   setEnableMcp,
+  setEnableThinking,
   setMaxHistoryMessages,
+  setReasoningEffort,
   setShowReasoning,
   setUseServerHistoryDefault,
   setUseServerMcpDefault,
+  setUseServerReasoningDefault,
   type ChatMode,
   type AgentChoice,
+  type CotMode,
+  type ReasoningEffort,
 } from "../utils/preferences";
 import { useRagRefs } from "../hooks/useRagRefs";
+import { useExperimentLogs } from "../hooks/useExperimentLogs";
+import { useMemoryGraph } from "../hooks/useMemoryGraph";
+import { useStructuredMemory } from "../hooks/useStructuredMemory";
+import { useWorkspaceFiles } from "../hooks/useWorkspaceFiles";
 import {
   createNewSession,
   fetchServerSessions,
@@ -45,6 +59,11 @@ export function ChatPage() {
   const [chatMode, setChatModeState] = useState<ChatMode>(getChatMode);
   const [agentChoice, setAgentChoiceState] = useState<AgentChoice>(getAgentChoice);
   const [showReasoning, setShowReasoningState] = useState(getShowReasoning);
+  const [useServerReasoning, setUseServerReasoningState] = useState(getUseServerReasoningDefault);
+  const [enableThinking, setEnableThinkingState] = useState(getEnableThinking);
+  const [reasoningEffort, setReasoningEffortState] = useState<ReasoningEffort>(getReasoningEffort);
+  const [cotMode, setCotModeState] = useState<CotMode>(getCotMode);
+  const [serverReasoningEffort, setServerReasoningEffort] = useState<ReasoningEffort>("max");
   const [useServerHistory, setUseServerHistoryState] = useState(getUseServerHistoryDefault);
   const [maxHistoryMessages, setMaxHistoryMessagesState] = useState(getMaxHistoryMessages);
   const [enableHistorySummary, setEnableHistorySummaryState] = useState(getEnableHistorySummary);
@@ -64,6 +83,12 @@ export function ChatPage() {
   };
 
   const agentPref = { agent: agentChoice };
+
+  const reasoningPref = {
+    useServerDefault: useServerReasoning,
+    enableThinking,
+    reasoningEffort,
+  };
 
   const {
     status: mcpStatus,
@@ -87,7 +112,7 @@ export function ChatPage() {
     reloadHistory,
     switchSession,
     createSession,
-  } = useChatStream(chatMode, historyPref, mcpPref, agentPref);
+  } = useChatStream(chatMode, historyPref, mcpPref, agentPref, reasoningPref, cotMode);
 
   const sessionIdRef = useRef(sessionId);
 
@@ -112,7 +137,36 @@ export function ChatPage() {
     uploadDocument,
     deleteDocument,
     clearAllDocuments,
-  } = useDocuments(!backendOffline);
+  } = useDocuments(sessionId, !backendOffline);
+
+  const {
+    entries: structuredEntries,
+    loading: structuredLoading,
+    error: structuredError,
+    refresh: refreshStructured,
+  } = useStructuredMemory(sessionId, !backendOffline);
+
+  const {
+    nodes: graphNodes,
+    edges: graphEdges,
+    loading: graphLoading,
+    error: graphError,
+    refresh: refreshGraph,
+  } = useMemoryGraph(sessionId, !backendOffline);
+
+  const {
+    runs: experimentRuns,
+    loading: experimentLoading,
+    error: experimentError,
+    refresh: refreshExperiments,
+  } = useExperimentLogs(!backendOffline);
+
+  const {
+    files: workspaceFiles,
+    loading: workspaceLoading,
+    error: workspaceError,
+    refresh: refreshWorkspace,
+  } = useWorkspaceFiles(!backendOffline);
 
   const [input, setInput] = useState("");
   const [helpOpen, setHelpOpen] = useState(false);
@@ -147,6 +201,20 @@ export function ChatPage() {
   useEffect(() => {
     refreshMcp();
     refreshDocuments();
+    waitForBackend(3, 500).then(async (ok) => {
+      if (!ok) return;
+      try {
+        const res = await fetch("/health");
+        if (res.ok) {
+          const data = (await res.json()) as { reasoning_effort?: string };
+          if (data.reasoning_effort === "high" || data.reasoning_effort === "max") {
+            setServerReasoningEffort(data.reasoning_effort);
+          }
+        }
+      } catch {
+        /* ignore */
+      }
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -185,6 +253,26 @@ export function ChatPage() {
   const handleShowReasoningChange = (checked: boolean) => {
     setShowReasoningState(checked);
     setShowReasoning(checked);
+  };
+
+  const handleUseServerReasoningChange = (checked: boolean) => {
+    setUseServerReasoningState(checked);
+    setUseServerReasoningDefault(checked);
+  };
+
+  const handleEnableThinkingChange = (checked: boolean) => {
+    setEnableThinkingState(checked);
+    setEnableThinking(checked);
+  };
+
+  const handleReasoningEffortChange = (value: ReasoningEffort) => {
+    setReasoningEffortState(value);
+    setReasoningEffort(value);
+  };
+
+  const handleCotModeChange = (value: CotMode) => {
+    setCotModeState(value);
+    setCotMode(value);
   };
 
   const handleUseServerHistoryChange = (checked: boolean) => {
@@ -364,6 +452,15 @@ export function ChatPage() {
             onAgentChoiceChange={handleAgentChoiceChange}
             showReasoning={showReasoning}
             onShowReasoningChange={handleShowReasoningChange}
+            useServerReasoning={useServerReasoning}
+            onUseServerReasoningChange={handleUseServerReasoningChange}
+            enableThinking={enableThinking}
+            onEnableThinkingChange={handleEnableThinkingChange}
+            reasoningEffort={reasoningEffort}
+            onReasoningEffortChange={handleReasoningEffortChange}
+            serverReasoningEffort={serverReasoningEffort}
+            cotMode={cotMode}
+            onCotModeChange={handleCotModeChange}
             useServerHistory={useServerHistory}
             onUseServerHistoryChange={handleUseServerHistoryChange}
             maxHistoryMessages={maxHistoryMessages}
@@ -390,6 +487,23 @@ export function ChatPage() {
             ragRefsLoading={ragRefsLoading}
             ragRefsError={ragRefsError}
             onRefreshRagRefs={refreshRagRefs}
+            structuredEntries={structuredEntries}
+            structuredLoading={structuredLoading}
+            structuredError={structuredError}
+            onRefreshStructured={refreshStructured}
+            graphNodes={graphNodes}
+            graphEdges={graphEdges}
+            graphLoading={graphLoading}
+            graphError={graphError}
+            onRefreshGraph={refreshGraph}
+            experimentRuns={experimentRuns}
+            experimentLoading={experimentLoading}
+            experimentError={experimentError}
+            onRefreshExperiments={refreshExperiments}
+            workspaceFiles={workspaceFiles}
+            workspaceLoading={workspaceLoading}
+            workspaceError={workspaceError}
+            onRefreshWorkspace={refreshWorkspace}
           />
         </ErrorBoundary>
       </div>

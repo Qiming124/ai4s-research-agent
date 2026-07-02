@@ -1,0 +1,20 @@
+[
+  {
+    "id": "quadratic_minimum",
+    "expression": "x0**2 + x1**2",
+    "point": "0,0",
+    "expected_classification": "local_minimum"
+  },
+  {
+    "id": "saddle_point",
+    "expression": "x0**2 - x1**2",
+    "point": "0,0",
+    "expected_classification": "saddle"
+  },
+  {
+    "id": "linear_no_critical",
+    "expression": "x0 + x1",
+    "point": "0,0",
+    "expected_classification": "degenerate_or_unknown"
+  }
+]

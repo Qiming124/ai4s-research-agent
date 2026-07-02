@@ -29,8 +29,14 @@ def test_mode_math_routes_to_theory():
 def test_theory_default_whitelist_includes_sympy_rag_and_web_search():
     patterns = get_agent_default_whitelist("theory")
     assert "sympy__*" in patterns
+    assert "numerical__*" in patterns
     assert "rag__*" in patterns
     assert "web_search__*" in patterns
+
+
+def test_experiment_default_whitelist_includes_numerical():
+    patterns = get_agent_default_whitelist("experiment")
+    assert "numerical__*" in patterns
 
 
 def test_theory_whitelist_from_json(tmp_path):
@@ -99,6 +105,42 @@ def test_extract_loss_expression():
     text = "损失函数为 $$L = \\theta**2 + 1$$"
     expr = extract_loss_expression(text)
     assert expr is not None
+
+
+@pytest.mark.asyncio
+async def test_stream_theory_verification_emits_workflow_steps():
+    from server.graph.theory_pipeline import stream_theory_verification
+    from shared.schemas import PersistedToolCall
+
+    class _FakeMcp:
+        is_connected = True
+
+        async def call_tool(self, name: str, arguments: dict) -> str:
+            return json.dumps({"derivative": "2*theta"})
+
+    records = [
+        PersistedToolCall(
+            id="1",
+            name="sympy__differentiate",
+            arguments="{}",
+            status="success",
+        )
+    ]
+    workflow_records: list[dict] = []
+    chunks = []
+    async for chunk in stream_theory_verification(
+        _FakeMcp(),  # type: ignore[arg-type]
+        "content",
+        records,
+        agent_name="theory",
+        workflow_records=workflow_records,
+    ):
+        chunks.append(chunk)
+
+    types = [c.type for c in chunks]
+    assert "workflow_step" in types
+    assert "verification_result" in types
+    assert any(w.get("step_kind") == "verify" for w in workflow_records)
 
 
 @pytest.mark.asyncio
