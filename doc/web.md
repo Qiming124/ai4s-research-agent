@@ -53,11 +53,32 @@ Docker 镜像在 build 阶段自动执行 `npm run build`（工作目录 `app/we
 ## 功能
 
 - 左侧会话列表（新建/切换/删除）
-- 中间对话区（流式、停止、思考过程开关）
-- 右侧设置（Chat/Math、L1、MCP、RAG 文档）
-- 顶栏连接状态与 Token 统计
+- 中间对话区（流式、停止、思考过程开关、工作流时间线、Loss Landscape 内嵌图）
+- 右侧设置与科研工作台（定理库、知识图谱、实验日志、理论工作区、RAG 文档）
+- 顶栏连接状态、Token 统计、当前 Agent 指示、**帮助**面板（v0.4 全量说明）
+- 多 Agent 路由（general / theory / experiment / literature / review）
+- SSE 新事件：`pipeline_stage`、`numerical_verification_result`、`memory_warning`
 
-## 数学公式
+## 科研工作台面板（v0.4）
+
+| 组件 | 路径 | 说明 |
+|------|------|------|
+| `TheoremLibraryPanel` | `components/TheoremLibraryPanel.tsx` | L4 结构化记忆（引理/定理/假设） |
+| `KnowledgeGraphPanel` | `components/KnowledgeGraphPanel.tsx` | L4 节点与 `depends_on` / `cites` 边 |
+| `ExperimentLogPanel` | `components/ExperimentLogPanel.tsx` | `data/experiments/logs/` JSON 运行记录 |
+| `WorkspacePanel` | `components/WorkspacePanel.tsx` | `data/theory/` 种子文件浏览 |
+| `LossLandscapeViz` | `components/LossLandscapeViz.tsx` | 2D loss 等高线 / SGD 轨迹摘要 |
+
+对应 Hooks：`useStructuredMemory`、`useMemoryGraph`、`useExperimentLogs`、`useWorkspaceFiles`。
+
+## 主要目录（补充）
+
+| 路径 | 说明 |
+|------|------|
+| `app/web/src/components/HelpPanel.tsx` | 顶栏「帮助」弹层（Agent、记忆、验证、工作台） |
+| `app/web/src/components/WorkflowTimeline.tsx` | 规划 → 工具 → SymPy/数值验证 → 综合 |
+| `app/web/src/components/MessageBubble.tsx` | 消息气泡 + Loss Landscape 嵌入 |
+| `app/web/src/hooks/useChatStream.ts` | SSE 流式与 `pipeline_stage` 等事件 |
 
 依赖 `remark-math`（须在 `remark-gfm` **之前**）+ `rehype-katex`，KaTeX CSS 在 `index.html` CDN 引入。
 
@@ -76,3 +97,5 @@ Docker 镜像在 build 阶段自动执行 `npm run build`（工作目录 `app/we
 **Math 模式**（Web 侧栏或 `mode=math`）会引导模型输出更规范的 LaTeX。若仍显示琥珀色原文，说明 LaTeX 不完整，可要求模型用完整 `$$...$$` 重写。
 
 详见根目录 `README.md`「Web 数学公式」与 Web 内「帮助 → 公式显示」。
+
+## 数学公式

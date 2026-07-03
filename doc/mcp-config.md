@@ -22,8 +22,9 @@ Web 端可在 **设置 → MCP 工具** 查看 Server 连接状态与工具列�
 ```env
 ENABLE_MCP=true
 MCP_CONFIG_PATH=./conf/mcp_servers.json
-MCP_ALLOWED_DIRS=./data/mcp_files
+MCP_ALLOWED_DIRS=./data/mcp_files:./data/theory:./data/experiments
 MCP_MAX_TOOL_ROUNDS=5
+ENABLE_NUMERICAL_MCP=true
 ```
 
 2. 确认 [`mcp_servers.json`](../conf/mcp_servers.json) 中需要的 Server 为 `"enabled": true`
@@ -47,8 +48,11 @@ MCP Client 已连接 3 个 Server，共 6 个工具
 |------|--------|------|
 | `ENABLE_MCP` | `false` | 是否启用 MCP 工具层 |
 | `MCP_CONFIG_PATH` | `./conf/mcp_servers.json` | MCP Server 配置文件路径 |
-| `MCP_ALLOWED_DIRS` | `./data/mcp_files` | filesystem MCP 允许访问的目录，多个路径用 `:` 分隔 |
+| `MCP_ALLOWED_DIRS` | `./data/mcp_files:./data/theory:./data/experiments` | filesystem MCP 允许访问的目录，多个路径用 `:` 分隔 |
 | `MCP_MAX_TOOL_ROUNDS` | `5` | 单轮对话中 LLM 工具调用循环的上限 |
+| `ENABLE_NUMERICAL_MCP` | `true` | 是否在配置中注册 `numerical` Server（见 `mcp_servers.json`） |
+
+各 Agent 默认工具白名单见 [`conf/mcp_tool_whitelist.json`](../conf/mcp_tool_whitelist.json)：`theory` 含 `sympy__*`、`numerical__*`、`rag__*`；`experiment` 含 `filesystem__*`、`numerical__*`；`review` 含 `filesystem__*`。
 
 `ChatRequest.enable_tools` 可在单次请求中覆盖全局开关（Web 侧边栏关闭「MCP：服务端默认」后生效）。
 
@@ -96,13 +100,14 @@ MCP Client 已连接 3 个 Server，共 6 个工具
 
 | Server | 模块 | 工具（注册名） | 说明 |
 |--------|------|----------------|------|
-| `web_search` | `server.mcp.servers.web_search` | `web_search__search` | DuckDuckGo 网页搜索，无需 API Key |
+| `web_search` | `server.mcp.servers.web_search` | `web_search__search` | DuckDuckGo / Tavily（有 Key 时）网页搜索 |
 | `arxiv` | `server.mcp.servers.arxiv` | `arxiv__search_papers`、`arxiv__get_paper` | arXiv 论文搜索与详情 |
 | `filesystem` | `server.mcp.servers.filesystem` | `filesystem__read_file`、`filesystem__write_file`、`filesystem__list_files` | 受限目录内文件读写 |
-| `sympy` | `server.mcp.servers.sympy` | `sympy__simplify_expression`、`sympy__differentiate`、`sympy__hessian_eigenvalues`、`sympy__taylor_expand` 等 | 符号计算 |
+| `sympy` | `server.mcp.servers.sympy` | `sympy__simplify_expression`、`sympy__differentiate`、`sympy__hessian_eigenvalues`、`sympy__taylor_expand`、`sympy__positive_definite_check`、`sympy__substitute_and_simplify`、`sympy__convexity_check` 等 | 符号计算与 Hessian 定性 |
 | `rag` | `server.mcp.servers.rag` | `rag__retrieve` | L3 向量库按需检索 |
+| `numerical` | `server.mcp.servers.numerical` | `numerical__numerical_gradient`、`numerical__hessian_spectrum`、`numerical__critical_point_classify`、`numerical__loss_landscape_2d`、`numerical__sgd_trajectory`、`numerical__random_hessian_sample` | NumPy 数值梯度、Hessian 谱、临界点分类、2D loss 曲面、SGD 轨迹 |
 
-实现代码位于 [`app/server/mcp/servers/`](../app/server/mcp/servers/)。
+实现代码位于 [`app/server/mcp/servers/`](../app/server/mcp/servers/)。`numerical` 依赖 NumPy；Theory 推导链在 SymPy 跳过时自动 fallback 到 `critical_point_classify`。
 
 ### 单独禁用某个 Server
 
@@ -223,7 +228,6 @@ python -m server.mcp.servers.filesystem  # stdio 模式，需 MCP 客户端配�
 
 ## 后续规划（未实现）
 
-- SymPy 符号计算 MCP
-- Tavily 等商业搜索 API
-- `rag_retrieve`（Phase 3 RAG）
+- Tavily 独立 MCP Server（当前 web_search 已内置 Tavily 回退）
 - MCP 配置热重载（无需重启）
+- per-user MCP 沙箱与配置隔离

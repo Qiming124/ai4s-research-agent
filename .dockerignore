@@ -12,7 +12,12 @@ __pycache__
 venv
 app/web/node_modules
 app/web/dist
-data
+data/chroma/
+data/*.db
+data/mcp_files/*
+!data/mcp_files/.gitkeep
+data/experiments/logs/*
+!data/experiments/logs/.gitkeep
 log
 .env
 conf/.env

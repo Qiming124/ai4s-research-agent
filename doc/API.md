@@ -32,7 +32,7 @@ curl -s http://127.0.0.1:8000/health
 | `max_history_messages` | int? | L1 历史条数，null 用服务端默认 |
 | `enable_history_summary` | bool? | 是否摘要旧历史 |
 | `enable_tools` | bool? | 是否启用 MCP，null 用 `ENABLE_MCP` |
-| `agent` | string? | `general` / `theory` / `experiment` / `literature` |
+| `agent` | string? | `general` / `theory` / `experiment` / `literature` / `review` |
 | `auto_route` | bool | 是否自动路由（默认 true） |
 | `enable_thinking` | bool? | 是否启用 DeepSeek thinking（null=默认开启，仅最终回答） |
 | `reasoning_effort` | `high` \| `max`? | 推理强度，null 用 `REASONING_EFFORT` |
@@ -58,6 +58,9 @@ SSE 流式对话，`Content-Type: text/event-stream`。
 | `workflow_step` | 工作流节点：`step_kind`（plan/tool/verify/synthesize）、`status`、`title` |
 | `cot_step` | 结构化思维链小节（JSON：`step`、`title`、`body`） |
 | `verification_result` | Theory SymPy 验证结果（JSON） |
+| `numerical_verification_result` | 数值验证 fallback 结果（JSON） |
+| `pipeline_stage` | 多跳研究流水线阶段名（如 `theory_derivation`） |
+| `memory_warning` | L4 矛盾检测告警文本 |
 | `done` | 结束，含 `usage` |
 | `error` | 错误信息 |
 
@@ -99,10 +102,61 @@ curl -N -X POST http://127.0.0.1:8000/v1/chat/stream \
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| POST | `/v1/documents` | 上传索引 `DocumentUploadRequest` |
-| GET | `/v1/documents` | 列出已索引文档 |
+| POST | `/v1/documents` | 上传文本/Markdown 索引 |
+| POST | `/v1/documents/upload` | multipart 上传 PDF 或文本文件 |
+| POST | `/v1/documents/from-arxiv` | 从 arXiv 下载 PDF 并入库（`?session_id=&arxiv_id=`） |
+| GET | `/v1/documents` | 列出已索引文档（`?session_id=`） |
 | DELETE | `/v1/documents/{doc_id}` | 删除文档及向量 |
 | GET | `/v1/sessions/{id}/rag-refs` | 会话检索引用记录 |
+
+---
+
+## L4 结构化记忆与知识图谱
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/v1/memory/structured` | 列出定理/引理（`?session_id=&kind=`） |
+| GET | `/v1/memory/structured/global` | 全局引理库（`session_id IS NULL`） |
+| GET | `/v1/memory/structured/graph` | 知识图谱节点 + 边 |
+| POST | `/v1/memory/structured` | 手动创建条目 |
+| POST | `/v1/memory/structured/{id}/edges` | 创建依赖边（`depends_on` 等） |
+
+---
+
+## 理论工作区
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/v1/theory/workspace` | 列出 `data/theory/` 文件 |
+| GET | `/v1/theory/workspace/{path}` | 读取工作区文件正文 |
+| GET | `/v1/theory/symbols` | 符号表 Markdown |
+| GET | `/v1/theory/assumptions` | 全局假设 Markdown |
+| GET | `/v1/theory/assumption-matrix` | 假设-定理对照矩阵 |
+
+---
+
+## 实验日志
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/v1/experiments/runs` | 列出 `data/experiments/logs/*.json` |
+| GET | `/v1/experiments/runs/{run_id}` | 单条实验运行详情 |
+
+---
+
+## 导出
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/v1/export/latex` | 从 L4 记忆生成 LaTeX（写入 `data/theory/proofs/export.tex`） |
+
+---
+
+## Agent 元数据
+
+### `GET /v1/agents`
+
+返回 `orchestration_backend` 与各 Agent 的 `description`、`rag_enabled`、`default_tool_patterns`。
 
 ---
 

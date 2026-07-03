@@ -14,10 +14,12 @@
 
 | Server | 工具 | 状态 | 主要用途 |
 |--------|------|------|----------|
-| `web_search` | `web_search__search` | ✅ 已启用 | DuckDuckGo / Wikipedia 检索 |
+| `web_search` | `web_search__search` | ✅ 已启用 | DuckDuckGo / Tavily 检索 |
 | `arxiv` | `arxiv__search_papers`、`arxiv__get_paper` | ✅ 已启用 | 论文搜索与元数据 |
 | `filesystem` | `read_file`、`write_file`、`list_files` | ✅ 已启用 | `MCP_ALLOWED_DIRS` 内文件读写 |
-| `sympy` | `simplify_expression`、`differentiate`、`solve_equation` 等 | ✅ 已配置 | 符号化简、求导、求解 |
+| `sympy` | `simplify_expression`、`differentiate`、`hessian_eigenvalues`、`taylor_expand`、`positive_definite_check`、`substitute_and_simplify`、`convexity_check` 等 | ✅ 已启用 | 符号化简、求导、Hessian 定性 |
+| `rag` | `rag__retrieve` | ✅ 已启用 | L3 Chroma 按需检索 |
+| `numerical` | `numerical_gradient`、`hessian_spectrum`、`critical_point_classify`、`loss_landscape_2d`、`sgd_trajectory`、`random_hessian_sample` | ✅ 已启用 | 数值验证与 loss landscape |
 
 配置说明见 [mcp-config.md](mcp-config.md)。
 
@@ -25,12 +27,13 @@
 
 | Agent | 职责 | 当前 MCP 白名单（`conf/mcp_tool_whitelist.json`） |
 |-------|------|-----------------------------------------------------|
-| `literature` | 文献检索 | `arxiv__*`、`web_search__*` |
-| `theory` | 数学推导 | `__none__`（待开放 sympy） |
-| `experiment` | 实验分析 | `filesystem__*` |
 | `general` | 通用对话 | `*` |
+| `theory` | 数学推导 | `sympy__*`、`numerical__*`、`rag__*`、`web_search__*` |
+| `experiment` | 数值实验 | `filesystem__*`、`numerical__*` |
+| `literature` | 文献检索 | `arxiv__*`、`web_search__*` |
+| `review` | 推导审稿 | `filesystem__*` |
 
-> **待办**：将 `theory` 白名单改为 `sympy__*`，使推导 Agent 能调用符号计算而不误用搜索工具。
+多跳研究流水线：`RESEARCH_PIPELINE_MODE=auto` → literature → theory → experiment → review。详见 [ARCHITECTURE.md](ARCHITECTURE.md)。
 
 ### 1.3 Cursor IDE 已启用 MCP
 
@@ -69,15 +72,21 @@
 
 ### P0 — 立即做（性价比最高）
 
-- [ ] **开放 theory Agent 的 SymPy 白名单**
+- [x] **开放 theory Agent 的 SymPy / numerical 白名单**（v0.4 已配置）
 
-  编辑 `conf/mcp_tool_whitelist.json`：
+- [x] **理论目录结构 `data/theory/`**（v0.4 种子文件已纳入版本库）
 
-  ```json
-  "theory": ["sympy__*"]
+  ```
+  data/theory/
+  ├── symbols.md
+  ├── assumptions.md
+  ├── lemmas/
+  ├── counterexamples/
+  ├── review-checklist.md
+  └── assumption_matrix.md
   ```
 
-  重启 uvicorn 后，用 `mode=math` 或路由到 theory 的请求验证工具调用。
+  `MCP_ALLOWED_DIRS` 已包含 `data/theory` 与 `data/experiments`。
 
 - [ ] **自建 Cursor Skill：`loss-landscape-workflow`**
 
@@ -98,50 +107,19 @@
   - 每定理附假设列表与维度说明
   - 引用格式：`[引理编号] + arXiv ID 或自证`
 
-- [ ] **理论目录结构**（便于 agent 与人类共用）
-
-  ```
-  data/theory/
-  ├── symbols.md          # 符号表
-  ├── assumptions.md      # 全局假设
-  ├── lemmas/             # 分引理 Markdown / TeX
-  ├── proofs/             # 完整证明稿
-  └── review-checklist.md # 人工审稿清单
-  ```
-
-  将 `data/theory/` 加入 `MCP_ALLOWED_DIRS`，供 filesystem MCP 读写。
-
 ---
 
 ### P1 — 近期安装（文献 + 验证闭环）
 
 #### 项目服务端 MCP（自研优先，见 mcp-config.md）
 
-- [ ] **SymPy 扩展工具**（在现有 `sympy.py` 上追加）
+- [x] **SymPy 扩展工具**（`hessian_eigenvalues`、`taylor_expand`、`substitute_and_simplify`、`positive_definite_check`、`convexity_check`）
 
-  | 建议工具名 | 功能 |
-  |------------|------|
-  | `hessian_eigenvalues` | 给定表达式与变量，返回 Hessian 及特征值符号判断 |
-  | `taylor_expand` | 临界点邻域泰勒展开 |
-  | `substitute_and_simplify` | 代入假设后化简（减少 LLM 手算错误） |
+- [x] **numerical MCP**（梯度、Hessian 谱、临界点分类、loss landscape、SGD 轨迹）
 
-- [ ] **Tavily 搜索**（可选，需 API Key）
+- [x] **RAG 文献库** — `POST /v1/documents/upload`、PDF 解析、`from-arxiv` 入库；`rag__retrieve` MCP
 
-  ```json
-  "tavily": {
-    "command": "npx",
-    "args": ["-y", "@anthropic/mcp-server-tavily"],
-    "env": { "TAVILY_API_KEY": "${TAVILY_API_KEY}" },
-    "enabled": false
-  }
-  ```
-
-  在 `.env` 配置 `TAVILY_API_KEY`；`literature` Agent 白名单增加 `tavily__*`。
-
-- [ ] **RAG 文献库**（项目已规划 Phase 3）
-
-  - 将精读 PDF / 笔记 ingest 到 Chroma（`POST /v1/documents`）
-  - `literature` / `theory` Agent 增加 `rag_retrieve` 工具（实现后）
+- [ ] **Tavily 独立 MCP Server**（可选；当前 `web_search` 已支持 Tavily Key 回退）
 
 #### Cursor IDE MCP（个人开发环境）
 
@@ -192,9 +170,7 @@
 
 #### Agent 编排
 
-- [ ] **LangGraph 子图细化**（`ORCHESTRATION_BACKEND=langgraph`）
-
-  theory → verify（sympy）→ review（checklist）闭环。
+- [x] **LangGraph 多跳流水线**（`RESEARCH_PIPELINE_MODE=auto`）+ Review Agent + SymPy/数值双验证
 
 - [ ] **Cursor SDK 脚本**（`sdk` skill）
 

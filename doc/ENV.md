@@ -49,7 +49,7 @@
 |------|--------|------|
 | `ENABLE_MCP` | `false` | **是否启用 MCP**；生产需 `true` |
 | `MCP_CONFIG_PATH` | `./conf/mcp_servers.json` | MCP Server 配置路径 |
-| `MCP_ALLOWED_DIRS` | `./data/mcp_files` | filesystem 工具可读目录（冒号分隔） |
+| `MCP_ALLOWED_DIRS` | `./data/mcp_files:./data/theory:./data/experiments` | filesystem MCP 可读目录（冒号分隔） |
 | `MCP_MAX_TOOL_ROUNDS` | `10` | 单轮对话最大工具循环次数 |
 | `MCP_TOOL_RESULT_MAX_CHARS` | `8000` | 工具结果写入上下文前最大字符 |
 | `MCP_TOOL_WHITELIST` | 空 | 全局工具 glob 白名单 |
@@ -62,9 +62,20 @@
 | `ORCHESTRATION_BACKEND` | `legacy` | `legacy`：仅 `GeneralAgent`；`langgraph` 或 `multi`：多 Agent Supervisor + SubAgent |
 | `ROUTER_USE_LLM` | `false` | `true` 时用 LLM 做意图路由，失败时回退关键词规则 |
 
-**说明**：多 Agent 代码已实现，但默认 `legacy` 不会走路由。要启用 general/theory/experiment/literature 分工，请设 `ORCHESTRATION_BACKEND=langgraph`（或 `multi`）。该开关同时决定 MCP 工具循环是否走 LangGraph ReAct 子图。
+**说明**：多 Agent 含 general / theory / experiment / literature / **review**。设 `ORCHESTRATION_BACKEND=langgraph` 启用 Supervisor 路由。`RESEARCH_PIPELINE_MODE=auto` 时复杂问题走多跳流水线。
 
 推荐演示配置：`ORCHESTRATION_BACKEND=langgraph`、`ENABLE_MCP=true`、`ENABLE_RAG=true`。
+
+## 理论工作区与研究流水线（v0.4）
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `THEORY_WORKSPACE_PATH` | `./data/theory` | 符号表、假设、引理种子目录 |
+| `EXPERIMENTS_PATH` | `./data/experiments` | 实验配置与日志目录 |
+| `RESEARCH_PIPELINE_MODE` | `single` | `auto` 启用 literature→theory→experiment→review 多跳 |
+| `ENABLE_NUMERICAL_MCP` | `true` | 是否注册 numerical MCP Server |
+| `GLOBAL_MEMORY_SYNC` | `true` | 启动时同步 `data/theory/lemmas/` → L4 全局记忆 |
+| `PDF_INGEST_ENABLED` | `true` | 是否启用 PDF 上传解析 |
 
 ## RAG（L3）
 
@@ -78,19 +89,26 @@
 | `RAG_CHUNK_SIZE` | `800` | 分块大小 |
 | `RAG_CHUNK_OVERLAP` | `100` | 分块重叠 |
 | `RAG_RETRIEVAL_TOP_K` | `4` | 检索返回条数 |
-| `RAG_AGENTS` | `literature,theory,general` | 启用 RAG 的 Agent；含 `general` 时 legacy 模式也会注入 |
+| `RAG_AGENTS` | `literature,theory,experiment,general` | 启用 RAG 的 Agent |
 | `RAG_INDEX_MCP_FILES` | `false` | 启动时索引 MCP 目录下 md/txt |
-| `STRUCTURED_MEMORY_AGENTS` | `theory` | 启用 L4 结构化记忆注入的 Agent |
+
+## L4 结构化记忆
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `STRUCTURED_MEMORY_AGENTS` | `theory,experiment,review` | 注入 L4 记忆的 Agent 列表 |
 | `ROUTER_USE_LLM` | `false` | LLM 意图路由（失败回退规则） |
-| `TAVILY_API_KEY` | 空 | Tavily 搜索 Key；设置后 web_search MCP 优先 Tavily |
+| `TAVILY_API_KEY` | 空 | Tavily 搜索 Key；web_search MCP 优先使用 |
 
 ## Docker 容器内推荐路径
 
-Compose 会自动覆盖为容器路径：
+Compose 会自动覆盖为容器路径（`/repo/...`）：
 
-- `SESSION_DB_PATH=/app/data/sessions.db`
-- `MCP_ALLOWED_DIRS=/app/data/mcp_files`
-- `RAG_CHROMA_PATH=/app/data/chroma`
-- `MCP_CONFIG_PATH=/app/mcp_servers.json`
+- `SESSION_DB_PATH=/repo/data/sessions.db`
+- `MCP_ALLOWED_DIRS=/repo/data/mcp_files:/repo/data/theory:/repo/data/experiments`
+- `THEORY_WORKSPACE_PATH=/repo/data/theory`
+- `EXPERIMENTS_PATH=/repo/data/experiments`
+- `RAG_CHROMA_PATH=/repo/data/chroma`
+- `MCP_CONFIG_PATH=/repo/conf/mcp_servers.json`
 
 镜像内不包含 `.env`，必须通过 `env_file` 或 `-e` / `--env-file` 注入。

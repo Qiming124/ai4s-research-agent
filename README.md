@@ -4,20 +4,22 @@
 
 **文档索引**：[`doc/README.md`](doc/README.md)（架构、API、环境变量、部署）
 
-**当前能力概览**：
+**当前能力概览（v0.4）**：
 
 | 模块 | 说明 |
 |------|------|
 | 对话 | DeepSeek V4 Pro 流式 reasoning + content（SSE） |
-| L2 会话 | SQLite 持久化，含 reasoning、tool_calls |
+| L2 会话 | SQLite 持久化，含 reasoning、tool_calls、workflow_steps |
 | L1 工作记忆 | 历史截断与可选 LLM 摘要 |
-| MCP | web_search / arxiv / filesystem / **sympy / rag**（stdio） |
-| 多 Agent | `ORCHESTRATION_BACKEND=langgraph` 时 Supervisor 路由（**推荐**） |
-| RAG | Chroma 向量库 + `/v1/documents` + **rag MCP 按需检索** |
-| L4 记忆 | 定理/引理结构化存储 + **theory 自动注入/持久化** |
-| Theory 闭环 | 分阶段 CoT → SymPy 验证 → `verification_result` SSE |
-| Web | 三栏 UI、KaTeX 公式、会话列表 |
-| Docker | 单镜像含前端构建产物与 API |
+| MCP | web_search / arxiv / filesystem / sympy / rag / **numerical**（stdio） |
+| 多 Agent | general / theory / experiment / literature / **review**（LangGraph 路由） |
+| 研究流水线 | `RESEARCH_PIPELINE_MODE=auto` 或 `/research` → 文献→理论→实验→审稿 |
+| RAG | Chroma + 文本/PDF 上传 + arXiv 入库 + rag MCP |
+| L4 记忆 | 定理/引理知识图谱 + 自动抽取 + 矛盾检测 |
+| Theory 闭环 | SymPy 验证 → 数值 fallback → `verification_result` / `numerical_verification_result` |
+| 理论工作区 | `data/theory/` 符号表、假设、引理、反例（注入 theory/review） |
+| Web 工作台 | 定理库、知识图谱、实验日志、工作区浏览器、Loss Landscape 可视化 |
+| Docker | 单镜像含前端 + API + 理论种子文件 |
 
 ---
 
@@ -73,7 +75,7 @@ agent/
 ├── conf/                  # .env 模板、mcp_servers.json 等
 ├── doc/                   # 技术文档
 ├── log/                   # 运行时日志 app.log
-├── data/                  # sessions.db、chroma、mcp_files
+├── data/                  # sessions.db、chroma、theory/、experiments/、mcp_files
 └── docker/                # Dockerfile / compose
 ```
 
@@ -191,8 +193,24 @@ cp conf/.env.example conf/.env
 | `ENABLE_MCP` | `false` | **启用 MCP 工具** |
 | `ORCHESTRATION_BACKEND` | `legacy` | `legacy` 单 Agent；`langgraph` 或 `multi` 多 Agent 编排 |
 | `ENABLE_RAG` | `false` | 启用 RAG 向量检索 |
+| `RESEARCH_PIPELINE_MODE` | `single` | `auto` 启用 literature→theory→experiment→review 多跳 |
+| `THEORY_WORKSPACE_PATH` | `./data/theory` | 理论工作区种子目录 |
+| `STRUCTURED_MEMORY_AGENTS` | `theory,experiment,review` | 注入 L4 记忆的 Agent |
 
-MCP、RAG 其余变量见 `conf/.env.example` 与 [`doc/mcp-config.md`](doc/mcp-config.md)。
+MCP、RAG、理论工作区其余变量见 `conf/.env.example` 与 [`doc/ENV.md`](doc/ENV.md)、[`doc/mcp-config.md`](doc/mcp-config.md)。
+
+## v0.4 能力补充（在 Phase 2A 之上）
+
+| 能力 | 说明 |
+|------|------|
+| numerical MCP | 梯度、Hessian 谱、临界点分类、loss landscape、SGD 轨迹 |
+| SymPy 扩展 | `positive_definite_check`、`substitute_and_simplify`、`convexity_check` |
+| L4 知识图谱 | `memory_edges`、矛盾检测 `memory_warning` |
+| Review Agent | 对照 `review-checklist.md` 审稿 |
+| 研究流水线 | `RESEARCH_PIPELINE_MODE=auto` 或 `/research` 前缀 |
+| PDF / arXiv 入库 | `POST /v1/documents/upload`、`from-arxiv` |
+| Web 科研工作台 | 定理库、知识图谱、实验日志、工作区浏览器 |
+| LaTeX 导出 | `POST /v1/export/latex` |
 
 ## Phase 2A 能力清单
 
@@ -267,7 +285,7 @@ cd ../../ && uvicorn server.main:app --host 0.0.0.0 --port 8000 --app-dir app
 # → http://127.0.0.1:8000/
 ```
 
-**Web 功能（Phase 2A）**：
+**Web 功能（v0.4）**：
 
 | 功能 | 说明 |
 |------|------|
@@ -276,8 +294,13 @@ cd ../../ && uvicorn server.main:app --host 0.0.0.0 --port 8000 --app-dir app
 | 思考过程开关 | 顶栏勾选控制是否显示 ReasoningPanel，偏好存 localStorage |
 | 推理强度 / 深度思考 | 设置面板可覆盖 `enable_thinking`、`reasoning_effort`（默认读服务端） |
 | 思维链模式 | `cot_mode`：标准三节或严格 Markdown；Math 模式默认 strict |
-| 工作流时间线 | 规划 → 工具 → 验证 → 综合回答，Theory 含 SymPy 验证节点 |
-| Chat / Math 模式 | 切换对话模式，请求携带 `mode` 字段（math 使用数学推导 prompt） |
+| 工作流时间线 | 规划 → 工具 → SymPy 验证 → 数值验证 → 综合回答 |
+| 多 Agent | general / theory / experiment / literature / review；顶栏显示当前 Agent |
+| 研究流水线 | `RESEARCH_PIPELINE_MODE=auto` 或消息前缀 `/research` |
+| 科研工作台 | 定理库、知识图谱、实验日志、理论工作区、RAG 文档 |
+| Loss Landscape | 数值工具返回 `viz_type` 时在消息内嵌 2D 图 |
+| 帮助面板 | 顶栏「帮助」— Agent、记忆层级、验证链、CLI/API 速查 |
+| Chat / Math 模式 | 切换对话模式，请求携带 `mode` 字段（math 路由 theory） |
 | 清空会话 | 调用 `DELETE /v1/sessions/{id}` 并清空 UI |
 
 ### Web 数学公式（KaTeX）
@@ -390,7 +413,7 @@ curl -N -X POST http://127.0.0.1:8000/v1/chat/stream \
 
 请求体可选字段：`session_id`、`system_prompt`、`mode`（`chat` 或 `math`）、`enable_thinking`、`reasoning_effort`（`high`/`max`）、`cot_mode`（`off`/`standard`/`strict`）。
 
-SSE 事件 type：`meta` → `workflow_step`（规划/验证/综合）→ `tool_call_*` → `reasoning` → `cot_step` → `content` → `verification_result`（Theory）→ `done`
+SSE 事件 type：`meta` → `pipeline_stage`（多跳流水线）→ `workflow_step`（规划/验证/综合）→ `tool_call_*` → `reasoning` → `cot_step` → `content` → `verification_result` / `numerical_verification_result`（Theory）→ `memory_warning` → `done`
 
 ### GET /v1/sessions/{id} | DELETE /v1/sessions/{id}
 
@@ -402,11 +425,14 @@ SSE 事件 type：`meta` → `workflow_step`（规划/验证/综合）→ `tool_
 
 ```bash
 python -m client.cli --server http://127.0.0.1:8000
-python -m client.cli --session my-work        # 固定会话 ID
-python -m client.cli --no-show-reasoning      # 隐藏推理过程
+python -m client.cli --mode math --agent theory    # 数学推导 + Theory Agent
+python -m client.cli --agent review                # 审稿清单检查
+python -m client.cli --agent experiment            # 数值实验
+python -m client.cli --session my-work             # 固定会话 ID
+python -m client.cli --no-show-reasoning           # 隐藏推理过程
 ```
 
-交互命令：`/clear`（清空会话）| `/history`（查看历史）| `exit` / `quit`（退出）| 行末 `\` 回车（多行输入）
+交互命令：`/clear`（清空会话）| `/history`（查看历史）| `exit` / `quit`（退出）| 行末 `\` 回车（多行输入）。消息前缀 `/research` 可在 `RESEARCH_PIPELINE_MODE=auto` 时触发多跳流水线。
 
 ---
 
@@ -428,21 +454,15 @@ python -m client.cli --no-show-reasoning      # 隐藏推理过程
 
 ---
 
-## Phase 2 扩展指引
+## 扩展指引
 
-1. 在 `app/server/agents/` 继承 `BaseAgent` 新建 Agent（TheoryAgent / ExperimentAgent / LiteratureAgent）
-2. 定义专用 `system_prompt`
-3. 实现 `async def run(...)` 方法
-4. 通过 LangGraph router 按用户意图分发
+v0.4 已实现多 Agent（`app/server/agents/`）、LangGraph 编排（`app/server/graph/`）、MCP Server（`app/server/mcp/servers/`）与 L4 记忆。扩展时：
 
-```python
-class TheoryAgent(BaseAgent):
-    name = "theory"
-    system_prompt = "..."
+1. 新建 Agent 继承 `BaseAgent`，在 `AGENT_NAMES` 与 `mcp_tool_whitelist.json` 注册
+2. 可选：在 `research_pipeline.py` 增加流水线阶段
+3. 自研 MCP：在 `mcp/servers/` 添加模块并在 `mcp_servers.json` 启用
 
-    async def run(self, message, session_id, *, system_prompt_override=None):
-        ...
-```
+详见 [`doc/ARCHITECTURE.md`](doc/ARCHITECTURE.md) 与 [`doc/mcp-config.md`](doc/mcp-config.md)。
 
 ---
 

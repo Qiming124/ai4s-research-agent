@@ -44,8 +44,9 @@ RUN python -c "from chromadb.utils.embedding_functions import DefaultEmbeddingFu
 
 COPY --from=web-build /web/dist ./app/web/dist
 
-RUN mkdir -p /repo/data/mcp_files /repo/data/chroma /repo/data/theory /repo/data/experiments/log /repo/log
+RUN mkdir -p /repo/data/mcp_files /repo/data/chroma /repo/data/theory /repo/data/experiments/logs /repo/data/experiments/notebooks /repo/log
 COPY data/theory/ ./data/theory/
+COPY data/experiments/configs/ ./data/experiments/configs/
 
 EXPOSE 8000
 

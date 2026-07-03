@@ -41,7 +41,7 @@ Apply & Restart 后执行 `docker info` 确认 mirrors 已生效，再重新 `bu
 cp conf/.env.example conf/.env
 # 编辑 conf/.env 并设置 DEEPSEEK_API_KEY
 
-mkdir -p data/mcp_files data/chroma log
+mkdir -p data/mcp_files data/chroma data/theory data/experiments/configs log
 
 docker compose -f docker/docker-compose.yml up --build
 ```
@@ -61,10 +61,15 @@ docker compose -f docker/docker-compose.yml up --build
 推荐的容器内路径（compose 中自动设置）：
 
 - `SESSION_DB_PATH=/repo/data/sessions.db`
-- `MCP_ALLOWED_DIRS=/repo/data/mcp_files`
+- `MCP_ALLOWED_DIRS=/repo/data/mcp_files:/repo/data/theory:/repo/data/experiments`
+- `THEORY_WORKSPACE_PATH=/repo/data/theory`
+- `EXPERIMENTS_PATH=/repo/data/experiments`
 - `RAG_CHROMA_PATH=/repo/data/chroma`
-- `MCP_CONFIG_PATH=/repo/conf/mcp_servers.json`
+- `STRUCTURED_MEMORY_AGENTS=theory,experiment,review`
+- `RAG_AGENTS=literature,theory,experiment,general`
 - `LOG_FORMAT=json` — 结构化日志
+
+镜像构建时会将 `data/theory/` 种子文件与 `data/experiments/configs/` 打入镜像；运行时 `../data` 卷挂载可覆盖或持久化会话/Chroma。
 
 详见 `conf/docker.env.example`。
 
@@ -89,7 +94,7 @@ curl -s 'http://localhost:8000/v1/stats/tokens?agent_name=literature&day=2026-06
 
 ## Docker 中的 MCP
 
-MCP 服务在同一容器内以 Python 子进程运行（`mcp_servers.json`）。将实验日志放在宿主机的 `data/mcp_files/` 下，容器内对应路径为 `/repo/data/mcp_files`。
+MCP 服务在同一容器内以 Python 子进程运行（`mcp_servers.json`），含 **numerical**（梯度/Hessian/loss landscape）。将实验日志放在 `data/experiments/logs/`，理论笔记放在 `data/theory/lemmas/`，容器内路径为 `/repo/data/...`。
 
 无需单独的 Chroma 服务 — 应用使用 `data/chroma` 下的 Chroma `PersistentClient`。
 
@@ -99,7 +104,7 @@ MCP 服务在同一容器内以 Python 子进程运行（`mcp_servers.json`）�
 docker compose --progress=plain -f docker/docker-compose.yml build
 ```
 
-默认使用 `chroma_default` 嵌入，不安装 `sentence-transformers` / `torch`，构建更快。若需 `RAG_EMBEDDING_PROVIDER=sentence_transformers`：
+默认使用 `chroma_default` 嵌入，并安装 `pypdf`（`pip install ".[pdf]"`）以支持 PDF 入库。若需 `RAG_EMBEDDING_PROVIDER=sentence_transformers`：
 
 ```bash
 INSTALL_RAG_EXTRA=1 docker compose --progress=plain -f docker/docker-compose.yml build

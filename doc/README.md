@@ -14,7 +14,7 @@
 | [Cursor IDE 安装清单](cursor-ide-tooling-checklist.md) | **仅 Cursor 编辑器**：MCP / Skills / Rules / Hooks |
 | [代码注释规范](CODE_STYLE.md) | Python/TS 中文 docstring 约定 |
 | [Docker 部署](docker.md) | 镜像构建与 compose |
-| [前端开发](web.md) | Vite + React 构建说明 |
+| [前端开发](web.md) | Vite + React 构建、科研工作台面板、帮助面板 |
 
 其他：
 
@@ -35,7 +35,7 @@ agent/
 ├── conf/              # 配置模板与 MCP JSON
 ├── doc/               # 技术文档（本目录）
 ├── log/               # 运行时日志（app.log）
-├── data/              # 会话 DB、Chroma、MCP 文件
+├── data/              # 会话 DB、Chroma、theory/、experiments/、mcp_files
 └── docker/            # Dockerfile 与 compose
 ```
 
