@@ -18,6 +18,7 @@ import httpx
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 
 from server.config import get_settings
+from server.memory.rag.doc_ingest import extract_text_from_docx
 from server.memory.rag.pdf_ingest import (
     build_literature_metadata,
     extract_text_from_pdf,
@@ -97,16 +98,29 @@ async def upload_document_file(
         raise HTTPException(status_code=400, detail="PDF 入库未启用")
 
     data = await file.read()
-    filename = file.filename or "upload.pdf"
-    if filename.lower().endswith(".pdf"):
+    filename = file.filename or "upload"
+    lower = filename.lower()
+
+    if lower.endswith(".pdf"):
         try:
             content = extract_text_from_pdf(data)
         except Exception as exc:
             raise HTTPException(status_code=400, detail=f"PDF 解析失败: {exc}") from exc
         source = f"pdf:{filename}"
-    else:
+    elif lower.endswith(".docx"):
+        try:
+            content = extract_text_from_docx(data)
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=f"DOCX 解析失败: {exc}") from exc
+        source = f"docx:{filename}"
+    elif lower.endswith((".md", ".txt", ".markdown")):
         content = data.decode("utf-8", errors="replace")
         source = f"file:{filename}"
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="不支持的文件类型，请上传 .pdf、.docx、.md 或 .txt",
+        )
 
     if not content.strip():
         raise HTTPException(status_code=400, detail="文件内容为空")

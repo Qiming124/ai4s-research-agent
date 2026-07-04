@@ -8,6 +8,26 @@ export interface CotStep {
 
 const SECTION_RE = /^##\s+(.+?)\s*$/gm;
 
+export function stripCotSections(content: string): string {
+  const text = content.trim();
+  if (!text) return content;
+
+  const matches = [...text.matchAll(SECTION_RE)];
+  if (matches.length === 0) return content;
+
+  let stripped = text;
+  for (let i = matches.length - 1; i >= 0; i--) {
+    const match = matches[i];
+    const start = match.index ?? 0;
+    const end =
+      i + 1 < matches.length
+        ? (matches[i + 1].index ?? text.length)
+        : text.length;
+    stripped = stripped.slice(0, start) + stripped.slice(end);
+  }
+  return stripped.trim();
+}
+
 export function parseCotSections(content: string): CotStep[] {
   const text = content.trim();
   if (!text) return [];

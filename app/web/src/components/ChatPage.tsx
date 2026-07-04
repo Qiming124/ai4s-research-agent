@@ -1,9 +1,17 @@
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 import { useChatStream } from "../hooks/useChatStream";
 import { useDocuments } from "../hooks/useDocuments";
 import { useMcpStatus } from "../hooks/useMcpStatus";
 import { useTokenStats } from "../hooks/useTokenStats";
+import { useAgents } from "../hooks/useAgents";
+import { useAssumptionDag } from "../hooks/useAssumptionDag";
+import { useBibliography } from "../hooks/useBibliography";
+import { useObservability } from "../hooks/useObservability";
+import { useProjectSessions } from "../hooks/useProjectSessions";
+import { useTheoryAssets } from "../hooks/useTheoryAssets";
+import { useVerificationRecords } from "../hooks/useVerificationRecords";
 import { waitForBackend } from "../utils/backend";
+import { pipelineStageToTab, type WorkbenchTab } from "../utils/workbenchTabs";
 import {
   getChatMode,
   getAgentChoice,
@@ -36,9 +44,13 @@ import {
 } from "../utils/preferences";
 import { useRagRefs } from "../hooks/useRagRefs";
 import { useExperimentLogs } from "../hooks/useExperimentLogs";
+import { useLayoutPrefs } from "../hooks/useLayoutPrefs";
 import { useMemoryGraph } from "../hooks/useMemoryGraph";
 import { useStructuredMemory } from "../hooks/useStructuredMemory";
 import { useWorkspaceFiles } from "../hooks/useWorkspaceFiles";
+import { useProjects } from "../hooks/useProjects";
+import { useVerification } from "../hooks/useVerification";
+import { useProjectTasks } from "../hooks/useProjectTasks";
 import {
   createNewSession,
   fetchServerSessions,
@@ -48,12 +60,17 @@ import {
   removeSessionFromList,
   type SessionMeta,
 } from "../utils/session";
-import { AgentSettingsSidebar } from "./AgentSettingsSidebar";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { HelpPanel } from "./HelpPanel";
 import { MessageBubble } from "./MessageBubble";
-import { SessionListSidebar } from "./SessionListSidebar";
+import { OnboardingWizard, shouldShowOnboarding } from "./OnboardingWizard";
+import { LeftSidebar } from "./LeftSidebar";
+import { ResearchWorkbench } from "./ResearchWorkbench";
+import { SettingsDrawer } from "./SettingsDrawer";
+import { ResizeHandle } from "./ResizeHandle";
+import { TheoremDetailDrawer } from "./TheoremDetailDrawer";
 import { TopStatusBar } from "./TopStatusBar";
+import type { StructuredMemoryEntry } from "../hooks/useStructuredMemory";
 
 export function ChatPage() {
   const [chatMode, setChatModeState] = useState<ChatMode>(getChatMode);
@@ -70,6 +87,19 @@ export function ChatPage() {
   const [useServerMcp, setUseServerMcpState] = useState(getUseServerMcpDefault);
   const [enableMcp, setEnableMcpState] = useState(getEnableMcp);
   const [sessions, setSessions] = useState<SessionMeta[]>(getSessionList);
+  const [workbenchTab, setWorkbenchTab] = useState<WorkbenchTab>("literature");
+  const [linkStatus, setLinkStatus] = useState<string | null>(null);
+  const [projectMembers, setProjectMembers] = useState<{ user_id: string; role: string }[]>([]);
+
+  const pipelineCallbacks = useMemo(
+    () => ({
+      onPipelineStage: (stage: string) => {
+        const tab = pipelineStageToTab(stage);
+        if (tab) setWorkbenchTab(tab);
+      },
+    }),
+    [],
+  );
 
   const historyPref = {
     useServerDefault: useServerHistory,
@@ -112,7 +142,15 @@ export function ChatPage() {
     reloadHistory,
     switchSession,
     createSession,
-  } = useChatStream(chatMode, historyPref, mcpPref, agentPref, reasoningPref, cotMode);
+  } = useChatStream(
+    chatMode,
+    historyPref,
+    mcpPref,
+    agentPref,
+    reasoningPref,
+    cotMode,
+    pipelineCallbacks,
+  );
 
   const sessionIdRef = useRef(sessionId);
 
@@ -135,6 +173,8 @@ export function ChatPage() {
     error: documentsError,
     refresh: refreshDocuments,
     uploadDocument,
+    uploadFile,
+    ingestArxiv,
     deleteDocument,
     clearAllDocuments,
   } = useDocuments(sessionId, !backendOffline);
@@ -168,10 +208,97 @@ export function ChatPage() {
     refresh: refreshWorkspace,
   } = useWorkspaceFiles(!backendOffline);
 
+  const {
+    projects,
+    currentProject,
+    currentProjectId,
+    selectProject,
+    createProject,
+    error: projectsError,
+    refresh: refreshProjects,
+  } = useProjects(!backendOffline);
+
+  const { sessions: projectSessions, linkSession, refresh: refreshProjectSessions } =
+    useProjectSessions(currentProjectId, !backendOffline);
+
+  const {
+    symbols: theorySymbols,
+    assumptions: theoryAssumptions,
+    matrix: theoryMatrix,
+    loading: theoryAssetsLoading,
+    error: theoryAssetsError,
+    refresh: refreshTheoryAssets,
+  } = useTheoryAssets(!backendOffline);
+
+  const {
+    nodes: dagNodes,
+    edges: dagEdges,
+    loading: dagLoading,
+    error: dagError,
+    refresh: refreshDag,
+    fetchImpact: fetchDagImpact,
+  } = useAssumptionDag(!backendOffline);
+
+  const {
+    entries: bibEntries,
+    loading: bibLoading,
+    error: bibError,
+    refresh: refreshBib,
+    exportBib,
+  } = useBibliography(currentProjectId, !backendOffline);
+
+  const {
+    records: verificationRecords,
+    loading: verificationRecordsLoading,
+    refresh: refreshVerificationRecords,
+    runVerification,
+  } = useVerificationRecords(currentProjectId, sessionId, !backendOffline);
+
+  const {
+    summary: observabilitySummary,
+    agentQuality,
+    loading: observabilityLoading,
+    error: observabilityError,
+    refresh: refreshObservability,
+  } = useObservability(currentProjectId, !backendOffline);
+
+  const { agents: serverAgents } = useAgents(!backendOffline);
+
+  const filteredSessions = useMemo(() => {
+    const linked = new Set(projectSessions.map((s) => s.session_id));
+    if (linked.size === 0) return sessions;
+    return sessions.filter((s) => linked.has(s.id) || s.id === sessionId);
+  }, [sessions, projectSessions, sessionId]);
+
+  const {
+    dashboard: verificationDashboard,
+    loading: verificationLoading,
+    error: verificationError,
+    refresh: refreshVerification,
+  } = useVerification(sessionId, currentProjectId, !backendOffline);
+
+  const {
+    tasks: projectTasks,
+    loading: tasksLoading,
+    error: tasksError,
+    refresh: refreshTasks,
+    updateStatus: updateTaskStatus,
+    createTask,
+  } = useProjectTasks(currentProjectId, !backendOffline);
+
   const [input, setInput] = useState("");
   const [helpOpen, setHelpOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(shouldShowOnboarding);
+  const [selectedTheorem, setSelectedTheorem] = useState<StructuredMemoryEntry | null>(null);
   const [retryingBackend, setRetryingBackend] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
+  const { prefs: layoutPrefs, resizeLeft, resizeRight, reset: resetLayout } = useLayoutPrefs();
+
+  const layoutStyle = {
+    "--layout-left": `${layoutPrefs.leftWidth}px`,
+    "--layout-right": `${layoutPrefs.rightWidth}px`,
+  } as CSSProperties;
 
   useEffect(() => {
     sessionIdRef.current = sessionId;
@@ -195,8 +322,43 @@ export function ChatPage() {
   useEffect(() => {
     if (!isStreaming) {
       refreshRagRefs();
+      refreshStructured();
+      refreshGraph();
+      refreshExperiments();
+      refreshWorkspace();
+      refreshVerification();
+      refreshTasks();
     }
-  }, [isStreaming, refreshRagRefs]);
+  }, [
+    isStreaming,
+    refreshRagRefs,
+    refreshStructured,
+    refreshGraph,
+    refreshExperiments,
+    refreshWorkspace,
+    refreshVerification,
+    refreshTasks,
+  ]);
+
+  useEffect(() => {
+    if (!sessionId || backendOffline) return;
+    linkSession(sessionId).then((ok) => {
+      setLinkStatus(ok ? `会话已关联课题「${currentProject.name || currentProjectId}」` : null);
+      if (ok) refreshProjectSessions();
+    });
+  }, [sessionId, currentProjectId, backendOffline, linkSession, refreshProjectSessions, currentProject.name, currentProjectId]);
+
+  useEffect(() => {
+    if (!currentProjectId || backendOffline) return;
+    fetch(`/v1/projects/${encodeURIComponent(currentProjectId)}/members`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data) => setProjectMembers(Array.isArray(data) ? data : []))
+      .catch(() => setProjectMembers([]));
+    refreshTasks();
+    refreshVerification();
+    refreshBib();
+    refreshObservability();
+  }, [currentProjectId, backendOffline, refreshTasks, refreshVerification, refreshBib, refreshObservability]);
 
   useEffect(() => {
     refreshMcp();
@@ -323,7 +485,39 @@ export function ChatPage() {
   const handleNewSession = async () => {
     const newId = createNewSession();
     await createSession(newId);
+    await linkSession(newId);
     await refreshSessions(newId);
+  };
+
+  const handleRunExperiment = async () => {
+    await fetch("/v1/experiments/runs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ config_path: "quadratic_minimum.yaml" }),
+    });
+    await refreshExperiments();
+  };
+
+  const handleJupyterTemplate = async () => {
+    const res = await fetch("/v1/jupyter/template");
+    if (!res.ok) return;
+    const data = await res.json();
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "notebook-template.json";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleJupyterUpload = async () => {
+    await fetch("/v1/jupyter/upload-result", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "ui-upload", summary: { ok: true }, metrics: { loss: 0.1 } }),
+    });
+    await refreshExperiments();
   };
 
   const handleSelectSession = async (id: string) => {
@@ -337,8 +531,18 @@ export function ChatPage() {
     await refreshSessions();
   };
 
+  const handleRunResearch = async () => {
+    const text = input.trim() ? `/research ${input.trim()}` : "/research 请对损失函数局部极小值进行完整研究";
+    setInput("");
+    setSettingsOpen(false);
+    await sendMessage(text);
+    refreshTokens();
+    await refreshSessions();
+  };
+
   const handleRemoveSession = async (id: string) => {
     if (isStreaming) return;
+    if (!window.confirm("确定删除此会话？")) return;
     await fetch(`/v1/sessions/${id}?purge=true`, { method: "DELETE" });
     removeSessionFromList(id);
 
@@ -378,32 +582,124 @@ export function ChatPage() {
           retryingBackend={retryingBackend}
         />
         <div className="header-actions">
+          <button type="button" className="btn-secondary" onClick={() => setSettingsOpen(true)}>
+            设置
+          </button>
           <button type="button" className="btn-secondary" onClick={() => setHelpOpen(true)}>
             帮助
           </button>
           <button type="button" className="btn-secondary" onClick={handleClearSession} disabled={isStreaming}>
             清空会话
           </button>
+          <button
+            type="button"
+            className="btn-secondary btn-sm"
+            onClick={resetLayout}
+            title="恢复默认栏宽"
+          >
+            重置布局
+          </button>
         </div>
       </header>
 
       <HelpPanel open={helpOpen} onClose={() => setHelpOpen(false)} />
+      {showOnboarding && <OnboardingWizard onComplete={() => setShowOnboarding(false)} />}
+      <SettingsDrawer
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        disabled={isStreaming}
+        chatMode={chatMode}
+        onChatModeChange={handleModeChange}
+        agentChoice={agentChoice}
+        onAgentChoiceChange={handleAgentChoiceChange}
+        showReasoning={showReasoning}
+        onShowReasoningChange={handleShowReasoningChange}
+        useServerReasoning={useServerReasoning}
+        onUseServerReasoningChange={handleUseServerReasoningChange}
+        enableThinking={enableThinking}
+        onEnableThinkingChange={handleEnableThinkingChange}
+        reasoningEffort={reasoningEffort}
+        onReasoningEffortChange={handleReasoningEffortChange}
+        serverReasoningEffort={serverReasoningEffort}
+        cotMode={cotMode}
+        onCotModeChange={handleCotModeChange}
+        useServerHistory={useServerHistory}
+        onUseServerHistoryChange={handleUseServerHistoryChange}
+        maxHistoryMessages={maxHistoryMessages}
+        onMaxHistoryChange={handleMaxHistoryChange}
+        enableHistorySummary={enableHistorySummary}
+        onEnableSummaryChange={handleEnableSummaryChange}
+        useServerMcp={useServerMcp}
+        onUseServerMcpChange={handleUseServerMcpChange}
+        enableMcp={enableMcp}
+        onEnableMcpChange={handleEnableMcpChange}
+        mcpStatus={mcpStatus}
+        mcpLoading={mcpLoading}
+        mcpError={mcpError}
+        onRefreshMcp={refreshMcp}
+        onReloadMcp={async () => {
+          await fetch("/v1/mcp/reload", { method: "POST" });
+          await refreshMcp();
+        }}
+        serverAgents={serverAgents}
+        onRunResearch={handleRunResearch}
+      />
+      <TheoremDetailDrawer
+        entry={selectedTheorem}
+        onClose={() => setSelectedTheorem(null)}
+        onCreateTask={async (title, entryId) => {
+          await fetch(`/v1/projects/${encodeURIComponent(currentProjectId)}/tasks`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              title,
+              assignee_role: "theorist",
+              related_entry_id: entryId,
+            }),
+          });
+          await refreshTasks();
+        }}
+      />
 
       {historyError && !backendOffline && (
         <div className="history-error">历史加载失败：{historyError}</div>
       )}
 
-      <div className="chat-layout">
+      <div className="chat-layout" style={layoutStyle}>
         <ErrorBoundary>
-          <SessionListSidebar
-            sessions={sessions}
+          <LeftSidebar
+            projects={projects.length ? projects : [currentProject]}
+            currentProjectId={currentProjectId}
+            currentProject={currentProject}
+            onSelectProject={selectProject}
+            onCreateProject={async (name, description) => {
+              await createProject(name, description);
+              await refreshProjects();
+            }}
+            projectsError={projectsError}
+            linkStatus={linkStatus}
+            projectMembers={projectMembers}
+            tasks={projectTasks}
+            tasksLoading={tasksLoading}
+            tasksError={tasksError}
+            onRefreshTasks={refreshTasks}
+            onUpdateTaskStatus={updateTaskStatus}
+            onCreateTask={createTask}
+            sessions={filteredSessions}
             currentSessionId={sessionId}
             disabled={isStreaming}
-            onSelect={handleSelectSession}
+            onSelectSession={handleSelectSession}
             onNewSession={handleNewSession}
-            onRemove={handleRemoveSession}
+            onRemoveSession={handleRemoveSession}
           />
         </ErrorBoundary>
+
+        <ResizeHandle
+          direction="horizontal"
+          onResize={resizeLeft}
+          className="resize-col-left"
+          title="拖拽调整左侧栏宽度"
+        />
 
         <div className="chat-center">
           <main className="chat-main" ref={listRef}>
@@ -424,6 +720,33 @@ export function ChatPage() {
           </main>
 
           <footer className="chat-footer">
+            <div className="mode-toggle footer-mode-toggle" role="group">
+              <button
+                type="button"
+                className={chatMode === "chat" ? "mode-btn active" : "mode-btn"}
+                onClick={() => handleModeChange("chat")}
+                disabled={isStreaming}
+              >
+                Chat
+              </button>
+              <button
+                type="button"
+                className={chatMode === "math" ? "mode-btn active" : "mode-btn"}
+                onClick={() => handleModeChange("math")}
+                disabled={isStreaming}
+              >
+                Math
+              </button>
+            </div>
+            <button
+              type="button"
+              className="btn-secondary btn-research"
+              onClick={handleRunResearch}
+              disabled={isStreaming || backendOffline}
+              title="运行 literature→theory→experiment→review 流水线"
+            >
+              完整研究
+            </button>
             <textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -443,68 +766,88 @@ export function ChatPage() {
           </footer>
         </div>
 
+        <ResizeHandle
+          direction="horizontal"
+          onResize={resizeRight}
+          className="resize-col-right"
+          title="拖拽调整右侧栏宽度"
+        />
+
         <ErrorBoundary>
-          <AgentSettingsSidebar
-            disabled={isStreaming}
-            chatMode={chatMode}
-            onChatModeChange={handleModeChange}
-            agentChoice={agentChoice}
-            onAgentChoiceChange={handleAgentChoiceChange}
-            showReasoning={showReasoning}
-            onShowReasoningChange={handleShowReasoningChange}
-            useServerReasoning={useServerReasoning}
-            onUseServerReasoningChange={handleUseServerReasoningChange}
-            enableThinking={enableThinking}
-            onEnableThinkingChange={handleEnableThinkingChange}
-            reasoningEffort={reasoningEffort}
-            onReasoningEffortChange={handleReasoningEffortChange}
-            serverReasoningEffort={serverReasoningEffort}
-            cotMode={cotMode}
-            onCotModeChange={handleCotModeChange}
-            useServerHistory={useServerHistory}
-            onUseServerHistoryChange={handleUseServerHistoryChange}
-            maxHistoryMessages={maxHistoryMessages}
-            onMaxHistoryChange={handleMaxHistoryChange}
-            enableHistorySummary={enableHistorySummary}
-            onEnableSummaryChange={handleEnableSummaryChange}
-            useServerMcp={useServerMcp}
-            onUseServerMcpChange={handleUseServerMcpChange}
-            enableMcp={enableMcp}
-            onEnableMcpChange={handleEnableMcpChange}
-            mcpStatus={mcpStatus}
-            mcpLoading={mcpLoading}
-            mcpError={mcpError}
-            onRefreshMcp={refreshMcp}
-            documents={documents}
-            documentsLoading={documentsLoading}
-            documentsUploading={documentsUploading}
-            documentsError={documentsError}
-            onRefreshDocuments={refreshDocuments}
-            onUploadDocument={uploadDocument}
-            onDeleteDocument={deleteDocument}
-            onClearAllDocuments={clearAllDocuments}
-            ragRefs={ragRefs}
-            ragRefsLoading={ragRefsLoading}
-            ragRefsError={ragRefsError}
-            onRefreshRagRefs={refreshRagRefs}
-            structuredEntries={structuredEntries}
-            structuredLoading={structuredLoading}
-            structuredError={structuredError}
-            onRefreshStructured={refreshStructured}
-            graphNodes={graphNodes}
-            graphEdges={graphEdges}
-            graphLoading={graphLoading}
-            graphError={graphError}
-            onRefreshGraph={refreshGraph}
-            experimentRuns={experimentRuns}
-            experimentLoading={experimentLoading}
-            experimentError={experimentError}
-            onRefreshExperiments={refreshExperiments}
-            workspaceFiles={workspaceFiles}
-            workspaceLoading={workspaceLoading}
-            workspaceError={workspaceError}
-            onRefreshWorkspace={refreshWorkspace}
-          />
+          <div className="right-column">
+            <ResearchWorkbench
+              sessionId={sessionId}
+              projectId={currentProjectId}
+              disabled={isStreaming}
+              activeTab={workbenchTab}
+              onTabChange={setWorkbenchTab}
+              structuredEntries={structuredEntries}
+              structuredLoading={structuredLoading}
+              structuredError={structuredError}
+              onRefreshStructured={refreshStructured}
+              onSelectTheorem={setSelectedTheorem}
+              graphNodes={graphNodes}
+              graphEdges={graphEdges}
+              graphLoading={graphLoading}
+              graphError={graphError}
+              onRefreshGraph={refreshGraph}
+              experimentRuns={experimentRuns}
+              experimentLoading={experimentLoading}
+              experimentError={experimentError}
+              onRefreshExperiments={refreshExperiments}
+              onRunExperiment={handleRunExperiment}
+              onJupyterTemplate={handleJupyterTemplate}
+              onJupyterUpload={handleJupyterUpload}
+              workspaceFiles={workspaceFiles}
+              workspaceLoading={workspaceLoading}
+              workspaceError={workspaceError}
+              onRefreshWorkspace={refreshWorkspace}
+              theorySymbols={theorySymbols}
+              theoryAssumptions={theoryAssumptions}
+              theoryMatrix={theoryMatrix}
+              theoryAssetsLoading={theoryAssetsLoading}
+              theoryAssetsError={theoryAssetsError}
+              onRefreshTheoryAssets={refreshTheoryAssets}
+              dagNodes={dagNodes}
+              dagEdges={dagEdges}
+              dagLoading={dagLoading}
+              dagError={dagError}
+              onRefreshDag={refreshDag}
+              onDagImpact={fetchDagImpact}
+              bibEntries={bibEntries}
+              bibLoading={bibLoading}
+              bibError={bibError}
+              onRefreshBib={refreshBib}
+              onExportBib={exportBib}
+              documents={documents}
+              documentsLoading={documentsLoading}
+              documentsUploading={documentsUploading}
+              documentsError={documentsError}
+              onRefreshDocuments={refreshDocuments}
+              onUploadDocument={uploadDocument}
+              onUploadFile={uploadFile}
+              onIngestArxiv={ingestArxiv}
+              onDeleteDocument={deleteDocument}
+              onClearAllDocuments={clearAllDocuments}
+              ragRefs={ragRefs}
+              ragRefsLoading={ragRefsLoading}
+              ragRefsError={ragRefsError}
+              onRefreshRagRefs={refreshRagRefs}
+              verificationDashboard={verificationDashboard}
+              verificationLoading={verificationLoading}
+              verificationError={verificationError}
+              verificationRecords={verificationRecords}
+              verificationRecordsLoading={verificationRecordsLoading}
+              onRefreshVerification={refreshVerification}
+              onRefreshVerificationRecords={refreshVerificationRecords}
+              onRunVerification={runVerification}
+              observabilitySummary={observabilitySummary}
+              agentQuality={agentQuality}
+              observabilityLoading={observabilityLoading}
+              observabilityError={observabilityError}
+              onRefreshObservability={refreshObservability}
+            />
+          </div>
         </ErrorBoundary>
       </div>
     </div>

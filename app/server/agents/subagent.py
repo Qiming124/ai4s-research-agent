@@ -38,7 +38,7 @@ from server.memory.base import BaseSessionStore
 from server.memory.manager import MemoryManager, get_memory_manager
 from server.memory.rag.context import reset_rag_session_id, set_rag_session_id
 from server.memory.rag.retrieval import build_rag_augmented_prompt
-from server.memory.structured.extract import persist_extracted_entries
+from server.memory.structured.extract import try_persist_structured_entries
 from server.memory.structured.injection import build_structured_augmented_prompt
 from server.memory.structured.store import get_structured_memory_store
 from server.memory.session import SessionStore, get_session_store
@@ -379,11 +379,9 @@ class SubAgent:
         a2a_task_id: str | None = None,
         workflow_records: list[dict] | None = None,
     ) -> AsyncIterator[StreamChunk]:
-        """Theory Agent：SymPy 验证 + 自动持久化引理/定理。"""
-        if self.name != "theory":
-            return
-
-        if mcp is not None and mcp.is_connected and full_content.strip():
+        """SymPy 验证（仅 theory）+ 引理/定理自动持久化（任意 Agent 输出匹配时）。"""
+        verification_results: list[dict] = []
+        if self.name == "theory" and mcp is not None and mcp.is_connected and full_content.strip():
             async for chunk in stream_theory_verification(
                 mcp,
                 full_content,
@@ -391,16 +389,34 @@ class SubAgent:
                 agent_name=self.name,
                 a2a_task_id=a2a_task_id,
                 workflow_records=workflow_records,
+                session_id=session_id,
             ):
+                if chunk.type == "verification_result":
+                    try:
+                        verification_results.append(json.loads(chunk.content))
+                    except Exception:
+                        pass
+                elif chunk.type == "numerical_verification_result":
+                    try:
+                        verification_results.append(json.loads(chunk.content))
+                    except Exception:
+                        pass
                 yield self._with_agent(chunk, a2a_task_id=a2a_task_id)
 
         if full_content.strip():
             store = get_structured_memory_store()
-            saved, warnings = persist_extracted_entries(full_content, session_id, store)
+            saved, warnings = try_persist_structured_entries(
+                full_content,
+                session_id,
+                store,
+                verification_results=verification_results if verification_results else None,
+                source="theory_auto_extract" if self.name == "theory" else "auto_extract",
+            )
             if saved:
                 logger.info(
-                    "Theory 自动持久化 %d 条结构化记忆 session=%s",
+                    "自动持久化 %d 条结构化记忆 agent=%s session=%s",
                     len(saved),
+                    self.name,
                     session_id,
                 )
             for warning in warnings:

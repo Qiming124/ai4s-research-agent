@@ -69,6 +69,46 @@ def test_extract_structured_entries():
     assert "引理 1" in entries[0]["title"]
 
 
+def test_extract_structured_entries_h3_and_colon():
+    content = """
+### 定理：收敛性
+**陈述**：序列收敛。
+
+## 引理 2：Lipschitz
+**陈述**：梯度 Lipschitz。
+"""
+    entries = extract_structured_entries(content)
+    assert len(entries) == 2
+    assert "定理" in entries[0]["title"]
+    assert "引理 2" in entries[1]["title"]
+
+
+def test_try_persist_skips_non_matching_content(tmp_path):
+    from server.memory.structured.extract import try_persist_structured_entries
+
+    db_path = tmp_path / "sessions.db"
+    store = StructuredMemoryStore(str(db_path))
+    saved, warnings = try_persist_structured_entries(
+        "普通回答，没有定理标题。",
+        "s1",
+        store,
+    )
+    assert saved == []
+    assert warnings == []
+
+
+def test_try_persist_saves_matching_content(tmp_path):
+    from server.memory.structured.extract import try_persist_structured_entries
+
+    db_path = tmp_path / "sessions.db"
+    store = StructuredMemoryStore(str(db_path))
+    content = "## 定理 1\n**陈述**：测试。\n"
+    saved, _ = try_persist_structured_entries(content, "s1", store)
+    assert len(saved) == 1
+    listed = store.list_entries(session_id="s1")
+    assert len(listed) == 1
+
+
 def test_format_structured_context():
     text = format_structured_context(
         [{"kind": "theorem", "title": "引理 1", "body": "内容"}]

@@ -65,24 +65,28 @@ const HELP_SECTIONS: HelpSection[] = [
     title: "科研工作台（右侧栏）",
     items: [
       {
+        name: "四个阶段 Tab",
+        desc: "文献（上传/书目/RAG 引用）→ 理论（定理库、资产、假设图、关系图谱、工作区）→ 验证（验证看板、可观测性）→ 产出（实验、Jupyter、论文导出）。各分区可折叠展开。",
+      },
+      {
         name: "定理库 (L4)",
-        desc: "展示当前会话的结构化记忆（引理/定理/假设）。Theory Agent 推导后会自动抽取 ## 引理/定理 标题块并持久化。",
+        desc: "「理论」Tab 内展示当前会话的结构化记忆（引理/定理/假设）。Theory Agent 推导后会自动抽取 ## 引理/定理 标题块并持久化。",
       },
       {
-        name: "知识图谱",
-        desc: "显示 L4 节点与 depends_on / cites 等依赖边。引理正文中 **依据**：引理 2 会自动建立关联。",
+        name: "关系图谱",
+        desc: "「理论」Tab 内显示 L4 节点与 depends_on / cites 等依赖边。引理正文中 **依据**：引理 2 会自动建立关联。",
       },
       {
-        name: "实验日志",
-        desc: "列出 data/experiments/logs/ 下的实验运行记录（JSON），由 Experiment Agent 或 runner 写入。",
+        name: "实验与导出",
+        desc: "「产出」Tab：实验日志、Jupyter 模板/上传、Markdown/Word/PDF 导出（先渲染 MD 再转 PDF）。",
       },
       {
         name: "理论工作区",
-        desc: "浏览 data/theory/ 种子文件：symbols.md、assumptions.md、lemmas/、counterexamples/ 等，人机共用符号基线。",
+        desc: "「理论」Tab 内浏览 data/theory/ 种子文件：symbols.md、assumptions.md 等，人机共用符号基线。",
       },
       {
         name: "RAG 文档",
-        desc: "上传 Markdown/文本或 PDF 到当前会话向量库；检索结果在 RAG 引用面板显示，供 theory / literature Agent 注入。",
+        desc: "「文献」Tab：支持 PDF/DOCX/Markdown 上传、arXiv 一键导入、书目库与 RAG 引用列表。",
       },
     ],
   },
@@ -109,6 +113,68 @@ const HELP_SECTIONS: HelpSection[] = [
         name: "记忆矛盾告警",
         desc: "新定理与已有假设冲突时，memory_warning SSE 会在消息中显示琥珀色提示。",
       },
+      {
+        name: "流水线阶段条",
+        desc: "多跳研究时，消息顶部显示「流水线: literature → theory → …」阶段路径（来自 pipeline_stage 事件）。",
+      },
+      {
+        name: "工具调用轨迹",
+        desc: "工作流时间线中 tool 节点展示 MCP 工具名与执行状态；顶栏同步显示当前 running 工具。",
+      },
+    ],
+  },
+  {
+    title: "顶栏与连接状态",
+    items: [
+      {
+        name: "连接状态",
+        desc: "显示「已连接」或「离线」。后端未启动时输入框禁用，可点「重试」重新检测并刷新 MCP、历史与 Token 统计。",
+      },
+      {
+        name: "会话 ID",
+        desc: "当前会话短 ID，便于对照 API 调试（完整 ID 存于 localStorage 与服务端 SQLite）。",
+      },
+      {
+        name: "当前 Agent / 工具",
+        desc: "流式生成时显示正在处理的 Agent；调用 MCP 时额外显示工具名（如 sympy__differentiate）。",
+      },
+      {
+        name: "Token 统计",
+        desc: "本会话累计 token 用量（需服务端 ENABLE_TOKEN_STATS=true）。每条回答底部也会显示当轮 usage。",
+      },
+      {
+        name: "停止生成",
+        desc: "生成中顶栏出现「停止」按钮，与流式中断逻辑相同：保留已输出内容。",
+      },
+      {
+        name: "清空会话",
+        desc: "顶栏按钮：清空当前会话全部消息（DELETE /v1/sessions/{id}），保留 session ID，与左侧「×」删除会话不同。",
+      },
+    ],
+  },
+  {
+    title: "会话管理（左侧栏）",
+    items: [
+      {
+        name: "三个 Tab",
+        desc: "左栏分为「会话」「课题」「任务」三个 Tab，避免一屏堆叠过多面板。默认打开会话列表。",
+      },
+      {
+        name: "新建会话",
+        desc: "「会话」Tab 中点击「+ 新建」创建新 session_id，自动切换并开始空白对话。",
+      },
+      {
+        name: "切换会话",
+        desc: "点击列表项切换；切换后从服务端加载历史（需 SESSION_STORE_BACKEND=sqlite）。",
+      },
+      {
+        name: "删除会话",
+        desc: "点击会话右侧「×」永久删除（purge=true），含服务端数据与列表项；若删的是当前会话则自动切到下一个或新建。",
+      },
+      {
+        name: "历史恢复",
+        desc: "刷新页面后自动恢复上次会话列表与消息。加载失败时顶栏下方显示琥珀色提示，可点重试或检查后端。",
+      },
     ],
   },
   {
@@ -116,15 +182,36 @@ const HELP_SECTIONS: HelpSection[] = [
     items: [
       {
         name: "发送消息",
-        desc: "底部输入框输入问题，Enter 发送，Shift+Enter 换行。多跳研究可在消息前加 /research（需 RESEARCH_PIPELINE_MODE=auto）。",
+        desc: "底部多行输入框，Enter 发送，Shift+Enter 换行。后端离线或生成中时输入禁用。多跳研究可在消息前加 /research（需 RESEARCH_PIPELINE_MODE=auto）。",
       },
       {
-        name: "停止",
-        desc: "生成中点击「停止」中断；已生成部分保留，未完成内容不写入历史。",
+        name: "流式占位提示",
+        desc: "生成中若尚无正文，会显示「正在思考…」「正在调用工具：xxx…」或工作流节点标题，便于判断当前进度。",
+      },
+    ],
+  },
+  {
+    title: "显示与推理设置",
+    items: [
+      {
+        name: "显示思考过程",
+        desc: "勾选后在每条回答中展开「思考过程」面板（DeepSeek reasoning 纯文本，流式时自动展开）。关闭后仅显示最终回答。",
       },
       {
-        name: "清空会话",
-        desc: "删除当前 Session 全部历史（含服务端 SQLite），开始全新对话。生成中不可用。",
+        name: "推理策略：服务端默认",
+        desc: "勾选时不向 API 发送 enable_thinking / reasoning_effort，由 .env 的 REASONING_EFFORT 决定；取消后可本地覆盖。",
+      },
+      {
+        name: "深度思考与推理强度",
+        desc: "enable_thinking 开启 DeepSeek thinking 通道；推理强度 high（较快）或 max（更深、耗 token 更多）。",
+      },
+      {
+        name: "思维链模式",
+        desc: "控制回答结构：关闭 / 标准（问题分析→推理→结论）/ 严格（强制 Markdown 三节）。Math 模式自动升为 strict；解析后显示「思维链」分步面板。",
+      },
+      {
+        name: "Theory 五阶段推导",
+        desc: "路由到 theory Agent 时，服务端使用专用推导 prompt，与工作流时间线的 plan/verify 节点配合，不限于侧栏 cot_mode。",
       },
     ],
   },
@@ -150,19 +237,35 @@ const HELP_SECTIONS: HelpSection[] = [
     ],
   },
   {
-    title: "Agent 设置侧边栏",
+    title: "科研工作台（右栏）",
     items: [
       {
         name: "打开方式",
-        desc: "顶栏「设置」打开右侧栏：对话模式、Agent 路由、思考过程、历史策略、MCP、科研工作台面板。",
+        desc: "顶栏「设置」按钮打开右侧浮层抽屉（非内嵌面板）：对话模式、Agent 路由、显示与思维链、L1 上下文、MCP。生成中部分控件禁用。",
+      },
+      {
+        name: "Chat / Math 模式",
+        desc: "Chat 为通用对话；Math 使用数学推导 prompt、优先 theory 路由，并默认严格思维链。",
+      },
+      {
+        name: "Agent 路由",
+        desc: "可选自动路由（Supervisor）或手动指定 general/theory/experiment/literature/review；偏好存 localStorage。",
       },
       {
         name: "MCP 工具",
-        desc: "内置 Server：web_search、arxiv、filesystem、sympy、rag、numerical。需 ENABLE_MCP=true。各 Agent 有独立工具白名单。",
+        desc: "「MCP：服务端默认」勾选时跟随 .env 的 ENABLE_MCP；取消后可本地开关「启用 MCP 工具」。侧栏列出各 Server 连接状态与工具 schema，可点「刷新」。",
+      },
+      {
+        name: "内置 Server",
+        desc: "web_search、arxiv、filesystem、sympy、rag、numerical。各 Agent 有独立白名单（conf/mcp_tool_whitelist.json）。",
       },
       {
         name: "numerical 工具",
         desc: "数值梯度、Hessian 谱、临界点分类、2D loss landscape、SGD 轨迹、随机 Hessian 采样——用于验证局部极小/鞍点直觉。",
+      },
+      {
+        name: "面板刷新",
+        desc: "定理库、知识图谱、实验日志、工作区、RAG 文档/引用、MCP 状态均支持手动「刷新」拉取最新数据。",
       },
     ],
   },
@@ -179,7 +282,7 @@ const HELP_SECTIONS: HelpSection[] = [
       },
       {
         name: "L3 RAG",
-        desc: "Chroma 向量库，按 session_id 隔离。支持文本上传、PDF 上传、arXiv 入库；theory/literature Agent 自动检索注入。",
+        desc: "Chroma 向量库，按 session_id 隔离。Web 可上传文本/Markdown；PDF 与 arXiv 通过 API 入库。theory/literature Agent 自动检索注入，引用见「RAG 引用」面板。",
       },
       {
         name: "L4 结构化记忆",
@@ -259,7 +362,7 @@ export function HelpPanel({ open, onClose }: HelpPanelProps) {
         <header className="help-header">
           <div>
             <h2 id="help-panel-title">使用帮助</h2>
-            <p className="help-subtitle">AI4S 科研助手 v0.4 — Agent、记忆、验证与工作台</p>
+            <p className="help-subtitle">AI4S 科研助手 v0.4 — 界面、Agent、记忆与验证</p>
           </div>
           <button type="button" className="help-close" onClick={onClose} aria-label="关闭">
             ×

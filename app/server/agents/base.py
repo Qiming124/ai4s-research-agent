@@ -27,6 +27,9 @@ from server.memory.manager import MemoryManager, get_memory_manager
 from server.memory.session import SessionStore, get_session_store
 from server.memory.rag.context import reset_rag_session_id, set_rag_session_id
 from server.memory.rag.retrieval import build_rag_augmented_prompt
+from server.memory.structured.extract import try_persist_structured_entries
+from server.memory.structured.injection import build_structured_augmented_prompt
+from server.memory.structured.store import get_structured_memory_store
 from server.mcp.client import MCPClient, get_mcp_client
 from server.mcp.truncation import truncate_tool_result
 from server.observability import finalize_chat_turn, set_agent_name, set_session_id
@@ -74,10 +77,41 @@ class GeneralAgent(BaseAgent):
         self._sessions: BaseSessionStore = session_store or get_session_store()
         self._memory = memory_manager or get_memory_manager()
         self._mcp = mcp_client
+        self._math_mode = math_mode
         self.system_prompt = MATH_MODE_SYSTEM_PROMPT if math_mode else self._settings.default_system_prompt
 
     def _with_agent(self, chunk: StreamChunk) -> StreamChunk:
         return chunk.model_copy(update={"agent_name": self.name})
+
+    def _structured_memory_post_chunks(
+        self,
+        full_content: str,
+        session_id: str,
+    ) -> list[StreamChunk]:
+        """回答含 ## 引理/定理 标题时写入 L4 定理库（legacy 编排下 Math 模式也生效）。"""
+        if not full_content.strip():
+            return []
+        store = get_structured_memory_store()
+        source = "math_mode_auto_extract" if self._math_mode else "auto_extract"
+        saved, warnings = try_persist_structured_entries(
+            full_content,
+            session_id,
+            store,
+            source=source,
+        )
+        chunks: list[StreamChunk] = []
+        if saved:
+            logger.info(
+                "自动持久化 %d 条结构化记忆 agent=%s session=%s",
+                len(saved),
+                self.name,
+                session_id,
+            )
+        for warning in warnings:
+            chunks.append(
+                StreamChunk(type="memory_warning", content=warning, agent_name=self.name)
+            )
+        return chunks
 
     def _build_messages(
         self,
@@ -442,6 +476,13 @@ class GeneralAgent(BaseAgent):
         )
         system_prompt = system_prompt_override or self.system_prompt
         system_prompt = apply_cot_prompt(system_prompt, cot_mode, self.name)  # type: ignore[arg-type]
+        if self._math_mode:
+            system_prompt = build_structured_augmented_prompt(
+                system_prompt,
+                sid,
+                "theory",
+                self._settings,
+            )
 
         if (
             self._settings.enable_rag
@@ -524,6 +565,8 @@ class GeneralAgent(BaseAgent):
                 elif chunk.type == "done":
                     for cot_chunk in cot_step_chunks(full_content, agent_name=self.name):
                         yield self._with_agent(cot_chunk)
+                    for post_chunk in self._structured_memory_post_chunks(full_content, sid):
+                        yield self._with_agent(post_chunk)
                     self._sessions.append_message(sid, ChatMessage(role="user", content=message))
                     self._sessions.append_message(
                         sid,
@@ -566,6 +609,8 @@ class GeneralAgent(BaseAgent):
             elif chunk.type == "done":
                 for cot_chunk in cot_step_chunks(full_content, agent_name=self.name):
                     yield self._with_agent(cot_chunk)
+                for post_chunk in self._structured_memory_post_chunks(full_content, sid):
+                    yield self._with_agent(post_chunk)
                 self._sessions.append_message(sid, ChatMessage(role="user", content=message))
                 self._sessions.append_message(
                     sid,

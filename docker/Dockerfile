@@ -20,7 +20,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /repo
 
-RUN apt-get update && apt-get install -y --no-install-recommends curl \
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    pandoc \
+    texlive-xetex \
+    texlive-lang-chinese \
+    fonts-noto-cjk \
     && if [ "$INSTALL_RAG_EXTRA" = "1" ]; then \
          apt-get install -y --no-install-recommends build-essential; \
        fi \
@@ -34,9 +39,9 @@ COPY app/shared/ ./app/shared/
 COPY conf/ ./conf/
 
 RUN if [ "$INSTALL_RAG_EXTRA" = "1" ]; then \
-      pip install ".[rag,pdf]"; \
+      pip install ".[rag,pdf,docx,export]"; \
     else \
-      pip install ".[pdf]"; \
+      pip install ".[pdf,docx,export]"; \
     fi
 
 # 预下载 chroma_default 嵌入模型，避免容器首次启动长时间阻塞健康检查

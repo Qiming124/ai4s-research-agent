@@ -44,6 +44,35 @@ async def list_global_structured_memory(
     )
 
 
+@router.get("/v1/memory/structured/{entry_id}/versions")
+async def list_entry_versions(entry_id: int) -> dict:
+    from server.memory.projects import get_project_store
+
+    store = get_project_store()
+    versions = store.list_entry_versions(entry_id)
+    return {"entry_id": entry_id, "versions": versions, "total": len(versions)}
+
+
+@router.post("/v1/memory/structured/{entry_id}/versions")
+async def create_entry_version(entry_id: int) -> dict:
+    from server.memory.projects import get_project_store
+
+    memory = get_structured_memory_store()
+    entries = memory.list_entries(limit=500)
+    entry = next((e for e in entries if e["id"] == entry_id), None)
+    if not entry:
+        raise HTTPException(status_code=404, detail="条目不存在")
+    meta = entry.get("metadata") or {}
+    version = get_project_store().save_entry_version(
+        entry_id,
+        entry["title"],
+        entry["body"],
+        meta,
+        status=str(meta.get("status", "draft")),
+    )
+    return version
+
+
 @router.get("/v1/memory/structured/graph", response_model=MemoryGraphResponse)
 async def get_memory_graph(
     session_id: str | None = Query(default=None),

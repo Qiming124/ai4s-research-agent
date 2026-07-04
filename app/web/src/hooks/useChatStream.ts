@@ -22,6 +22,7 @@ import { formatBackendError, waitForBackend } from "../utils/backend";
 import {
   getSessionId,
   setSessionId,
+  readSessionList,
   updateSessionMeta,
 } from "../utils/session";
 
@@ -517,10 +518,14 @@ function processStreamEvents(
   assistantId: string,
   ctx: Parameters<typeof applyStreamEvent>[2],
   setMessages: Dispatch<SetStateAction<ChatMessage[]>>,
+  onPipelineStage?: (stage: string) => void,
 ) {
   const updaters: Array<(prev: ChatMessage[]) => ChatMessage[]> = [];
 
   for (const ev of events) {
+    if (ev.type === "pipeline_stage" && onPipelineStage) {
+      onPipelineStage(ev.content ?? ev.title ?? "stage");
+    }
     try {
       const updater = applyStreamEvent(ev, assistantId, ctx);
       if (updater) updaters.push(updater);
@@ -559,6 +564,7 @@ export function useChatStream(
   agentPref: AgentPreference,
   reasoningPref: ReasoningPreference,
   cotMode: CotMode,
+  callbacks?: { onPipelineStage?: (stage: string) => void },
 ) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [sessionId, setSessionIdState] = useState(getSessionId);
@@ -662,10 +668,19 @@ export function useChatStream(
     if (!trimmed || isStreaming) return;
 
     const sid = sessionIdRef.current;
-    updateSessionMeta(sid, {
-      title: trimmed.slice(0, 40) + (trimmed.length > 40 ? "…" : ""),
-      updatedAt: Date.now(),
-    });
+    const meta = readSessionList().find((s) => s.id === sid);
+    const defaultTitle =
+      !meta?.title ||
+      meta.title.startsWith("会话 ") ||
+      meta.title.startsWith("新会话 ");
+    if (defaultTitle) {
+      updateSessionMeta(sid, {
+        title: trimmed.slice(0, 40) + (trimmed.length > 40 ? "…" : ""),
+        updatedAt: Date.now(),
+      });
+    } else {
+      updateSessionMeta(sid, { updatedAt: Date.now() });
+    }
 
     const userMsg: ChatMessage = {
       id: crypto.randomUUID(),
@@ -732,7 +747,7 @@ export function useChatStream(
       let buffer = "";
 
       const handleParsedEvents = (events: SseEvent[]) => {
-        processStreamEvents(events, assistantId, streamCtx, setMessages);
+        processStreamEvents(events, assistantId, streamCtx, setMessages, callbacks?.onPipelineStage);
       };
 
       while (true) {
@@ -779,7 +794,7 @@ export function useChatStream(
         pendingSessionIdRef.current = null;
       }
     }
-  }, [isStreaming, chatMode, historyPref, mcpPref, agentPref, reasoningPref, cotMode, finishStreaming]);
+  }, [isStreaming, chatMode, historyPref, mcpPref, agentPref, reasoningPref, cotMode, finishStreaming, callbacks]);
 
   const clearSession = useCallback(async () => {
     historyEpochRef.current += 1;

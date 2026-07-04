@@ -1,13 +1,14 @@
 import { useEffect, useRef } from "react";
+import { MarkdownContent } from "./MarkdownContent";
 
 interface ReasoningPanelProps {
   reasoning: string;
   isStreaming: boolean;
 }
 
-/** 思考过程：始终纯文本，避免流结束后切换 Markdown/KaTeX 导致崩溃 */
+/** 思考过程：流式阶段纯文本；结束后 Markdown + KaTeX 渲染 */
 export function ReasoningPanel({ reasoning, isStreaming }: ReasoningPanelProps) {
-  const bodyRef = useRef<HTMLPreElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!isStreaming || !bodyRef.current) return;
@@ -25,8 +26,12 @@ export function ReasoningPanel({ reasoning, isStreaming }: ReasoningPanelProps) 
           {isStreaming && <span className="streaming-dot"> · 生成中</span>}
         </span>
       </summary>
-      <div className="reasoning-body">
-        <pre ref={bodyRef} className="reasoning-plain reasoning-md">{reasoning}</pre>
+      <div className="reasoning-body" ref={bodyRef}>
+        <MarkdownContent
+          content={reasoning}
+          className="reasoning-md"
+          isStreaming={isStreaming}
+        />
       </div>
     </details>
   );

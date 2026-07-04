@@ -12,9 +12,15 @@ from server.memory.structured.graph import (
 )
 
 _SECTION_PATTERN = re.compile(
-    r"^##\s+(引理|定理|推论)\s*(\d+)?\s*(.*)$",
-    re.MULTILINE,
+    r"^#{2,3}\s+"
+    r"(引理|定理|推论|Lemma|Theorem|Corollary)"
+    r"\s*[:：]?\s*"
+    r"(\d+)?"
+    r"([^\n]*)",
+    re.MULTILINE | re.IGNORECASE,
 )
+
+_THEOREM_KIND_LABELS = frozenset({"引理", "定理", "推论", "lemma", "theorem", "corollary"})
 
 
 def extract_structured_entries(content: str) -> list[dict[str, Any]]:
@@ -39,14 +45,14 @@ def extract_structured_entries(content: str) -> list[dict[str, Any]]:
         end = matches[i + 1].start() if i + 1 < len(matches) else len(content)
         body = content[start:end].strip()
 
-        kind = "theorem" if kind_label in ("引理", "定理", "推论") else "note"
+        kind = "theorem" if kind_label.lower() in _THEOREM_KIND_LABELS else "note"
         title = f"{kind_label} {number}"
         if extra_title:
             title = f"{title}: {extra_title}"
 
         if body:
             metadata = extract_metadata_from_body(body)
-            metadata["status"] = "proved"
+            metadata["status"] = "draft"
             entries.append(
                 {"kind": kind, "title": title, "body": body, "metadata": metadata}
             )
@@ -54,10 +60,34 @@ def extract_structured_entries(content: str) -> list[dict[str, Any]]:
     return entries
 
 
+def try_persist_structured_entries(
+    content: str,
+    session_id: str,
+    store,
+    verification_results: list[dict[str, Any]] | None = None,
+    *,
+    source: str = "theory_auto_extract",
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """若内容含引理/定理标题则抽取并写入；无匹配时返回 ([], [])。"""
+    extracted = extract_structured_entries(content)
+    if not extracted:
+        return [], []
+    return persist_extracted_entries(
+        content,
+        session_id,
+        store,
+        verification_results=verification_results,
+        source=source,
+    )
+
+
 def persist_extracted_entries(
     content: str,
     session_id: str,
     store,
+    verification_results: list[dict[str, Any]] | None = None,
+    *,
+    source: str = "theory_auto_extract",
 ) -> tuple[list[dict[str, Any]], list[str]]:
     """抽取并写入 StructuredMemoryStore；返回 (saved, warnings)。"""
     extracted = extract_structured_entries(content)
@@ -65,15 +95,24 @@ def persist_extracted_entries(
     warnings: list[str] = []
     existing = store.list_entries(session_id=session_id, limit=100)
 
+    any_passed = any(
+        r.get("status") == "pass" for r in (verification_results or [])
+    )
+
     for item in extracted:
         for w in detect_contradictions(item, existing):
             warnings.append(w)
+        meta = {**(item.get("metadata") or {}), "source": source}
+        if any_passed:
+            meta["status"] = "symbolically_verified"
+        if verification_results:
+            meta["verification_ledger"] = verification_results
         entry = store.create_entry(
             session_id=session_id,
             kind=item["kind"],
             title=item["title"],
             body=item["body"],
-            metadata={**(item.get("metadata") or {}), "source": "theory_auto_extract"},
+            metadata=meta,
         )
         link_depends_on_from_metadata(store, entry, session_id)
         saved.append(entry)

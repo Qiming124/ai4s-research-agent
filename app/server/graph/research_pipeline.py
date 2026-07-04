@@ -122,6 +122,7 @@ class ResearchPipeline:
         )
         theory_content = ""
         sympy_result: dict = {}
+        num_result: dict | None = None
         async for chunk in self._stage(
             "theory_derivation",
             "theory",
@@ -138,15 +139,32 @@ class ResearchPipeline:
                     sympy_result = json.loads(chunk.content)
                 except json.JSONDecodeError:
                     pass
+            elif chunk.type == "numerical_verification_result":
+                try:
+                    num_result = json.loads(chunk.content)
+                except json.JSONDecodeError:
+                    pass
             yield chunk
 
         # Stage 3: Experiment (conditional)
-        num_result: dict | None = None
         if needs_experiment_handoff(sympy_result, num_result):
+            from server.experiments.runner import run_config
+
             exp_prompt = (
                 f"请对以下理论推导进行数值验证（使用 numerical MCP）：\n\n"
                 f"{theory_content[:3000] if theory_content else clean_message}"
             )
+            try:
+                auto_record = run_config("quadratic_minimum.yaml", session_id=session_id)
+                yield StreamChunk(
+                    type="numerical_verification_result",
+                    content=json.dumps(auto_record.get("summary", auto_record), ensure_ascii=False),
+                    agent_name="experiment",
+                    a2a_task_id=a2a_task_id,
+                )
+                num_result = auto_record.get("summary", auto_record)
+            except Exception as exc:
+                logger.warning("自动实验执行失败，回退 Experiment Agent: %s", exc)
             async for chunk in self._stage(
                 "experiment_verify",
                 "experiment",

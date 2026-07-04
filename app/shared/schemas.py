@@ -109,7 +109,7 @@ class ChatRequest(BaseModel):
         default=None,
         description="是否启用 MCP 工具；None 为服务端 ENABLE_MCP 默认值",
     )
-    agent: Literal["general", "theory", "experiment", "literature", "review"] | None = Field(
+    agent: Literal["general", "theory", "experiment", "literature", "review", "counterexample"] | None = Field(
         default=None,
         description="指定 Agent；省略时按 auto_route 自动路由",
     )
@@ -434,6 +434,7 @@ class ExperimentRunInfo(BaseModel):
     log_path: str = ""
     created_at: str | None = None
     summary: dict[str, Any] = Field(default_factory=dict)
+    metrics: dict[str, Any] = Field(default_factory=dict)
 
 
 class ExperimentRunsResponse(BaseModel):
@@ -444,11 +445,34 @@ class ExperimentRunsResponse(BaseModel):
 
 
 class LatexExportRequest(BaseModel):
-    """POST /v1/export/latex 请求体。"""
+    """POST /v1/export/* 请求体。"""
 
     session_id: str | None = None
     title: str = "Theory Export"
     include_global: bool = True
+    include_chat: bool = True
+    project_id: str = "default"
+    use_ai: bool = False
+    ai_instructions: str | None = None
+
+
+class ExportPolishResponse(BaseModel):
+    """POST /v1/export/polish 响应。"""
+
+    markdown: str
+    ai_applied: bool = False
+    message: str = ""
+
+
+class ExportPreviewResponse(BaseModel):
+    """GET /v1/export/preview 响应。"""
+
+    entry_count: int = 0
+    session_structured_count: int = 0
+    global_structured_count: int = 0
+    chat_message_count: int = 0
+    source: str = "empty"
+    hint: str = ""
 
 
 class LatexExportResponse(BaseModel):
@@ -456,3 +480,185 @@ class LatexExportResponse(BaseModel):
 
     latex: str
     path: str | None = None
+    bib_path: str | None = None
+
+
+# ── 课题（Project）─────────────────────────────────────────────
+
+class ProjectInfo(BaseModel):
+    id: str
+    name: str
+    description: str = ""
+    created_by: str = ""
+    default_assumptions: list[str] = Field(default_factory=list)
+    workspace_path: str = ""
+    rag_namespace: str = ""
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+class ProjectListResponse(BaseModel):
+    projects: list[ProjectInfo] = Field(default_factory=list)
+    total: int = 0
+
+
+class ProjectCreateRequest(BaseModel):
+    name: str = Field(..., min_length=1)
+    description: str = ""
+    created_by: str = ""
+
+
+class ProjectMemberInfo(BaseModel):
+    id: int
+    project_id: str
+    user_id: str
+    role: Literal["pi", "theorist", "experimenter", "reviewer", "literature"]
+    created_at: str | None = None
+
+
+class ProjectTaskInfo(BaseModel):
+    id: int
+    project_id: str
+    title: str
+    description: str = ""
+    assignee_role: str = "theorist"
+    status: Literal["todo", "in_progress", "blocked", "done"] = "todo"
+    related_entry_id: int | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+class ProjectTasksResponse(BaseModel):
+    tasks: list[ProjectTaskInfo] = Field(default_factory=list)
+    total: int = 0
+
+
+class ProjectTaskCreateRequest(BaseModel):
+    title: str = Field(..., min_length=1)
+    description: str = ""
+    assignee_role: str = "theorist"
+    related_entry_id: int | None = None
+
+
+class ProjectSessionInfo(BaseModel):
+    session_id: str
+    project_id: str
+
+
+class ProjectSessionsResponse(BaseModel):
+    sessions: list[ProjectSessionInfo] = Field(default_factory=list)
+    total: int = 0
+
+
+# ── 验证账本 ──────────────────────────────────────────────────
+
+class VerificationRecordInfo(BaseModel):
+    id: int
+    project_id: str = "default"
+    session_id: str | None = None
+    entry_id: int | None = None
+    claim_id: str = ""
+    tier: Literal["symbolic", "numerical", "experiment"] = "numerical"
+    executor: str = ""
+    agent_name: str = ""
+    passed: bool = False
+    result: dict[str, Any] = Field(default_factory=dict)
+    artifacts: list[str] = Field(default_factory=list)
+    created_at: str | None = None
+
+
+class VerificationRecordsResponse(BaseModel):
+    records: list[VerificationRecordInfo] = Field(default_factory=list)
+    total: int = 0
+
+
+class VerificationDashboardResponse(BaseModel):
+    project_id: str = "default"
+    total_records: int = 0
+    passed: int = 0
+    failed: int = 0
+    by_tier: dict[str, int] = Field(default_factory=dict)
+    recent: list[VerificationRecordInfo] = Field(default_factory=list)
+
+
+class VerificationClaimRequest(BaseModel):
+    claim: dict[str, Any]
+    session_id: str | None = None
+    project_id: str = "default"
+    entry_id: int | None = None
+
+
+class ExperimentRunRequest(BaseModel):
+    config_path: str = Field(..., min_length=1)
+    session_id: str | None = None
+
+
+# ── 同步 / 可观测性 ───────────────────────────────────────────
+
+class SyncMetadataRequest(BaseModel):
+    project_id: str = "default"
+    session_id: str | None = None
+    actor: str = ""
+
+
+class SyncMetadataResponse(BaseModel):
+    project_id: str
+    synced_entries: int = 0
+    metadata: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class ObservabilitySummary(BaseModel):
+    project_id: str = "default"
+    verification_total: int = 0
+    verification_passed: int = 0
+    verification_pass_rate: float = 0.0
+    by_agent: dict[str, dict[str, int]] = Field(default_factory=dict)
+
+
+class AgentQualityResponse(BaseModel):
+    agents: list[dict[str, Any]] = Field(default_factory=list)
+
+
+# ── Jupyter 桥接 ──────────────────────────────────────────────
+
+class NotebookResultUploadRequest(BaseModel):
+    name: str = "notebook_result"
+    project_id: str = "default"
+    session_id: str | None = None
+    summary: dict[str, Any] = Field(default_factory=dict)
+    metrics: dict[str, Any] = Field(default_factory=dict)
+
+
+class NotebookResultUploadResponse(BaseModel):
+    run_id: str
+    log_path: str
+    status: str = "indexed"
+
+
+class WorkspaceWriteRequest(BaseModel):
+    content: str = Field(..., min_length=0)
+
+
+class AssumptionDagResponse(BaseModel):
+    nodes: list[dict[str, Any]] = Field(default_factory=list)
+    edges: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class BibliographyEntryInfo(BaseModel):
+    id: int | None = None
+    project_id: str = "default"
+    bib_key: str
+    title: str = ""
+    authors: str = ""
+    year: str = ""
+    arxiv_id: str = ""
+    doi: str = ""
+    raw_bibtex: str = ""
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    created_at: str | None = None
+
+
+class BibliographyListResponse(BaseModel):
+    entries: list[BibliographyEntryInfo] = Field(default_factory=list)
+    total: int = 0
+

@@ -12,7 +12,7 @@ const ENABLE_MCP_KEY = "ai4s_enable_mcp";
 
 export type ChatMode = "chat" | "math";
 
-export type AgentChoice = "auto" | "general" | "theory" | "experiment" | "literature" | "review";
+export type AgentChoice = "auto" | "general" | "theory" | "experiment" | "literature" | "review" | "counterexample";
 
 export type ReasoningEffort = "high" | "max";
 
@@ -171,7 +171,8 @@ export function getAgentChoice(): AgentChoice {
     raw === "general" ||
     raw === "theory" ||
     raw === "experiment" ||
-    raw === "literature"
+    raw === "literature" ||
+    raw === "review"
   ) {
     return raw;
   }

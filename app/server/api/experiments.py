@@ -9,7 +9,12 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException
 
 from server.config import get_settings
-from shared.schemas import ExperimentRunInfo, ExperimentRunsResponse
+from server.experiments.runner import run_config
+from shared.schemas import (
+    ExperimentRunInfo,
+    ExperimentRunRequest,
+    ExperimentRunsResponse,
+)
 
 router = APIRouter(tags=["experiments"])
 
@@ -37,9 +42,20 @@ def _list_runs() -> list[ExperimentRunInfo]:
                 log_path=str(path.relative_to(_experiments_root())),
                 created_at=data.get("created_at"),
                 summary=data.get("summary", {}),
+                metrics=data.get("metrics", {}),
             )
         )
     return runs
+
+
+@router.post("/v1/experiments/runs")
+async def create_experiment_run(request: ExperimentRunRequest) -> dict:
+    try:
+        return run_config(request.config_path, session_id=request.session_id)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @router.get("/v1/experiments/runs", response_model=ExperimentRunsResponse)

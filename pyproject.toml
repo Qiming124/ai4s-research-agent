@@ -30,6 +30,7 @@ dependencies = [
     "sympy>=1.13.0",
     "numpy>=1.26.0",
     "scipy>=1.11.0",
+    "pyyaml>=6.0.0",
 ]
 
 [project.optional-dependencies]
@@ -46,6 +47,14 @@ numerical = [
 pdf = [
     "pypdf>=4.0.0",
 ]
+docx = [
+    "python-docx>=1.1.0",
+]
+export = [
+    "python-docx>=1.1.0",
+    "fpdf2>=2.8.0",
+    "reportlab>=4.0.0",
+]
 
 [project.scripts]
 research-agent-cli = "client.cli:main"
@@ -54,7 +63,10 @@ research-agent-cli = "client.cli:main"
 where = ["app"]
 include = ["server*", "client*", "shared*"]
 
+[tool.setuptools.package-data]
+"server.export" = ["fonts/*.otf"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-pythonpath = ["app"]
+pythonpath = ["app", "."]

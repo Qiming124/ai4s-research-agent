@@ -76,6 +76,68 @@ export function useDocuments(sessionId: string | null, enabled = true) {
     [refresh, sessionId],
   );
 
+  const uploadFile = useCallback(
+    async (file: File, title?: string) => {
+      if (!sessionId) {
+        setError("请先选择或创建会话");
+        return false;
+      }
+      setUploading(true);
+      setError(null);
+      try {
+        const form = new FormData();
+        form.append("session_id", sessionId);
+        form.append("file", file);
+        if (title) form.append("title", title);
+        const res = await fetch("/v1/documents/upload", {
+          method: "POST",
+          body: form,
+        });
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+        }
+        await refresh();
+        return true;
+      } catch (err) {
+        setError(formatBackendError(err));
+        return false;
+      } finally {
+        setUploading(false);
+      }
+    },
+    [refresh, sessionId],
+  );
+
+  const ingestArxiv = useCallback(
+    async (arxivId: string, title?: string) => {
+      if (!sessionId) {
+        setError("请先选择或创建会话");
+        return false;
+      }
+      setUploading(true);
+      setError(null);
+      try {
+        const params = new URLSearchParams({
+          session_id: sessionId,
+          arxiv_id: arxivId.trim(),
+        });
+        if (title) params.set("title", title);
+        const res = await fetch(`/v1/documents/from-arxiv?${params}`, { method: "POST" });
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+        }
+        await refresh();
+        return true;
+      } catch (err) {
+        setError(formatBackendError(err));
+        return false;
+      } finally {
+        setUploading(false);
+      }
+    },
+    [refresh, sessionId],
+  );
+
   const deleteDocument = useCallback(
     async (docId: string) => {
       if (!sessionId) {
@@ -128,6 +190,8 @@ export function useDocuments(sessionId: string | null, enabled = true) {
     uploading,
     refresh,
     uploadDocument,
+    uploadFile,
+    ingestArxiv,
     deleteDocument,
     clearAllDocuments,
   };

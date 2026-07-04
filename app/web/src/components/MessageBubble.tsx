@@ -1,5 +1,5 @@
 import type { ChatMessage } from "../hooks/useChatStream";
-import { parseCotSections } from "../utils/cotParse";
+import { parseCotSections, stripCotSections } from "../utils/cotParse";
 import { CotStepsPanel } from "./CotStepsPanel";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { MarkdownContent } from "./MarkdownContent";
@@ -46,6 +46,8 @@ export function MessageBubble({ message, showReasoning = true }: MessageBubblePr
       : !message.streaming
         ? parseCotSections(message.content)
         : [];
+  const displayContent =
+    cotSteps.length > 0 ? stripCotSections(message.content) : message.content;
 
   const body = (
     <div className={`message-row ${isUser ? "message-user" : "message-assistant"}`}>
@@ -80,8 +82,8 @@ export function MessageBubble({ message, showReasoning = true }: MessageBubblePr
                 {placeholder}
               </div>
             )}
-            <MarkdownContent content={message.content} isStreaming={!!message.streaming} />
-            {message.streaming && message.content && (
+            <MarkdownContent content={displayContent} isStreaming={!!message.streaming} />
+            {message.streaming && displayContent && (
               <span className="cursor-blink">▍</span>
             )}
             {message.usage && !message.streaming && (

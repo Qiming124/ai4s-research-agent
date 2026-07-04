@@ -8,6 +8,8 @@ import re
 from collections.abc import AsyncIterator
 from typing import Any
 
+from server.memory.claim_parser import claim_from_content_or_expression, parse_verifiable_claim
+from server.memory.verification import get_verification_ledger
 from server.mcp.client import MCPClient
 from server.graph.workflow import workflow_step_chunk, workflow_step_record
 from shared.schemas import PersistedToolCall, StreamChunk
@@ -21,8 +23,16 @@ _EXPRESSION_PATTERNS = [
 ]
 
 
+def parse_verifiable_claim_from_content(content: str) -> dict[str, Any] | None:
+    """解析结构化 verifiable Claim 块。"""
+    return parse_verifiable_claim(content)
+
+
 def extract_loss_expression(content: str) -> str | None:
     """从推导文本中启发式提取可符号化的损失表达式。"""
+    claim = parse_verifiable_claim(content)
+    if claim and claim.get("expression"):
+        return str(claim["expression"])
     for pattern in _EXPRESSION_PATTERNS:
         match = pattern.search(content)
         if match:
@@ -59,7 +69,8 @@ async def run_sympy_verification(
             "details": [r.name for r in sympy_calls],
         }
 
-    expression = extract_loss_expression(content)
+    claim = claim_from_content_or_expression(content, extract_loss_expression(content))
+    expression = (claim or {}).get("expression") or extract_loss_expression(content)
     if not expression:
         return {
             "status": "skipped",
@@ -67,10 +78,12 @@ async def run_sympy_verification(
             "details": [],
         }
 
+    point = (claim or {}).get("point", "0,0")
     try:
+        sym_expr = expression.replace("x0", "theta").replace("x1", "theta2")
         grad_result = await mcp.call_tool(
             "sympy__differentiate",
-            {"expression": expression, "variable": "theta"},
+            {"expression": sym_expr, "variable": "theta"},
         )
         grad_data = json.loads(grad_result)
         if "error" in grad_data:
@@ -82,7 +95,7 @@ async def run_sympy_verification(
 
         hess_result = await mcp.call_tool(
             "sympy__hessian_eigenvalues",
-            {"expression": expression, "variables": "theta"},
+            {"expression": sym_expr, "variables": "theta,theta2"},
         )
         hess_data = json.loads(hess_result)
         if "error" in hess_data:
@@ -132,7 +145,8 @@ async def run_numerical_verification(
             "details": {},
         }
 
-    expression = extract_loss_expression(content)
+    claim = claim_from_content_or_expression(content, extract_loss_expression(content))
+    expression = (claim or {}).get("expression") or extract_loss_expression(content)
     if not expression:
         return {
             "status": "skipped",
@@ -140,11 +154,14 @@ async def run_numerical_verification(
             "details": {},
         }
 
+    point = (claim or {}).get("point", "0,0")
+    variables = (claim or {}).get("variables", "x0,x1")
+    expected = (claim or {}).get("expected") or {}
     num_expr = to_numerical_expression(expression)
     try:
         result_raw = await mcp.call_tool(
             "numerical__critical_point_classify",
-            {"expression": num_expr, "point": "0,0", "variables": "x0,x1"},
+            {"expression": num_expr, "point": point, "variables": variables},
         )
         data = json.loads(result_raw)
         if "error" in data:
@@ -154,11 +171,16 @@ async def run_numerical_verification(
                 "details": data,
             }
         classification = data.get("classification", "unknown")
-        status = "pass" if classification in ("local_minimum", "saddle", "local_maximum") else "partial"
+        expected_cls = expected.get("classification")
+        if expected_cls:
+            status = "pass" if classification == expected_cls else "fail"
+        else:
+            status = "pass" if classification in ("local_minimum", "saddle", "local_maximum") else "partial"
         return {
             "status": status,
             "reason": f"数值临界点分类: {classification}",
             "details": data,
+            "claim": claim,
         }
     except Exception as exc:
         logger.warning("数值验证异常: %s", exc)
@@ -169,6 +191,31 @@ async def run_numerical_verification(
         }
 
 
+def _record_verification_ledger(
+    *,
+    session_id: str | None,
+    tier: str,
+    passed: bool,
+    result: dict[str, Any],
+    agent_name: str,
+    entry_id: int | None = None,
+) -> None:
+    try:
+        claim = result.get("claim") or {}
+        get_verification_ledger().append(
+            session_id=session_id,
+            entry_id=entry_id,
+            claim_id=str(claim.get("expression", result.get("reason", "")))[:64],
+            tier=tier,
+            executor=f"theory_pipeline:{tier}",
+            agent_name=agent_name,
+            passed=passed,
+            result=result,
+        )
+    except Exception as exc:
+        logger.warning("验证账本写入失败: %s", exc)
+
+
 async def stream_theory_verification(
     mcp: MCPClient,
     content: str,
@@ -177,6 +224,8 @@ async def stream_theory_verification(
     agent_name: str,
     a2a_task_id: str | None = None,
     workflow_records: list[dict] | None = None,
+    session_id: str | None = None,
+    entry_id: int | None = None,
 ) -> AsyncIterator[StreamChunk]:
     """运行 SymPy + 数值验证并产出 SSE 事件。"""
     wf_records = workflow_records if workflow_records is not None else []
@@ -213,6 +262,18 @@ async def stream_theory_verification(
         a2a_task_id=a2a_task_id,
     )
 
+    claim = claim_from_content_or_expression(content, extract_loss_expression(content))
+    if claim:
+        sympy_result["claim"] = claim
+    _record_verification_ledger(
+        session_id=session_id,
+        tier="symbolic",
+        passed=str(sympy_result.get("status")) == "pass",
+        result=sympy_result,
+        agent_name=agent_name,
+        entry_id=entry_id,
+    )
+
     payload = json.dumps(sympy_result, ensure_ascii=False, indent=2)
     yield StreamChunk(
         type="verification_result",
@@ -239,6 +300,14 @@ async def stream_theory_verification(
             detail=str(num_result.get("reason", "")),
             agent_name=agent_name,
             a2a_task_id=a2a_task_id,
+        )
+        _record_verification_ledger(
+            session_id=session_id,
+            tier="numerical",
+            passed=str(num_result.get("status")) == "pass",
+            result=num_result,
+            agent_name=agent_name,
+            entry_id=entry_id,
         )
         yield StreamChunk(
             type="numerical_verification_result",

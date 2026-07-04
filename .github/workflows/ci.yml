@@ -16,7 +16,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install package
-        run: pip install -e ".[dev]"
+        run: pip install -e ".[dev,pdf,docx,export]"
 
       - name: Run pytest
         env:
@@ -37,7 +37,22 @@ jobs:
           cache: npm
           cache-dependency-path: app/web/package-lock.json
 
-      - name: Install and build
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install backend for E2E
+        run: |
+          cd ../..
+          pip install -e ".[dev,pdf,docx,export]"
+
+      - name: Install and build frontend
         run: |
           npm ci
           npm run build
+          npx playwright install chromium --with-deps
+
+      - name: Playwright E2E
+        env:
+          DEEPSEEK_API_KEY: sk-test-key-for-ci
+        run: npm run test:e2e

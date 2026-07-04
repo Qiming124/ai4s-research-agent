@@ -36,8 +36,13 @@ from server.api.mcp import router as mcp_router
 from server.api.stats import router as stats_router
 from server.api.export import router as export_router
 from server.api.experiments import router as experiments_router
+from server.api.jupyter import router as jupyter_router
+from server.api.observability import router as observability_router
+from server.api.projects import router as projects_router
+from server.api.sync import router as sync_router
 from server.api.structured_memory import router as structured_memory_router
 from server.api.theory import router as theory_router
+from server.api.verification import router as verification_router
 from server.config import get_settings, setup_logging
 from server.mcp.client import get_mcp_client, reset_mcp_client
 from server.observability.middleware import RequestContextMiddleware
@@ -99,6 +104,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         synced = sync_workspace_to_l4(settings)
         if synced:
             logger.info("  L4 全局记忆: 已同步 %d 条引理", synced)
+    from server.memory.projects import get_project_store
+
+    get_project_store()
+    logger.info("  课题存储: 已初始化（含默认课题与任务看板）")
     logger.info("=" * 50)
 
     yield
@@ -146,6 +155,11 @@ def create_app() -> FastAPI:
     app.include_router(theory_router)
     app.include_router(experiments_router)
     app.include_router(export_router)
+    app.include_router(projects_router)
+    app.include_router(verification_router)
+    app.include_router(observability_router)
+    app.include_router(sync_router)
+    app.include_router(jupyter_router)
 
     # 生产模式：dist 存在时托管 web/dist 静态文件与首页。
     # 开发模式 dist 不存在则跳过（用 Vite :5173 + proxy）

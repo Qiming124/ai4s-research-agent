@@ -4,7 +4,32 @@
 
 **文档索引**：[`doc/README.md`](doc/README.md)（架构、API、环境变量、部署）
 
-**当前能力概览（v0.4）**：
+**v2.0 全链路自动化（当前）**：
+
+| 模块 | 说明 |
+|------|------|
+| API 全覆盖测试 | `tests/api/` 冒烟 + 分域测试 + 黄金路径 workflow（90+ pytest） |
+| 课题-会话联动 | 按课题过滤会话、自动关联、首条消息命名 |
+| 流水线自动化 | SSE `pipeline_stage` 自动切换工作台 Tab |
+| 文献 | PDF/DOCX/arXiv 导入 UI、书目库、BibTeX 导出 |
+| 理论 | 假设 DAG、符号/假设速览、工作区在线编辑 |
+| 验证 | 手动重跑、验证账本、Agent 质量面板 |
+| 导出 | LaTeX / DOCX / PDF（按课题 `project_id`） |
+| E2E | Playwright 三场景（课题、文献、导出） |
+| 文档 | [`doc/API-COVERAGE.md`](doc/API-COVERAGE.md) 58 端点清单 |
+
+**当前能力概览（v1.0 产业化路线）**：
+
+| 模块 | 说明 |
+|------|------|
+| 课题工作台 | Project 实体、任务看板、科研工作台 Tabs（文献/理论/验证/图谱/实验/导出） |
+| 验证闭环 | 结构化 Claim → SymPy/数值/Torch 三层验证 → 验证账本 |
+| 记忆扩展 | 假设 DAG、BibTeX 文献库、L4 版本化、工作区在线预览 |
+| 协作 | 角色分工（PI/理论/实验/审稿/文献）、可选云端元数据同步 |
+| Counterexample Agent | 反例搜索与验证 |
+| 可观测性 | `/v1/observability/summary`、Agent 质量面板 |
+
+**v0.4 基础能力**：
 
 | 模块 | 说明 |
 |------|------|

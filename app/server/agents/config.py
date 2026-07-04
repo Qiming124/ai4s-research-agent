@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Literal
 
 from server.llm.prompts import (
+    COUNTEREXAMPLE_AGENT_PROMPT,
     DEFAULT_SYSTEM_PROMPT,
     EXPERIMENT_AGENT_PROMPT,
     LITERATURE_AGENT_PROMPT,
@@ -12,7 +13,7 @@ from server.llm.prompts import (
     THEORY_AGENT_PROMPT,
 )
 
-AgentName = Literal["general", "theory", "experiment", "literature", "review"]
+AgentName = Literal["general", "theory", "experiment", "literature", "review", "counterexample"]
 
 AGENT_NAMES: tuple[AgentName, ...] = (
     "general",
@@ -20,6 +21,7 @@ AGENT_NAMES: tuple[AgentName, ...] = (
     "experiment",
     "literature",
     "review",
+    "counterexample",
 )
 
 _AGENT_PROMPTS: dict[AgentName, str] = {
@@ -28,6 +30,7 @@ _AGENT_PROMPTS: dict[AgentName, str] = {
     "experiment": EXPERIMENT_AGENT_PROMPT,
     "literature": LITERATURE_AGENT_PROMPT,
     "review": REVIEW_AGENT_PROMPT,
+    "counterexample": COUNTEREXAMPLE_AGENT_PROMPT,
 }
 
 # 内置默认白名单（可被 mcp_tool_whitelist.json agents 覆盖）
@@ -37,6 +40,7 @@ _AGENT_DEFAULT_WHITELIST: dict[AgentName, list[str]] = {
     "experiment": ["filesystem__*", "numerical__*"],
     "literature": ["arxiv__*", "web_search__*"],
     "review": ["filesystem__*"],
+    "counterexample": ["sympy__*", "numerical__*"],
 }
 
 

@@ -9,6 +9,7 @@ export interface ExperimentRun {
   log_path: string;
   created_at: string | null;
   summary: Record<string, unknown>;
+  metrics?: Record<string, unknown>;
 }
 
 export function useExperimentLogs(enabled: boolean) {

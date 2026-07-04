@@ -1,4 +1,5 @@
 import type { CotStep } from "../utils/cotParse";
+import { MarkdownContent } from "./MarkdownContent";
 
 interface CotStepsPanelProps {
   steps: CotStep[];
@@ -18,7 +19,9 @@ export function CotStepsPanel({ steps }: CotStepsPanelProps) {
               <span className="cot-step-num">{step.step}</span>
               <strong>{step.title}</strong>
             </div>
-            <pre className="cot-step-body">{step.body}</pre>
+            <div className="cot-step-body">
+              <MarkdownContent content={step.body} className="cot-step-md" />
+            </div>
           </li>
         ))}
       </ol>

@@ -243,6 +243,10 @@ class Settings(BaseSettings):
         default="single",
         description="研究流水线模式：single=单次路由，auto=多跳 literature→theory→experiment→review",
     )
+    enable_cloud_sync: bool = Field(
+        default=False,
+        description="是否启用可选云端元数据同步（不含原始推导正文）",
+    )
     enable_numerical_mcp: bool = Field(
         default=True,
         description="是否在 MCP 配置中启用 numerical 数值验证服务",

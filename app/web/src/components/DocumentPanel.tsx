@@ -9,9 +9,13 @@ interface DocumentPanelProps {
   disabled?: boolean;
   onRefresh: () => void;
   onUpload: (content: string, title?: string) => Promise<boolean>;
+  onUploadFile?: (file: File, title?: string) => Promise<boolean>;
+  onIngestArxiv?: (arxivId: string, title?: string) => Promise<boolean>;
   onDelete: (docId: string) => Promise<boolean>;
   onClearAll?: () => Promise<boolean>;
 }
+
+const BINARY_ACCEPT = ".pdf,.docx,.md,.txt,.markdown";
 
 export function DocumentPanel({
   documents,
@@ -21,12 +25,15 @@ export function DocumentPanel({
   disabled = false,
   onRefresh,
   onUpload,
+  onUploadFile,
+  onIngestArxiv,
   onDelete,
   onClearAll,
 }: DocumentPanelProps) {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
-  const fileRef = useRef<HTMLInputElement>(null);
+  const textFileRef = useRef<HTMLInputElement>(null);
+  const binaryFileRef = useRef<HTMLInputElement>(null);
 
   const handleUpload = async () => {
     if (!content.trim()) return;
@@ -37,7 +44,7 @@ export function DocumentPanel({
     }
   };
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleTextFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const text = await file.text();
@@ -46,6 +53,28 @@ export function DocumentPanel({
       setTitle(file.name.replace(/\.[^.]+$/, ""));
     }
     e.target.value = "";
+  };
+
+  const handleBinaryFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !onUploadFile) return;
+    const ok = await onUploadFile(file, title.trim() || file.name.replace(/\.[^.]+$/, ""));
+    if (ok) {
+      setTitle("");
+      setContent("");
+    }
+    e.target.value = "";
+  };
+
+  const [arxivId, setArxivId] = useState("");
+
+  const handleArxiv = async () => {
+    if (!onIngestArxiv || !arxivId.trim()) return;
+    const ok = await onIngestArxiv(arxivId.trim(), title.trim() || undefined);
+    if (ok) {
+      setArxivId("");
+      setTitle("");
+    }
   };
 
   return (
@@ -86,7 +115,7 @@ export function DocumentPanel({
       </label>
 
       <label className="settings-field doc-upload-field">
-        内容
+        内容（文本粘贴）
         <textarea
           className="doc-content-input"
           rows={4}
@@ -97,23 +126,59 @@ export function DocumentPanel({
         />
       </label>
 
+      <div className="inline-form">
+        <input
+          className="inline-form-input"
+          placeholder="arXiv ID（如 2301.00001）"
+          value={arxivId}
+          disabled={disabled || uploading || !onIngestArxiv}
+          onChange={(e) => setArxivId(e.target.value)}
+        />
+        <button
+          type="button"
+          className="btn-small btn-primary"
+          disabled={disabled || uploading || !arxivId.trim() || !onIngestArxiv}
+          onClick={() => void handleArxiv()}
+        >
+          {uploading ? "导入中…" : "arXiv 导入"}
+        </button>
+      </div>
+
       <div className="doc-upload-actions">
         <input
-          ref={fileRef}
+          ref={textFileRef}
           type="file"
           accept=".md,.txt,.markdown"
           className="doc-file-input"
-          onChange={handleFileChange}
+          onChange={handleTextFileChange}
           disabled={disabled || uploading}
+        />
+        <input
+          ref={binaryFileRef}
+          type="file"
+          accept={BINARY_ACCEPT}
+          className="doc-file-input"
+          onChange={handleBinaryFileChange}
+          disabled={disabled || uploading || !onUploadFile}
         />
         <button
           type="button"
           className="btn-secondary btn-sm"
-          onClick={() => fileRef.current?.click()}
+          onClick={() => textFileRef.current?.click()}
           disabled={disabled || uploading}
         >
-          选择文件
+          文本文件
         </button>
+        {onUploadFile && (
+          <button
+            type="button"
+            className="btn-secondary btn-sm"
+            onClick={() => binaryFileRef.current?.click()}
+            disabled={disabled || uploading}
+          >
+            PDF / Word
+          </button>
+        )}
         <button
           type="button"
           className="btn-primary btn-sm"
@@ -126,7 +191,7 @@ export function DocumentPanel({
 
       {error && <p className="settings-error">{error}</p>}
       <p className="settings-hint">
-        来自 MCP 目录的自动索引文件，删除或「清空全部」后重启不会再次索引；手动上传可重新加入。
+        支持 PDF、DOCX、Markdown、纯文本导入并自动解析入库；也可粘贴文本后上传索引。
       </p>
 
       <ul className="doc-list">
