@@ -36,6 +36,7 @@ benchmarks/
 # Web 前端
 app/web/node_modules/
 app/web/dist/
+app/web/test-results/
 
 # 运行时数据（种子工作区 data/theory、data/experiments/configs 纳入版本库）
 data/chroma/
@@ -44,3 +45,9 @@ data/mcp_files/*
 !data/mcp_files/.gitkeep
 data/experiments/logs/*
 !data/experiments/logs/.gitkeep
+data/experiments/notebooks/results/
+
+# 本地导出/字体/冒烟测试产物（勿提交）
+data/test_*
+data/theory/_smoke.md
+data/theory/smoke_test_file.md
