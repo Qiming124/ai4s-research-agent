@@ -9,7 +9,8 @@ from collections.abc import AsyncIterator
 from server.agents.config import AgentName, normalize_agent_name
 from server.agents.subagent import SubAgent
 from server.config import Settings, get_settings
-from server.graph.research_pipeline import ResearchPipeline, should_use_research_pipeline
+from server.graph.research_pipeline import should_use_research_pipeline
+from server.graph.research_supervisor import ResearchSupervisorPipeline
 from server.graph.router_llm import classify_intent_smart
 from server.mcp.client import MCPClient
 from shared.schemas import StreamChunk
@@ -70,13 +71,15 @@ class MultiAgentOrchestrator:
         enable_thinking: bool | None = None,
         reasoning_effort: str | None = None,
         cot_mode: str = "standard",
+        project_id: str | None = None,
+        campaign_id: str | None = None,
     ) -> AsyncIterator[StreamChunk]:
         if (
             agent is None
             and auto_route
             and should_use_research_pipeline(message, mode, self._settings)
         ):
-            pipeline = ResearchPipeline(
+            pipeline = ResearchSupervisorPipeline(
                 settings=self._settings,
                 mcp_client=self._mcp,
             )
@@ -84,6 +87,8 @@ class MultiAgentOrchestrator:
                 message,
                 session_id,
                 mode=mode,
+                project_id=project_id,
+                campaign_id=campaign_id,
                 system_prompt_override=system_prompt_override,
                 max_history_messages=max_history_messages,
                 enable_history_summary=enable_history_summary,
@@ -152,6 +157,8 @@ class MultiAgentOrchestrator:
         enable_thinking: bool | None = None,
         reasoning_effort: str | None = None,
         cot_mode: str = "standard",
+        project_id: str | None = None,
+        campaign_id: str | None = None,
     ) -> tuple[str, str, str, dict | None, AgentName, str]:
         sid = session_id or ""
         content = ""
@@ -173,6 +180,8 @@ class MultiAgentOrchestrator:
             enable_thinking=enable_thinking,
             reasoning_effort=reasoning_effort,
             cot_mode=cot_mode,
+            project_id=project_id,
+            campaign_id=campaign_id,
         ):
             if chunk.type == "agent_handoff":
                 target = normalize_agent_name(chunk.to_agent) or target

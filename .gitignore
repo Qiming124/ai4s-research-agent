@@ -47,6 +47,10 @@ data/experiments/logs/*
 !data/experiments/logs/.gitkeep
 data/experiments/notebooks/results/
 
+# Campaign 运行时产物（种子见 data/theory/campaigns/）
+data/campaigns/*
+!data/campaigns/.gitkeep
+
 # 本地导出/字体/冒烟测试产物（勿提交）
 data/test_*
 data/theory/_smoke.md

@@ -270,6 +270,22 @@ $\square$`,
     expectIncludes: ["$\\frac{\\partial \\ell}{\\partial z_k}$"],
     expectNotIncludes: ["$$\\partial$$", "$$z_k$$", "$\\partial$"],
   },
+  {
+    name: "theorem nested text subscript",
+    input: "**陈述**：L_{\\text{MSE}} 在 $\\theta=0$ 处取极小",
+    expectIncludes: ["$L_{\\text{MSE}}$"],
+  },
+  {
+    name: "theorem norm inequality",
+    input: String.raw`\|\nabla L(\theta)\|^2 \geq 2\mu L(\theta)`,
+    expectIncludes: [String.raw`$\|\nabla L(\theta)\|^2$`],
+    expectNotIncludes: ["|$\\nabla$"],
+  },
+  {
+    name: "theorem section labels preserved",
+    input: "**证明**：\n$$\\nabla L(\\theta) = 0$$",
+    expectIncludes: ["**证明**", "$$\\nabla L(\\theta) = 0$$"],
+  },
 ];
 
 let failed = 0;

@@ -12,6 +12,8 @@ FROM python:3.12-slim AS runtime
 
 # 设为 1 时安装 sentence-transformers（会拉取 torch，镜像更大、构建更慢）
 ARG INSTALL_RAG_EXTRA=0
+# 设为 1 时安装 texlive（pandoc+xelatex PDF）；网络不稳时可设为 0，回退 reportlab/HTML 导出
+ARG INSTALL_TEXLIVE=1
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -23,11 +25,18 @@ WORKDIR /repo
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     pandoc \
-    texlive-xetex \
-    texlive-lang-chinese \
     fonts-noto-cjk \
     && if [ "$INSTALL_RAG_EXTRA" = "1" ]; then \
          apt-get install -y --no-install-recommends build-essential; \
+       fi \
+    && if [ "$INSTALL_TEXLIVE" = "1" ]; then \
+         for i in 1 2 3; do \
+           apt-get install -y --no-install-recommends \
+             texlive-xetex texlive-lang-chinese && break; \
+           echo "texlive install attempt $i failed, retrying..."; \
+           apt-get update; \
+           sleep 5; \
+         done || echo "WARN: texlive install skipped; PDF uses reportlab/HTML fallback"; \
        fi \
     && rm -rf /var/lib/apt/lists/*
 

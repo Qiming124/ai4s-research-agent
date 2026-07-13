@@ -79,6 +79,8 @@ export interface ChatMessage {
   vizData?: import("../components/LossLandscapeViz").VizData;
   memoryWarnings?: string[];
   pipelineStages?: string[];
+  pipelineGates?: string[];
+  campaignUpdates?: string[];
 }
 
 interface SseEvent {
@@ -444,6 +446,26 @@ function applyStreamEvent(
       );
   }
 
+  if (ev.type === "pipeline_gate") {
+    const gate = ev.content ?? "";
+    return (prev) =>
+      prev.map((m) =>
+        m.id === assistantId
+          ? { ...m, pipelineGates: [...(m.pipelineGates ?? []), gate] }
+          : m,
+      );
+  }
+
+  if (ev.type === "campaign_update") {
+    const update = ev.content ?? "";
+    return (prev) =>
+      prev.map((m) =>
+        m.id === assistantId
+          ? { ...m, campaignUpdates: [...(m.campaignUpdates ?? []), update] }
+          : m,
+      );
+  }
+
   if (ev.type === "memory_warning") {
     const warning = ev.content ?? "";
     return (prev) =>
@@ -518,13 +540,23 @@ function processStreamEvents(
   assistantId: string,
   ctx: Parameters<typeof applyStreamEvent>[2],
   setMessages: Dispatch<SetStateAction<ChatMessage[]>>,
-  onPipelineStage?: (stage: string) => void,
+  callbacks?: {
+    onPipelineStage?: (stage: string) => void;
+    onCampaignUpdate?: (payload: string) => void;
+    onPipelineGate?: (payload: string) => void;
+  },
 ) {
   const updaters: Array<(prev: ChatMessage[]) => ChatMessage[]> = [];
 
   for (const ev of events) {
-    if (ev.type === "pipeline_stage" && onPipelineStage) {
-      onPipelineStage(ev.content ?? ev.title ?? "stage");
+    if (ev.type === "pipeline_stage" && callbacks?.onPipelineStage) {
+      callbacks.onPipelineStage(ev.content ?? ev.title ?? "stage");
+    }
+    if (ev.type === "campaign_update" && callbacks?.onCampaignUpdate) {
+      callbacks.onCampaignUpdate(ev.content ?? "{}");
+    }
+    if (ev.type === "pipeline_gate" && callbacks?.onPipelineGate) {
+      callbacks.onPipelineGate(ev.content ?? "{}");
     }
     try {
       const updater = applyStreamEvent(ev, assistantId, ctx);
@@ -564,7 +596,12 @@ export function useChatStream(
   agentPref: AgentPreference,
   reasoningPref: ReasoningPreference,
   cotMode: CotMode,
-  callbacks?: { onPipelineStage?: (stage: string) => void },
+  callbacks?: {
+    onPipelineStage?: (stage: string) => void;
+    onCampaignUpdate?: (payload: string) => void;
+    onPipelineGate?: (payload: string) => void;
+  },
+  projectId?: string,
 ) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [sessionId, setSessionIdState] = useState(getSessionId);
@@ -732,6 +769,7 @@ export function useChatStream(
           ...buildAgentRequestFields(agentPref),
           ...buildReasoningRequestFields(reasoningPref),
           ...buildCotModeRequestField(cotMode, chatMode),
+          project_id: projectId ?? undefined,
         }),
         signal: controller.signal,
       });
@@ -747,7 +785,7 @@ export function useChatStream(
       let buffer = "";
 
       const handleParsedEvents = (events: SseEvent[]) => {
-        processStreamEvents(events, assistantId, streamCtx, setMessages, callbacks?.onPipelineStage);
+        processStreamEvents(events, assistantId, streamCtx, setMessages, callbacks);
       };
 
       while (true) {
@@ -794,7 +832,7 @@ export function useChatStream(
         pendingSessionIdRef.current = null;
       }
     }
-  }, [isStreaming, chatMode, historyPref, mcpPref, agentPref, reasoningPref, cotMode, finishStreaming, callbacks]);
+  }, [isStreaming, chatMode, historyPref, mcpPref, agentPref, reasoningPref, cotMode, finishStreaming, callbacks, projectId]);
 
   const clearSession = useCallback(async () => {
     historyEpochRef.current += 1;

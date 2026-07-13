@@ -29,6 +29,11 @@ interface LeftSidebarProps {
   onSelectSession: (id: string) => void;
   onNewSession: () => void;
   onRemoveSession: (id: string) => void;
+  campaignTitle?: string | null;
+  campaignStage?: string | null;
+  campaignStatus?: string | null;
+  campaignProgress?: number;
+  campaignGates?: Record<string, string>;
 }
 
 const TABS: { id: LeftSidebarTab; label: string }[] = [
@@ -67,6 +72,11 @@ export function LeftSidebar(props: LeftSidebarProps) {
             error={props.projectsError}
             linkStatus={props.linkStatus}
             members={props.projectMembers}
+            campaignTitle={props.campaignTitle}
+            campaignStage={props.campaignStage}
+            campaignStatus={props.campaignStatus}
+            campaignProgress={props.campaignProgress}
+            campaignGates={props.campaignGates}
           />
         )}
         {tab === "tasks" && (

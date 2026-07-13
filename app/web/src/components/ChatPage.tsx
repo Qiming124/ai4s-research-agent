@@ -49,6 +49,7 @@ import { useMemoryGraph } from "../hooks/useMemoryGraph";
 import { useStructuredMemory } from "../hooks/useStructuredMemory";
 import { useWorkspaceFiles } from "../hooks/useWorkspaceFiles";
 import { useProjects } from "../hooks/useProjects";
+import { useCampaign } from "../hooks/useCampaign";
 import { useVerification } from "../hooks/useVerification";
 import { useProjectTasks } from "../hooks/useProjectTasks";
 import {
@@ -91,14 +92,37 @@ export function ChatPage() {
   const [linkStatus, setLinkStatus] = useState<string | null>(null);
   const [projectMembers, setProjectMembers] = useState<{ user_id: string; role: string }[]>([]);
 
+  const {
+    projects,
+    currentProject,
+    currentProjectId,
+    selectProject,
+    createProject,
+    error: projectsError,
+    refresh: refreshProjects,
+  } = useProjects(true);
+
+  const {
+    campaign,
+    progress: campaignProgress,
+    applyCampaignUpdate,
+    refresh: refreshCampaign,
+  } = useCampaign(currentProjectId, true);
+
   const pipelineCallbacks = useMemo(
     () => ({
       onPipelineStage: (stage: string) => {
         const tab = pipelineStageToTab(stage);
         if (tab) setWorkbenchTab(tab);
       },
+      onCampaignUpdate: (payload: string) => {
+        applyCampaignUpdate(payload);
+      },
+      onPipelineGate: () => {
+        refreshCampaign();
+      },
     }),
-    [],
+    [applyCampaignUpdate, refreshCampaign],
   );
 
   const historyPref = {
@@ -150,6 +174,7 @@ export function ChatPage() {
     reasoningPref,
     cotMode,
     pipelineCallbacks,
+    currentProjectId,
   );
 
   const sessionIdRef = useRef(sessionId);
@@ -207,16 +232,6 @@ export function ChatPage() {
     error: workspaceError,
     refresh: refreshWorkspace,
   } = useWorkspaceFiles(!backendOffline);
-
-  const {
-    projects,
-    currentProject,
-    currentProjectId,
-    selectProject,
-    createProject,
-    error: projectsError,
-    refresh: refreshProjects,
-  } = useProjects(!backendOffline);
 
   const { sessions: projectSessions, linkSession, refresh: refreshProjectSessions } =
     useProjectSessions(currentProjectId, !backendOffline);
@@ -691,6 +706,11 @@ export function ChatPage() {
             onSelectSession={handleSelectSession}
             onNewSession={handleNewSession}
             onRemoveSession={handleRemoveSession}
+            campaignTitle={campaign?.title ?? null}
+            campaignStage={campaign?.current_stage ?? null}
+            campaignStatus={campaign?.status ?? null}
+            campaignProgress={campaignProgress}
+            campaignGates={campaign?.gates ?? {}}
           />
         </ErrorBoundary>
 

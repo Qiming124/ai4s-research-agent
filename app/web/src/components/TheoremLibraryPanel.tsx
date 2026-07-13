@@ -1,5 +1,23 @@
 import type { StructuredMemoryEntry } from "../hooks/useStructuredMemory";
 import { getEntryStatus, StatusBadge } from "./TheoremDetailDrawer";
+import { MarkdownContent } from "./MarkdownContent";
+
+/** 预览截断：避免在 $ / $$ 未闭合处截断 */
+function truncateTheoremPreview(body: string, max = 480): string {
+  if (body.length <= max) return body;
+  let cut = body.slice(0, max);
+  const ddCount = (cut.match(/\$\$/g) || []).length;
+  if (ddCount % 2 !== 0) {
+    const last = cut.lastIndexOf("$$");
+    if (last >= 0) cut = cut.slice(0, last);
+  }
+  const dCount = (cut.match(/(?<!\$)\$(?!\$)/g) || []).length;
+  if (dCount % 2 !== 0) {
+    const last = cut.lastIndexOf("$");
+    if (last >= 0) cut = cut.slice(0, last);
+  }
+  return `${cut.trimEnd()}\n\n…`;
+}
 
 interface TheoremLibraryPanelProps {
   entries: StructuredMemoryEntry[];
@@ -44,10 +62,12 @@ export function TheoremLibraryPanel({
               <StatusBadge status={getEntryStatus(e)} />
             </div>
             <strong>{e.title || `条目 #${e.id}`}</strong>
-            <p className="theorem-body">
-              {e.body.slice(0, 200)}
-              {e.body.length > 200 ? "…" : ""}
-            </p>
+            <div className="theorem-body theorem-body-preview">
+              <MarkdownContent
+                content={truncateTheoremPreview(e.body)}
+                className="panel-markdown theorem-preview-md"
+              />
+            </div>
           </li>
         ))}
       </ul>

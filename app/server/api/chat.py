@@ -105,6 +105,8 @@ async def chat(request: ChatRequest) -> ChatResponse:
                 enable_thinking=request.enable_thinking,
                 reasoning_effort=request.reasoning_effort,
                 cot_mode=_effective_cot_mode(request),
+                project_id=request.project_id,
+                campaign_id=request.campaign_id,
             )
         else:
             agent = get_general_agent(math_mode=(request.mode == "math"))
@@ -118,6 +120,8 @@ async def chat(request: ChatRequest) -> ChatResponse:
                 enable_thinking=request.enable_thinking,
                 reasoning_effort=request.reasoning_effort,
                 cot_mode=_effective_cot_mode(request),
+                project_id=request.project_id,
+                campaign_id=request.campaign_id,
             )
     except Exception as exc:
         logger.exception("非流式对话失败")
@@ -179,6 +183,8 @@ async def _stream_generator(request: ChatRequest) -> AsyncIterator[str]:
                 enable_thinking=request.enable_thinking,
                 reasoning_effort=request.reasoning_effort,
                 cot_mode=_effective_cot_mode(request),
+                project_id=request.project_id,
+                campaign_id=request.campaign_id,
             ):
                 payload = chunk.model_dump()
                 yield _sse_event(payload)

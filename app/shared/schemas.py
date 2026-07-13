@@ -129,6 +129,14 @@ class ChatRequest(BaseModel):
         default="standard",
         description="结构化思维链模式：off=关闭，standard=三节，strict=强制 Markdown 小节",
     )
+    project_id: str | None = Field(
+        default=None,
+        description="关联课题 ID；省略时从 session 解析或回退 default",
+    )
+    campaign_id: str | None = Field(
+        default=None,
+        description="关联科研 Campaign ID；省略时使用课题活跃 Campaign",
+    )
 
 
 class ChatResponse(BaseModel):
@@ -186,6 +194,9 @@ class StreamChunk(BaseModel):
         "verification_result",
         "numerical_verification_result",
         "pipeline_stage",
+        "pipeline_gate",
+        "campaign_update",
+        "artifact_saved",
         "memory_warning",
         "cot_step",
         "workflow_step",
@@ -661,4 +672,64 @@ class BibliographyEntryInfo(BaseModel):
 class BibliographyListResponse(BaseModel):
     entries: list[BibliographyEntryInfo] = Field(default_factory=list)
     total: int = 0
+
+
+# ── 科研 Campaign ──────────────────────────────────────────────
+
+CampaignStageId = Literal[
+    "S0_campaign",
+    "S1_literature",
+    "S2_formalization",
+    "S3_theory",
+    "S4_counterexample",
+    "S5_experiment",
+    "S6_synthesis",
+    "S7_review",
+    "S8_archive",
+    "complete",
+]
+
+CampaignGateStatus = Literal["pending", "pass", "fail", "skipped"]
+
+
+class ResearchCampaignInfo(BaseModel):
+    id: str
+    project_id: str = "default"
+    title: str
+    task_family: str = "loss_landscape_critical_points"
+    dataset: str = ""
+    benchmark: str = ""
+    sota_reference: list[str] = Field(default_factory=list)
+    compute_budget: dict[str, Any] = Field(default_factory=dict)
+    assumptions: list[str] = Field(default_factory=list)
+    current_stage: CampaignStageId = "S0_campaign"
+    status: Literal["active", "blocked", "done", "iterate"] = "active"
+    stage_artifacts: dict[str, Any] = Field(default_factory=dict)
+    gates: dict[str, CampaignGateStatus] = Field(default_factory=dict)
+    session_id: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+class ResearchCampaignListResponse(BaseModel):
+    campaigns: list[ResearchCampaignInfo] = Field(default_factory=list)
+    total: int = 0
+
+
+class ResearchCampaignCreateRequest(BaseModel):
+    title: str = Field(..., min_length=1)
+    task_family: str = "loss_landscape_critical_points"
+    dataset: str = ""
+    benchmark: str = ""
+    sota_reference: list[str] = Field(default_factory=list)
+    compute_budget: dict[str, Any] = Field(default_factory=dict)
+    assumptions: list[str] = Field(default_factory=list)
+    session_id: str | None = None
+
+
+class ResearchCampaignUpdateRequest(BaseModel):
+    current_stage: CampaignStageId | None = None
+    status: Literal["active", "blocked", "done", "iterate"] | None = None
+    stage_artifacts: dict[str, Any] | None = None
+    gates: dict[str, CampaignGateStatus] | None = None
 

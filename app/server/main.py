@@ -38,6 +38,7 @@ from server.api.export import router as export_router
 from server.api.experiments import router as experiments_router
 from server.api.jupyter import router as jupyter_router
 from server.api.observability import router as observability_router
+from server.api.campaigns import router as campaigns_router
 from server.api.projects import router as projects_router
 from server.api.sync import router as sync_router
 from server.api.structured_memory import router as structured_memory_router
@@ -105,9 +106,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         if synced:
             logger.info("  L4 全局记忆: 已同步 %d 条引理", synced)
     from server.memory.projects import get_project_store
+    from server.memory.campaigns import get_campaign_store
 
     get_project_store()
     logger.info("  课题存储: 已初始化（含默认课题与任务看板）")
+    get_campaign_store()
+    logger.info("  Campaign 存储: 已初始化（含 PL 临界点示范 Campaign）")
     logger.info("=" * 50)
 
     yield
@@ -156,6 +160,7 @@ def create_app() -> FastAPI:
     app.include_router(experiments_router)
     app.include_router(export_router)
     app.include_router(projects_router)
+    app.include_router(campaigns_router)
     app.include_router(verification_router)
     app.include_router(observability_router)
     app.include_router(sync_router)

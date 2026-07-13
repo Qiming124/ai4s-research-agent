@@ -466,6 +466,20 @@ function wrapProseSegmentInner(segment: string): string {
     wrapInInlineMath,
   );
 
+  // 嵌套花括号下标：L_{\text{MSE}}、H_{\boldsymbol{\theta}}
+  s = wrapSegmentMatch(
+    s,
+    /\b([A-Za-z])_\{((?:[^{}]|\{[^{}]*\})+)\}/g,
+    wrapInInlineMath,
+  );
+
+  // 范数：\|\theta\|_2^2、\|\nabla L(\theta)\|^2
+  s = wrapSegmentMatch(
+    s,
+    /\\\|([^|]+?)\\\|(?:_\{[^}]+\}|_[0-9a-zA-Z+]+|\^[0-9a-zA-Z+{}]+)*/g,
+    wrapInInlineMath,
+  );
+
   // 先包裹简单下标（y_m、L_0(\theta)），避免后续 \sum 等命令被误匹配
   s = wrapSegmentMatch(
     s,

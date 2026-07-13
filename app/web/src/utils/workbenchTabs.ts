@@ -7,6 +7,9 @@ export function pipelineStageToTab(stage: string): WorkbenchTab | null {
     s.includes("theory") ||
     s.includes("理论") ||
     s.includes("derive") ||
+    s.includes("formalization") ||
+    s.includes("counterexample") ||
+    s.includes("反例") ||
     s.includes("graph") ||
     s.includes("图谱")
   ) {
@@ -17,6 +20,11 @@ export function pipelineStageToTab(stage: string): WorkbenchTab | null {
     s.includes("experiment") ||
     s.includes("实验") ||
     s.includes("numerical") ||
+    s.includes("synthesis") ||
+    s.includes("review") ||
+    s.includes("campaign") ||
+    s.includes("complete") ||
+    s.includes("archive") ||
     s.includes("export") ||
     s.includes("导出")
   ) {
