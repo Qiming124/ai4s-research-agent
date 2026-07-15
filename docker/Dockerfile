@@ -10,35 +10,49 @@ RUN npm run build
 # ── Stage 2: Python runtime ──────────────────────────────────
 FROM python:3.12-slim AS runtime
 
-# 设为 1 时安装 sentence-transformers（会拉取 torch，镜像更大、构建更慢）
+# 可选 apt 大包（默认全关：Debian 官方源在国内常 <20KB/s，texlive/pandoc 会卡数小时）
 ARG INSTALL_RAG_EXTRA=0
-# 设为 1 时安装 texlive（pandoc+xelatex PDF）；网络不稳时可设为 0，回退 reportlab/HTML 导出
-ARG INSTALL_TEXLIVE=1
+ARG INSTALL_PANDOC=0
+ARG INSTALL_TEXLIVE=0
+# apt 镜像（默认阿里云；海外可构建时传 APT_MIRROR=deb.debian.org）
+ARG APT_MIRROR=mirrors.aliyun.com
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    DEBIAN_FRONTEND=noninteractive
 
 WORKDIR /repo
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
-    pandoc \
-    fonts-noto-cjk \
-    && if [ "$INSTALL_RAG_EXTRA" = "1" ]; then \
-         apt-get install -y --no-install-recommends build-essential; \
-       fi \
-    && if [ "$INSTALL_TEXLIVE" = "1" ]; then \
-         for i in 1 2 3; do \
-           apt-get install -y --no-install-recommends \
-             texlive-xetex texlive-lang-chinese && break; \
-           echo "texlive install attempt $i failed, retrying..."; \
-           apt-get update; \
-           sleep 5; \
-         done || echo "WARN: texlive install skipped; PDF uses reportlab/HTML fallback"; \
-       fi \
-    && rm -rf /var/lib/apt/lists/*
+# 仅 curl（HEALTHCHECK）。MD/DOCX/PDF 走 pip：markdown_renderer / python-docx / reportlab
+# 中文字体已打包在 app/server/export/fonts/
+RUN set -eux; \
+    if [ -f /etc/apt/sources.list.d/debian.sources ]; then \
+      sed -i "s|deb.debian.org|${APT_MIRROR}|g; s|security.debian.org|${APT_MIRROR}|g" \
+        /etc/apt/sources.list.d/debian.sources; \
+    fi; \
+    if [ -f /etc/apt/sources.list ]; then \
+      sed -i "s|deb.debian.org|${APT_MIRROR}|g; s|security.debian.org|${APT_MIRROR}|g" \
+        /etc/apt/sources.list; \
+    fi; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends curl; \
+    if [ "$INSTALL_RAG_EXTRA" = "1" ]; then \
+      apt-get install -y --no-install-recommends build-essential; \
+    fi; \
+    if [ "$INSTALL_PANDOC" = "1" ]; then \
+      apt-get install -y --no-install-recommends pandoc; \
+    else \
+      echo "INSTALL_PANDOC=0 — MD→HTML uses in-repo renderer"; \
+    fi; \
+    if [ "$INSTALL_TEXLIVE" = "1" ]; then \
+      apt-get install -y --no-install-recommends texlive-xetex fonts-noto-cjk \
+        || echo "WARN: texlive failed; PDF uses reportlab fallback"; \
+    else \
+      echo "INSTALL_TEXLIVE=0 — PDF uses reportlab/HTML"; \
+    fi; \
+    rm -rf /var/lib/apt/lists/*
 
 COPY pyproject.toml README.md ./
 COPY app/server/ ./app/server/

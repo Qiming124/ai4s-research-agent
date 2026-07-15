@@ -1,3 +1,5 @@
+import { randomUUID } from "./id";
+
 const SESSION_KEY = "ai4s_session_id";
 const SESSION_LIST_KEY = "ai4s_session_list";
 
@@ -10,7 +12,7 @@ export interface SessionMeta {
 export function getSessionId(): string {
   let id = localStorage.getItem(SESSION_KEY);
   if (!id) {
-    id = crypto.randomUUID();
+    id = randomUUID();
     localStorage.setItem(SESSION_KEY, id);
     ensureSessionInList(id);
   }
@@ -124,7 +126,7 @@ export function syncSessionListWithServer(
 }
 
 export function createNewSession(): string {
-  const id = crypto.randomUUID();
+  const id = randomUUID();
   const meta: SessionMeta = {
     id,
     title: `新会话 ${shortSessionId(id)}`,

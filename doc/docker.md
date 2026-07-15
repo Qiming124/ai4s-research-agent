@@ -107,7 +107,11 @@ docker compose --progress=plain -f docker/docker-compose.yml build
 默认使用 `chroma_default` 嵌入，并安装 `pypdf`（`pip install ".[pdf]"`）以支持 PDF 入库。若需 `RAG_EMBEDDING_PROVIDER=sentence_transformers`：
 
 ```bash
+# 更大镜像选项（默认不装，避免 Debian 官方源卡死）：
 INSTALL_RAG_EXTRA=1 docker compose --progress=plain -f docker/docker-compose.yml build
+INSTALL_PANDOC=1 docker compose --progress=plain -f docker/docker-compose.yml build
+INSTALL_TEXLIVE=1 docker compose --progress=plain -f docker/docker-compose.yml build
+# 海外构建可用官方源：APT_MIRROR=deb.debian.org docker compose -f docker/docker-compose.yml build
 ```
 
 ## 停止

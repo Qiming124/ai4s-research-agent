@@ -1,0 +1,6 @@
+# 私钥与本地生成的证书勿入库
+*.pem
+*.key
+*.crt
+!.gitignore
+!README.md

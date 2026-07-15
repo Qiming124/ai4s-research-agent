@@ -4,8 +4,13 @@
 #   cp conf/.env.example conf/.env   # 填入 DEEPSEEK_API_KEY
 #   docker compose -f docker/docker-compose.yml up -d --build
 #
-# 可选：安装 sentence-transformers 嵌入（镜像更大）
-#   INSTALL_RAG_EXTRA=1 docker compose -f docker/docker-compose.yml build
+# 可选构建参数（默认全关，避免 apt 卡死数小时）：
+#   INSTALL_RAG_EXTRA=1  — sentence-transformers / torch
+#   INSTALL_PANDOC=1     — 系统 pandoc（否则用内置 Markdown 渲染）
+#   INSTALL_TEXLIVE=1    — texlive-xetex + fonts-noto-cjk
+#   APT_MIRROR=deb.debian.org  — 海外改回官方源
+# 示例：
+#   INSTALL_PANDOC=1 docker compose -f docker/docker-compose.yml build
 
 services:
   app:
@@ -14,6 +19,9 @@ services:
       dockerfile: docker/Dockerfile
       args:
         INSTALL_RAG_EXTRA: ${INSTALL_RAG_EXTRA:-0}
+        INSTALL_PANDOC: ${INSTALL_PANDOC:-0}
+        INSTALL_TEXLIVE: ${INSTALL_TEXLIVE:-0}
+        APT_MIRROR: ${APT_MIRROR:-mirrors.aliyun.com}
     ports:
       - "${PORT:-8000}:8000"
     env_file:

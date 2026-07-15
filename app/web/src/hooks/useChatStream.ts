@@ -25,6 +25,7 @@ import {
   readSessionList,
   updateSessionMeta,
 } from "../utils/session";
+import { randomUUID } from "../utils/id";
 
 export interface ToolCallEvent {
   id: string;
@@ -185,7 +186,7 @@ function mapServerMessages(raw: ServerMessage[]): ChatMessage[] {
         toolCalls?.map((event) => ({ kind: "tool" as const, event })) ?? [];
       const timeline = [...workflowTimeline, ...toolTimeline];
       return {
-        id: crypto.randomUUID(),
+        id: randomUUID(),
         role: m.role as "user" | "assistant",
         content: m.content,
         reasoning: m.reasoning_content ?? undefined,
@@ -256,7 +257,7 @@ function applyStreamEvent(
   }
 
   if (ev.type === "agent_handoff") {
-    const handoffId = ev.a2a_task_id ?? crypto.randomUUID();
+    const handoffId = ev.a2a_task_id ?? randomUUID();
     if (ev.to_agent) {
       ctx.setActiveAgentName(ev.to_agent);
     }
@@ -280,7 +281,7 @@ function applyStreamEvent(
   }
 
   if (ev.type === "tool_call_start") {
-    const toolId = ev.tool_call_id ?? crypto.randomUUID();
+    const toolId = ev.tool_call_id ?? randomUUID();
     ctx.setActiveToolName(ev.tool_name ?? "tool");
     const toolEvent: ToolCallEvent = {
       id: toolId,
@@ -314,7 +315,7 @@ function applyStreamEvent(
               (tc) => tc.toolName === ev.tool_name && tc.status === "running",
             );
         if (idx === -1) {
-          const toolId = ev.tool_call_id ?? crypto.randomUUID();
+          const toolId = ev.tool_call_id ?? randomUUID();
           const toolEvent: ToolCallEvent = {
             id: toolId,
             toolName: ev.tool_name ?? "tool",
@@ -720,11 +721,11 @@ export function useChatStream(
     }
 
     const userMsg: ChatMessage = {
-      id: crypto.randomUUID(),
+      id: randomUUID(),
       role: "user",
       content: trimmed,
     };
-    const assistantId = crypto.randomUUID();
+    const assistantId = randomUUID();
     const assistantMsg: ChatMessage = {
       id: assistantId,
       role: "assistant",

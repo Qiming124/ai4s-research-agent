@@ -112,6 +112,49 @@ location / {
 }
 ```
 
+仓库内完整示例：[`conf/nginx/ai4s.conf`](../conf/nginx/ai4s.conf)（含 HTTP→HTTPS 与自签名证书）。
+
+---
+
+## 四-B、自签名 HTTPS（公网 IP 访问推荐）
+
+纯 `http://公网IP` 不是浏览器安全上下文，`crypto.randomUUID` 会报错导致白屏。启用 HTTPS（即使自签名）可解决；前端也已内置 UUID 回退。
+
+### 1. 生成证书
+
+```bash
+cd /root/ai4s-research-agent   # 按实际路径
+chmod +x scripts/gen-self-signed-cert.sh
+./scripts/gen-self-signed-cert.sh 47.112.10.62   # 换成你的公网 IP
+```
+
+产物：`conf/ssl/cert.pem`、`conf/ssl/key.pem`（私钥已被 gitignore）。
+
+### 2. 安装 Nginx 配置
+
+```bash
+# 确认 conf/nginx/ai4s.conf 里 ssl_certificate* 指向本机绝对路径
+cp conf/nginx/ai4s.conf /etc/nginx/sites-available/ai4s
+ln -sf /etc/nginx/sites-available/ai4s /etc/nginx/sites-enabled/
+rm -f /etc/nginx/sites-enabled/default
+nginx -t && systemctl reload nginx
+```
+
+### 3. 安全组
+
+放行 **443/TCP**（以及可选保留 80，用于跳转 HTTPS）。
+
+### 4. 访问
+
+浏览器打开 **https://公网IP** → 出现「您的连接不是私密连接」→ 高级 → 继续访问。
+
+重建前端（若刚拉了含 UUID 回退的代码）：
+
+```bash
+cd app/web && npm run build && cd ../..
+systemctl restart ai4s-agent
+```
+
 ---
 
 ## 五、常见问题
@@ -122,3 +165,5 @@ location / {
 | 页面 404 | 确认镜像含 `app/web/dist`（build 阶段在 `app/web` 执行 `npm run build`） |
 | 会话丢失 | 挂载 `data/` 卷；`SESSION_STORE_BACKEND=sqlite` |
 | Docker Hub 超时 | 配置 `registry-mirrors`，见 doc/docker.md |
+| `crypto.randomUUID is not a function` | 用 HTTPS（见「四-B」）或拉取含 UUID 回退的前端并重新 `npm run build` |
+| 浏览器提示证书不受信任 | 自签名正常现象：高级 → 继续访问；或换 Let's Encrypt |

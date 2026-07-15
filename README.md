@@ -364,6 +364,7 @@ $$
 
 - **Docker**：见 [`doc/docker.md`](doc/docker.md) 与 [`doc/DEPLOY.md`](doc/DEPLOY.md)
 - **Nginx + systemd**：见下方示例（SSE 需关闭 `proxy_buffering`）
+- **自签名 HTTPS（公网 IP）**：`./scripts/gen-self-signed-cert.sh <公网IP>` + [`conf/nginx/ai4s.conf`](conf/nginx/ai4s.conf)，详见 [`doc/DEPLOY.md`](doc/DEPLOY.md)「四-B」
 
 ```bash
 # 1. 安装 Nginx
