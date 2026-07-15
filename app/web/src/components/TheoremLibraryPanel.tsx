@@ -2,21 +2,55 @@ import type { StructuredMemoryEntry } from "../hooks/useStructuredMemory";
 import { getEntryStatus, StatusBadge } from "./TheoremDetailDrawer";
 import { MarkdownContent } from "./MarkdownContent";
 
-/** 预览截断：避免在 $ / $$ 未闭合处截断 */
+/** 预览截断：避免在 $ / $$ / \( \) / \[ \] 未闭合处截断 */
 function truncateTheoremPreview(body: string, max = 480): string {
   if (body.length <= max) return body;
-  let cut = body.slice(0, max);
+
+  // 优先在段落或句号附近截断，减少切开公式的概率
+  let cutEnd = max;
+  const window = body.slice(0, max);
+  const para = window.lastIndexOf("\n\n");
+  if (para >= Math.floor(max * 0.55)) cutEnd = para;
+  else {
+    const sentence = Math.max(
+      window.lastIndexOf("。"),
+      window.lastIndexOf(". "),
+      window.lastIndexOf("；"),
+    );
+    if (sentence >= Math.floor(max * 0.55)) cutEnd = sentence + 1;
+  }
+
+  let cut = body.slice(0, cutEnd);
+
   const ddCount = (cut.match(/\$\$/g) || []).length;
   if (ddCount % 2 !== 0) {
     const last = cut.lastIndexOf("$$");
     if (last >= 0) cut = cut.slice(0, last);
   }
+
   const dCount = (cut.match(/(?<!\$)\$(?!\$)/g) || []).length;
   if (dCount % 2 !== 0) {
     const last = cut.lastIndexOf("$");
     if (last >= 0) cut = cut.slice(0, last);
   }
-  return `${cut.trimEnd()}\n\n…`;
+
+  // \( ... \) / \[ ... \]（模型定理正文常见）
+  const parenOpen = (cut.match(/\\\(/g) || []).length;
+  const parenClose = (cut.match(/\\\)/g) || []).length;
+  if (parenOpen > parenClose) {
+    const last = cut.lastIndexOf("\\(");
+    if (last >= 0) cut = cut.slice(0, last);
+  }
+
+  const bracketOpen = (cut.match(/\\\[/g) || []).length;
+  const bracketClose = (cut.match(/\\\]/g) || []).length;
+  if (bracketOpen > bracketClose) {
+    const last = cut.lastIndexOf("\\[");
+    if (last >= 0) cut = cut.slice(0, last);
+  }
+
+  cut = cut.trimEnd();
+  return cut ? `${cut}\n\n…` : "…";
 }
 
 interface TheoremLibraryPanelProps {

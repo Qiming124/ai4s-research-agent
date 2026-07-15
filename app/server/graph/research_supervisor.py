@@ -251,6 +251,8 @@ class ResearchSupervisorPipeline:
             a2a_task_id=a2a_task_id,
         )
         agent = self._get_agent(agent_name)
+        # SubAgent.run 不接受 mode；math 路由已由 agent_name=theory 体现
+        kwargs.pop("mode", None)
         async for chunk in agent.run(
             message,
             session_id,

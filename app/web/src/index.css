@@ -1573,7 +1573,7 @@ body {
 }
 
 .theorem-body-preview {
-  max-height: 5.5em;
+  max-height: 12em;
   overflow: hidden;
   position: relative;
 }
@@ -1584,14 +1584,24 @@ body {
   left: 0;
   right: 0;
   bottom: 0;
-  height: 1.2em;
+  height: 1.8em;
   background: linear-gradient(transparent, #f8fafc);
   pointer-events: none;
 }
 
 .theorem-preview-md.panel-markdown.markdown-body {
-  font-size: 0.75rem;
-  line-height: 1.45;
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.theorem-preview-md.panel-markdown.markdown-body .katex,
+.theorem-full-body.panel-markdown.markdown-body .katex {
+  font-size: 1.05em;
+}
+
+.theorem-preview-md.panel-markdown.markdown-body .katex-display {
+  margin: 0.4em 0;
+  overflow-x: auto;
 }
 
 .theorem-preview-md.panel-markdown.markdown-body p {

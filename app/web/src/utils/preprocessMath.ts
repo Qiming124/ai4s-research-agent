@@ -80,7 +80,7 @@ function repairEnvironmentClosures(latex: string): string {
 function processMathInner(latex: string, forceDisplay: boolean): string {
   const repaired = repairEnvironmentClosures(latex.trim());
   if (forceDisplay || containsDisplayEnv(repaired)) {
-    return `$$${repaired}$$`;
+    return `$$\n${repaired}\n$$`;
   }
   return `$${repaired}$`;
 }
@@ -543,9 +543,23 @@ function wrapProseLatex(content: string): string {
 
 /** 独立成行的裸 LaTeX / Unicode 公式提升为 $$...$$ */
 function wrapDisplayEquationLines(content: string): string {
-  return content
-    .split("\n")
+  const lines = content.split("\n");
+  let inDisplay = false;
+  return lines
     .map((line) => {
+      // 跟踪 $$ 块，已在 display 内的行不再二次包裹
+      const trimmedForFence = line.trim();
+      if (trimmedForFence === "$$") {
+        inDisplay = !inDisplay;
+        return line;
+      }
+      const fencePairs = (line.match(/\$\$/g) || []).length;
+      if (fencePairs > 0) {
+        // 同行开闭或奇数个 $$：按奇偶切换（简化）
+        if (fencePairs % 2 === 1) inDisplay = !inDisplay;
+        return line;
+      }
+      if (inDisplay) return line;
       if (line.includes("$")) return line;
       const trimmed = line.trim();
       if (!trimmed || /^[#>|*-]/.test(trimmed)) return line;
@@ -557,7 +571,7 @@ function wrapDisplayEquationLines(content: string): string {
         !/^=\s*\\begin/.test(trimmed)
       ) {
         const indent = line.match(/^(\s*)/)?.[1] ?? "";
-        return `${indent}$$${trimmed}$$`;
+        return `${indent}$$\n${trimmed}\n$$`;
       }
       if (line.includes("\\begin{")) return line;
       const hasFrac = /\\frac\{/.test(trimmed);
@@ -571,7 +585,7 @@ function wrapDisplayEquationLines(content: string): string {
         /[_^∥‖]/.test(trimmed);
       if (!hasFrac && !looksLikeEquation && !looksLikeUnicodeEquation) return line;
       const indent = line.match(/^(\s*)/)?.[1] ?? "";
-      return `${indent}$$${trimmed}$$`;
+      return `${indent}$$\n${trimmed}\n$$`;
     })
     .join("\n");
 }
@@ -628,7 +642,7 @@ function wrapBareLatexEnvironments(content: string): string {
       replacements.push({
         start: blockStart,
         end: consumeEnd,
-        text: `$$${match[0]}$$`,
+        text: `$$\n${match[0]}\n$$`,
       });
     }
   }
@@ -686,7 +700,9 @@ function mergeDisplayLineWithCases(content: string): string {
   );
 }
 
-/** 按顺序配对 $$ 块级定界符（避免非贪婪正则误匹配下一行公式） */
+/** 按顺序配对 $$ 块级定界符（避免非贪婪正则误匹配下一行公式）
+ * 注意：remark-math v6 将单行 $$x$$ 解析为 inlineMath，必须输出带换行的 $$\\n...\\n$$ 才是 display math。
+ */
 function replaceDisplayMathBlocks(
   content: string,
   transform: (inner: string) => string,
@@ -701,7 +717,8 @@ function replaceDisplayMathBlocks(
         break;
       }
       const inner = content.slice(i + 2, close);
-      result += `$$${transform(inner)}$$`;
+      const transformed = transform(inner).trim();
+      result += `$$\n${transformed}\n$$`;
       i = close + 2;
       continue;
     }
@@ -908,7 +925,11 @@ function normalizeMultilineDisplayMath(content: string): string {
 
 function normalizeLatexDelimiters(content: string): string {
   let result = content;
-  result = result.replace(/\\\[([\s\S]*?)\\\]/g, (_, inner: string) => `$$${inner.trim()}$$`);
+  // \[...\] → 多行 $$，确保 remark-math 识别为 display math
+  result = result.replace(/\\\[([\s\S]*?)\\\]/g, (_, inner: string) => {
+    const trimmed = inner.trim();
+    return `$$\n${trimmed}\n$$`;
+  });
   result = result.replace(/\\\(([\s\S]*?)\\\)/g, (_, inner: string) => `$${inner.trim()}$`);
   return result;
 }
@@ -963,6 +984,8 @@ export function preprocessMathContent(content: string): string {
   result = removeOrphanEnvEnd(result);
   result = stripLeadingCorruptDisplayBlocks(result);
   result = trimOrphanTrailingDollars(result);
+  // remark-math：单行 $$x$$ 会被当成 inlineMath，末尾统一成 $$\n...\n$$
+  result = replaceDisplayMathBlocks(result, (inner) => inner.trim());
 
   return result;
 }

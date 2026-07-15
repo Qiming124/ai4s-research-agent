@@ -82,10 +82,19 @@ const samples: {
 ];
 
 let failed = 0;
+function compactDisplayDollars(s: string): string {
+  return s.replace(/\$\$\r?\n([\s\S]*?)\r?\n\$\$/g, (_, inner: string) => `$$${inner}$$`);
+}
+
 for (const s of samples) {
   const out = preprocessMathContent(s.input);
-  const bad = (s.mustNotInclude ?? []).filter((x) => out.includes(x));
-  const missing = (s.expectIncludes ?? []).filter((x) => !out.includes(x));
+  const compact = compactDisplayDollars(out);
+  const bad = (s.mustNotInclude ?? []).filter(
+    (x) => out.includes(x) || compact.includes(x),
+  );
+  const missing = (s.expectIncludes ?? []).filter(
+    (x) => !out.includes(x) && !compact.includes(x),
+  );
   if (bad.length > 0 || missing.length > 0) {
     failed++;
     console.error(`FAIL ${s.name}`);

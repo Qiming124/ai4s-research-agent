@@ -41,15 +41,30 @@ app/web/test-results/
 # 运行时数据（种子工作区 data/theory、data/experiments/configs 纳入版本库）
 data/chroma/
 data/*.db
+data/*.pdf
+data/*.docx
 data/mcp_files/*
 !data/mcp_files/.gitkeep
 data/experiments/logs/*
 !data/experiments/logs/.gitkeep
 data/experiments/notebooks/results/
+data/experiments/configs/campaign_dynamic_symbolic.yaml
+data/experiments/configs/campaign_tmp*.yaml
+
+# 课题运行时工作区（default 等由 API 创建）
+data/projects/*
+!data/projects/.gitkeep
 
 # Campaign 运行时产物（种子见 data/theory/campaigns/）
 data/campaigns/*
 !data/campaigns/.gitkeep
+
+# SkillsBridge / 探索输出
+data/explore_outputs/*
+!data/explore_outputs/.gitkeep
+
+# 导出 API 写入的 LaTeX（非种子）
+data/theory/proofs/export.tex
 
 # 本地导出/字体/冒烟测试产物（勿提交）
 data/test_*

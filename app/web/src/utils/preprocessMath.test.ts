@@ -283,17 +283,24 @@ $\square$`,
   },
   {
     name: "theorem section labels preserved",
-    input: "**证明**：\n$$\\nabla L(\\theta) = 0$$",
-    expectIncludes: ["**证明**", "$$\\nabla L(\\theta) = 0$$"],
+    input: String.raw`**证明**：
+$$\nabla L(\theta) = 0$$`,
+    expectIncludes: ["**证明**", String.raw`$$\nabla L(\theta) = 0$$`],
   },
 ];
 
 let failed = 0;
+/** remark-math 需要 $$\n...\n$$；断言时忽略换行差异 */
+function compactDisplayDollars(s: string): string {
+  return s.replace(/\$\$\r?\n([\s\S]*?)\r?\n\$\$/g, (_, inner: string) => `$$${inner}$$`);
+}
+
 for (const c of cases) {
   const out = preprocessMathContent(c.input);
+  const compact = compactDisplayDollars(out);
   const ok =
-    c.expectIncludes.every((s) => out.includes(s)) &&
-    (c.expectNotIncludes?.every((s) => !out.includes(s)) ?? true);
+    c.expectIncludes.every((s) => out.includes(s) || compact.includes(s)) &&
+    (c.expectNotIncludes?.every((s) => !out.includes(s) && !compact.includes(s)) ?? true);
   if (!ok) {
     failed++;
     console.error(`FAIL ${c.name}`);
