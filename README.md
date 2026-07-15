@@ -14,7 +14,7 @@
 | 文献 | PDF/DOCX/arXiv 导入 UI、书目库、BibTeX 导出 |
 | 理论 | 假设 DAG、符号/假设速览、工作区在线编辑 |
 | 验证 | 手动重跑、验证账本、Agent 质量面板 |
-| 导出 | LaTeX / DOCX / PDF（按课题 `project_id`） |
+| 导出 | LaTeX / DOCX / PDF（按课题 `project_id`；PDF 保留 Markdown 表格与公式可读文本） |
 | E2E | Playwright 三场景（课题、文献、导出） |
 | 文档 | [`doc/API-COVERAGE.md`](doc/API-COVERAGE.md) 58 端点清单 |
 
@@ -235,7 +235,7 @@ MCP、RAG、理论工作区其余变量见 `conf/.env.example` 与 [`doc/ENV.md`
 | 研究流水线 | `RESEARCH_PIPELINE_MODE=auto` 或 `/research` 前缀 |
 | PDF / arXiv 入库 | `POST /v1/documents/upload`、`from-arxiv` |
 | Web 科研工作台 | 定理库、知识图谱、实验日志、工作区浏览器 |
-| LaTeX 导出 | `POST /v1/export/latex` |
+| LaTeX / DOCX / PDF 导出 | `POST /v1/export/{latex,docx,pdf,md}`；无 xelatex 时用 HTML→reportlab，保留表格 |
 
 ## Phase 2A 能力清单
 
