@@ -301,4 +301,4 @@ npx skills add <package>   # 按搜索结果安装
 ## 相关文档
 
 - 项目侧 MCP（本文 **不包含**）：[mcp-config.md](mcp-config.md)
-- 上一版混合清单：[dev-tooling-checklist.md](dev-tooling-checklist.md)
+- 架构与流水线：[ARCHITECTURE.md](ARCHITECTURE.md)

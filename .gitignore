@@ -59,6 +59,13 @@ data/projects/*
 data/campaigns/*
 !data/campaigns/.gitkeep
 
+# 流水线写出的形式化/反例稿（保留种子 pl-critical-points / relu_saddle）
+data/theory/campaigns/*-problem.md
+data/theory/campaigns/multi-paper-pipeline-*.md
+data/theory/counterexamples/*
+!data/theory/counterexamples/relu_saddle.md
+!data/theory/counterexamples/.gitkeep
+
 # SkillsBridge / 探索输出
 data/explore_outputs/*
 !data/explore_outputs/.gitkeep
@@ -70,3 +77,5 @@ data/theory/proofs/export.tex
 data/test_*
 data/theory/_smoke.md
 data/theory/smoke_test_file.md
+app/web/tmp_*.json
+app/web/tmp_thm_cases.json
