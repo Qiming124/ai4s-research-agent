@@ -22,6 +22,8 @@ services:
         INSTALL_PANDOC: ${INSTALL_PANDOC:-0}
         INSTALL_TEXLIVE: ${INSTALL_TEXLIVE:-0}
         APT_MIRROR: ${APT_MIRROR:-mirrors.aliyun.com}
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://mirrors.aliyun.com/pypi/simple/}
+        PIP_TRUSTED_HOST: ${PIP_TRUSTED_HOST:-mirrors.aliyun.com}
     ports:
       - "${PORT:-8000}:8000"
     env_file:

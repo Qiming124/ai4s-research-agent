@@ -16,12 +16,17 @@ ARG INSTALL_PANDOC=0
 ARG INSTALL_TEXLIVE=0
 # apt 镜像（默认阿里云；海外可构建时传 APT_MIRROR=deb.debian.org）
 ARG APT_MIRROR=mirrors.aliyun.com
+# pip 镜像（默认阿里云；海外可传 PIP_INDEX_URL=https://pypi.org/simple）
+ARG PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/
+ARG PIP_TRUSTED_HOST=mirrors.aliyun.com
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    DEBIAN_FRONTEND=noninteractive
+    DEBIAN_FRONTEND=noninteractive \
+    PIP_INDEX_URL=${PIP_INDEX_URL} \
+    PIP_TRUSTED_HOST=${PIP_TRUSTED_HOST}
 
 WORKDIR /repo
 
@@ -67,8 +72,9 @@ RUN if [ "$INSTALL_RAG_EXTRA" = "1" ]; then \
       pip install ".[pdf,docx,export]"; \
     fi
 
-# 预下载 chroma_default 嵌入模型，避免容器首次启动长时间阻塞健康检查
-RUN python -c "from chromadb.utils.embedding_functions import DefaultEmbeddingFunction; DefaultEmbeddingFunction()(['warmup'])"
+# 预下载 chroma 嵌入（网络失败不阻断构建；运行时首次查询会再拉取）
+RUN python -c "from chromadb.utils.embedding_functions import DefaultEmbeddingFunction; DefaultEmbeddingFunction()(['warmup'])" \
+    || echo "WARN: chroma embedding warmup skipped (network); will download on first use"
 
 COPY --from=web-build /web/dist ./app/web/dist
 
