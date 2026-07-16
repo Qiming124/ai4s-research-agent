@@ -1,13 +1,16 @@
-# API 参考
+# API 参考（v2.2）
 
 Base URL 默认：`http://127.0.0.1:8000`。  
-数据模型详见 `shared/schemas.py`。
+数据模型：`app/shared/schemas.py`。  
+**完整端点矩阵（67）**：[`API-COVERAGE.md`](API-COVERAGE.md)。交互式文档：`GET /docs`。
+
+---
 
 ## 健康检查
 
 ### `GET /health`
 
-**返回** `HealthResponse`：`status`、`model`、`reasoning_effort`。
+返回 `HealthResponse`：`status`、`model`、`reasoning_effort`。
 
 ```bash
 curl -s http://127.0.0.1:8000/health
@@ -17,11 +20,11 @@ curl -s http://127.0.0.1:8000/health
 
 ## 对话
 
-### `POST /v1/chat`
+### `POST /v1/chat` / `POST /v1/chat/stream`
 
-非流式对话，一次返回完整 JSON。
+非流式返回完整 JSON；流式为 `Content-Type: text/event-stream`。
 
-**请求体** `ChatRequest`：
+**请求体** `ChatRequest`（常用字段）：
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -32,67 +35,87 @@ curl -s http://127.0.0.1:8000/health
 | `max_history_messages` | int? | L1 历史条数，null 用服务端默认 |
 | `enable_history_summary` | bool? | 是否摘要旧历史 |
 | `enable_tools` | bool? | 是否启用 MCP，null 用 `ENABLE_MCP` |
-| `agent` | string? | `general` / `theory` / `experiment` / `literature` / `review` |
+| `agent` | string? | `general` / `theory` / `experiment` / `literature` / `review` / `counterexample` |
 | `auto_route` | bool | 是否自动路由（默认 true） |
-| `enable_thinking` | bool? | 是否启用 DeepSeek thinking（null=默认开启，仅最终回答） |
-| `reasoning_effort` | `high` \| `max`? | 推理强度，null 用 `REASONING_EFFORT` |
-| `cot_mode` | `off` \| `standard` \| `strict` | 结构化思维链（Math 模式默认 strict） |
-
-**返回** `ChatResponse`：`session_id`、`content`、`reasoning`、`usage`。
-
-### `POST /v1/chat/stream`
-
-SSE 流式对话，`Content-Type: text/event-stream`。
+| `enable_thinking` | bool? | DeepSeek thinking |
+| `reasoning_effort` | `high` \| `max`? | 推理强度 |
+| `cot_mode` | `off` \| `standard` \| `strict` | 结构化思维链（Math 默认 strict） |
+| `project_id` | string? | 关联课题（工作台 / 导出作用域） |
+| `campaign_id` | string? | 关联 Campaign（多阶段研究） |
 
 **SSE 事件 `type`**：
 
 | type | 说明 |
 |------|------|
 | `meta` | 会话 ID、agent_name、route_reason |
-| `reasoning` | 思考过程片段 |
-| `content` | 回答正文片段 |
-| `tool_call_start` | 工具开始，`tool_name`、`tool_call_id` |
-| `tool_call_result` | 工具成功结果 |
-| `tool_call_error` | 工具失败 |
-| `agent_handoff` | 多 Agent 切换，`from_agent`、`to_agent` |
-| `workflow_step` | 工作流节点：`step_kind`（plan/tool/verify/synthesize）、`status`、`title` |
-| `cot_step` | 结构化思维链小节（JSON：`step`、`title`、`body`） |
-| `verification_result` | Theory SymPy 验证结果（JSON） |
-| `numerical_verification_result` | 数值验证 fallback 结果（JSON） |
-| `pipeline_stage` | 多跳研究流水线阶段名（如 `theory_derivation`） |
-| `memory_warning` | L4 矛盾检测告警文本 |
-| `done` | 结束，含 `usage` |
-| `error` | 错误信息 |
+| `reasoning` / `content` | 思考 / 正文片段 |
+| `tool_call_start` / `tool_call_result` / `tool_call_error` | MCP 工具 |
+| `agent_handoff` | 多 Agent 切换 |
+| `workflow_step` | 规划/工具/验证/综合 |
+| `cot_step` | 结构化思维链小节 |
+| `verification_result` / `numerical_verification_result` | 符号 / 数值验证 |
+| `pipeline_stage` | 研究流水线阶段（可驱动工作台 Tab） |
+| `campaign_update` | Campaign 阶段推进 |
+| `artifact_saved` | 产物落盘（理论稿、反例等） |
+| `memory_warning` | L4 矛盾告警 |
+| `done` / `error` | 结束 / 错误 |
 
 ```bash
 curl -N -X POST http://127.0.0.1:8000/v1/chat/stream \
   -H "Content-Type: application/json" \
-  -d '{"message":"你好","session_id":"demo"}'
+  -d '{"message":"二次损失临界点","session_id":"demo","mode":"math","agent":"theory"}'
 ```
 
 ---
 
 ## 会话
 
-### `GET /v1/sessions/{session_id}`
-
-返回 `SessionResponse`：历史消息列表（含 `reasoning_content`、`tool_calls`、`workflow_steps`）。
-
-### `DELETE /v1/sessions/{session_id}`
-
-清空该会话消息，返回 `{"status":"cleared","session_id":"..."}`。
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/v1/sessions` | 会话列表 |
+| GET | `/v1/sessions/{id}` | 历史（含 reasoning、tool_calls、workflow_steps） |
+| DELETE | `/v1/sessions/{id}` | 清空会话 |
 
 ---
 
-## MCP
+## 课题 / 任务 / Campaign
 
-### `GET /v1/mcp/status`
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET/POST | `/v1/projects` | 列表 / 新建 |
+| GET | `/v1/projects/{id}` | 详情 |
+| GET | `/v1/projects/{id}/members` | 成员（角色） |
+| GET/POST | `/v1/projects/{id}/tasks` | 任务看板 |
+| PATCH | `/v1/projects/{id}/tasks/{tid}` | 更新任务状态 |
+| GET/POST | `/v1/projects/{id}/sessions…` | 课题-会话关联 |
+| GET/POST | `/v1/projects/{id}/campaign` | 活跃 Campaign / 创建 |
+| GET | `/v1/projects/{id}/campaigns` | Campaign 列表 |
+| GET/PATCH | `/v1/projects/{id}/campaigns/{cid}` | 详情 / 更新阶段 |
 
-返回 `MCPStatusResponse`：
+Campaign 阶段（S0–S8）：`S0_campaign` → literature → formalization → theory → counterexample → experiment → synthesis → review → `S8_archive`。
 
-- `server_enabled`：服务端 `ENABLE_MCP`
-- `connected`：Client 是否已连接
-- `servers[]`：各 Server 名称、连接状态、工具列表
+---
+
+## 验证账本
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/v1/verification/dashboard` | 仪表盘汇总 |
+| GET | `/v1/verification/records` | 记录列表 |
+| POST | `/v1/verification/run` | 手动重跑验证 |
+
+---
+
+## MCP / Agents / 可观测
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/v1/mcp/status` | MCP 连接与工具列表 |
+| POST | `/v1/mcp/reload` | 热重载 MCP 配置 |
+| GET | `/v1/agents` | 编排后端与各 Agent 元数据 |
+| GET | `/v1/observability/summary` | 请求/错误摘要 |
+| GET | `/v1/observability/agent-quality` | Agent 质量面板 |
+| GET | `/v1/stats/tokens` | Token 用量（需 `ENABLE_TOKEN_STATS`） |
 
 ---
 
@@ -102,73 +125,49 @@ curl -N -X POST http://127.0.0.1:8000/v1/chat/stream \
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| POST | `/v1/documents` | 上传文本/Markdown 索引 |
-| POST | `/v1/documents/upload` | multipart 上传 PDF 或文本文件 |
-| POST | `/v1/documents/from-arxiv` | 从 arXiv 下载 PDF 并入库（`?session_id=&arxiv_id=`） |
-| GET | `/v1/documents` | 列出已索引文档（`?session_id=`） |
-| DELETE | `/v1/documents/{doc_id}` | 删除文档及向量 |
-| GET | `/v1/sessions/{id}/rag-refs` | 会话检索引用记录 |
+| POST | `/v1/documents` | 文本入库 |
+| POST | `/v1/documents/upload` | PDF/DOCX/MD |
+| POST | `/v1/documents/from-arxiv` | arXiv 入库 |
+| GET | `/v1/documents` | 列表 |
+| DELETE | `/v1/documents` | 全局 purge |
+| DELETE | `/v1/documents/session/{id}` | 按会话清空 |
+| DELETE | `/v1/documents/{doc_id}` | 删除单条 |
+| GET | `/v1/sessions/{id}/rag-refs` | 检索引用 |
 
 ---
 
-## L4 结构化记忆与知识图谱
+## L4 结构化记忆与理论工作区
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | `/v1/memory/structured` | 列出定理/引理（`?session_id=&kind=`） |
-| GET | `/v1/memory/structured/global` | 全局引理库（`session_id IS NULL`） |
-| GET | `/v1/memory/structured/graph` | 知识图谱节点 + 边 |
-| POST | `/v1/memory/structured` | 手动创建条目 |
-| POST | `/v1/memory/structured/{id}/edges` | 创建依赖边（`depends_on` 等） |
+| GET/POST | `/v1/memory/structured` | 定理库列表 / 写入 |
+| GET | `/v1/memory/structured/global` | 全局引理 |
+| GET | `/v1/memory/structured/graph` | 知识图谱 |
+| GET/POST | `/v1/memory/structured/{id}/versions` | 版本 |
+| POST | `/v1/memory/structured/{id}/edges` | 依赖边 |
+| GET | `/v1/theory/workspace` | 文件列表 |
+| GET/PUT | `/v1/theory/workspace/{path}` | 读写 |
+| GET | `/v1/theory/symbols` / `assumptions` / `assumption-matrix` | 种子 Markdown |
+| GET | `/v1/theory/assumption-dag` (+ `/impact/{id}`) | 假设 DAG |
+| GET | `/v1/bibliography` / `/export.bib` | 书目 / BibTeX |
 
 ---
 
-## 理论工作区
+## 实验 / 导出 / Jupyter / 同步
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | `/v1/theory/workspace` | 列出 `data/theory/` 文件 |
-| GET | `/v1/theory/workspace/{path}` | 读取工作区文件正文 |
-| GET | `/v1/theory/symbols` | 符号表 Markdown |
-| GET | `/v1/theory/assumptions` | 全局假设 Markdown |
-| GET | `/v1/theory/assumption-matrix` | 假设-定理对照矩阵 |
+| GET/POST | `/v1/experiments/runs` | 列表 / 触发 |
+| GET | `/v1/experiments/runs/{id}` | 详情 |
+| GET | `/v1/export/preview` | 按课题预览草稿 |
+| POST | `/v1/export/polish` | LLM 润色 |
+| POST | `/v1/export/{md,latex,docx,pdf}` | 导出文件 |
+| GET | `/v1/jupyter/template` | 笔记本模板 |
+| POST | `/v1/jupyter/upload-result` | 结果回传 |
+| POST | `/v1/sync/metadata` | 云端元数据同步（`ENABLE_CLOUD_SYNC=true`，否则 403） |
+| GET | `/v1/sync/audit/{project_id}` | 同步审计 |
 
----
-
-## 实验日志
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | `/v1/experiments/runs` | 列出 `data/experiments/logs/*.json` |
-| GET | `/v1/experiments/runs/{run_id}` | 单条实验运行详情 |
-
----
-
-## 导出
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| POST | `/v1/export/latex` | 从 L4 记忆生成 LaTeX（写入 `data/theory/proofs/export.tex`） |
-
----
-
-## Agent 元数据
-
-### `GET /v1/agents`
-
-返回 `orchestration_backend` 与各 Agent 的 `description`、`rag_enabled`、`default_tool_patterns`。
-
----
-
-## Token 统计
-
-需 `ENABLE_TOKEN_STATS=true`。
-
-### `GET /v1/stats/tokens`
-
-查询参数（均可选）：`session_id`、`agent_name`、`day`（YYYY-MM-DD）。
-
-返回各 Agent 与合计 token 用量。
+导出支持查询参数 `project_id`（按课题作用域）。无 xelatex 时 PDF 走 HTML→reportlab 回退。
 
 ---
 
@@ -177,5 +176,6 @@ curl -N -X POST http://127.0.0.1:8000/v1/chat/stream \
 | 状态码 | 含义 |
 |--------|------|
 | 422 | 请求体校验失败 |
-| 404 | 会话或文档不存在 |
+| 403 | 同步未启用 / 路径越界等 |
+| 404 | 资源不存在 |
 | 502 | LLM / 上游调用失败 |

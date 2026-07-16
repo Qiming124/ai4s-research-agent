@@ -23,6 +23,8 @@ log
 conf/.env
 *.md
 !README.md
+!data/theory/**/*.md
+!doc/**/*.md
 benchmarks
 tests
 agent-transcripts

@@ -8,7 +8,7 @@
 
 - **配置文件**：项目根目录 [`mcp_servers.json`](../conf/mcp_servers.json)
 - **环境变量**：`conf/.env` 中的 `ENABLE_MCP` 等（见 [环境变量](#环境变量)）
-- **架构**：启动时 `MCPClient` 按配置逐个拉起 stdio MCP Server，聚合工具后供 `GeneralAgent` 通过 function calling 调用
+- **架构**：启动时 `MCPClient` 按配置拉起 stdio MCP Server，聚合工具后供 **各 Agent**（legacy `GeneralAgent` 或 LangGraph SubAgent）按白名单调用
 - **工具命名**：`{server名}__{工具名}`，例如 `arxiv__search_papers`
 
 Web 端可在 **设置 → MCP 工具** 查看 Server 连接状态与工具列表；是否启用工具由 `ENABLE_MCP` 或侧边栏「启用 MCP 工具」控制。
@@ -23,7 +23,8 @@ Web 端可在 **设置 → MCP 工具** 查看 Server 连接状态与工具列�
 ENABLE_MCP=true
 MCP_CONFIG_PATH=./conf/mcp_servers.json
 MCP_ALLOWED_DIRS=./data/mcp_files:./data/theory:./data/experiments
-MCP_MAX_TOOL_ROUNDS=5
+MCP_MAX_TOOL_ROUNDS=10
+MCP_TOOL_WHITELIST_PATH=./conf/mcp_tool_whitelist.json
 ENABLE_NUMERICAL_MCP=true
 ```
 
@@ -35,9 +36,10 @@ ENABLE_NUMERICAL_MCP=true
 
 ```
 MCP: 已启用 (./conf/mcp_servers.json)
-MCP Client 已连接 3 个 Server，共 6 个工具
+MCP Client 已连接 N 个 Server，共 M 个工具
 ```
 
+（具体数量取决于 `mcp_servers.json` 中启用的 Server，通常含 web_search / arxiv / filesystem / sympy / rag / numerical。）
 5. 验证：`curl http://127.0.0.1:8000/v1/mcp/status`
 
 ---
@@ -46,13 +48,16 @@ MCP Client 已连接 3 个 Server，共 6 个工具
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
-| `ENABLE_MCP` | `false` | 是否启用 MCP 工具层 |
-| `MCP_CONFIG_PATH` | `./conf/mcp_servers.json` | MCP Server 配置文件路径 |
-| `MCP_ALLOWED_DIRS` | `./data/mcp_files:./data/theory:./data/experiments` | filesystem MCP 允许访问的目录，多个路径用 `:` 分隔 |
-| `MCP_MAX_TOOL_ROUNDS` | `5` | 单轮对话中 LLM 工具调用循环的上限 |
-| `ENABLE_NUMERICAL_MCP` | `true` | 是否在配置中注册 `numerical` Server（见 `mcp_servers.json`） |
+| `ENABLE_MCP` | `false`（演示 `.env.example` 为 `true`） | 是否启用 MCP |
+| `MCP_CONFIG_PATH` | `./conf/mcp_servers.json` | MCP Server 配置 |
+| `MCP_ALLOWED_DIRS` | 代码默认仅 `mcp_files`；演示含 theory/experiments | filesystem 可读目录（`:` 分隔） |
+| `MCP_MAX_TOOL_ROUNDS` | `10` | 单轮工具循环上限 |
+| `MCP_TOOL_WHITELIST_PATH` | `./conf/mcp_tool_whitelist.json` | 按 Agent 白名单 |
+| `ENABLE_NUMERICAL_MCP` | `true` | 是否注册 `numerical` Server |
 
-各 Agent 默认工具白名单见 [`conf/mcp_tool_whitelist.json`](../conf/mcp_tool_whitelist.json)：`theory` 含 `sympy__*`、`numerical__*`、`rag__*`；`experiment` 含 `filesystem__*`、`numerical__*`；`review` 含 `filesystem__*`。
+完整变量见 [`ENV.md`](ENV.md)。
+
+各 Agent 默认工具白名单见 [`conf/mcp_tool_whitelist.json`](../conf/mcp_tool_whitelist.json)：`theory` 含 `sympy__*`、`numerical__*`、`rag__*`；`experiment` 含 `filesystem__*`、`numerical__*`；`review` / `counterexample` 见 JSON。
 
 `ChatRequest.enable_tools` 可在单次请求中覆盖全局开关（Web 侧边栏关闭「MCP：服务端默认」后生效）。
 

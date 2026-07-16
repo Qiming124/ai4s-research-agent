@@ -48,6 +48,8 @@ docker compose -f docker/docker-compose.yml up --build
 
 打开 http://localhost:8000 — 服务端提供 `app/web/dist` 静态资源与 API 路由。
 
+镜像会复制 `data/theory/**/*.md` 种子（`.dockerignore` 已放行）。运行时会话/Chroma/Campaign 产物落在挂载的 `data/` 卷，清理约定见 [`DATA.md`](DATA.md)。`compose` 的 `environment:` 会覆盖 env_file 中的同名路径变量。
+
 ## 配置说明
 
 | 机制 | 用途 |

@@ -139,14 +139,18 @@ flowchart LR
 
   Supervisor -->|通用问答| General[General Agent]
   Supervisor -->|数学/理论| Theory[Theory Agent]
-  Supervisor -->|实验日志| Experiment[Experiment Agent]
+  Supervisor -->|数值实验| Experiment[Experiment Agent]
   Supervisor -->|论文检索| Literature[Literature Agent]
+  Supervisor -->|审稿| Review[Review Agent]
+  Supervisor -->|反例| Counterexample[Counterexample Agent]
   Supervisor -->|用户指定| Explicit[显式指定 Agent]
 
   General --> React[ReAct 工具子图]
   Theory --> React
   Experiment --> React
   Literature --> React
+  Review --> React
+  Counterexample --> React
 
   React --> Final[最终流式回答]
   Final --> SSE[SSE 事件推送]
@@ -156,9 +160,11 @@ flowchart LR
 |-------|----------|
 | **Supervisor** | 分析用户意图，选择目标 Agent，发出 handoff 事件 |
 | **General** | 通用科研问答、跨领域讨论 |
-| **Theory** | 损失函数理论推导、五阶段 CoT、SymPy 验证、引理持久化 |
-| **Experiment** | 训练日志/指标分析、异常诊断、实验建议 |
-| **Literature** | arXiv/网络检索、文献综述与引用整理 |
+| **Theory** | 损失函数理论推导、CoT、SymPy/数值验证、引理持久化 |
+| **Experiment** | 数值实验、谱分析、loss landscape |
+| **Literature** | arXiv/网络检索、文献入库与引用 |
+| **Review** | 对照审稿清单检查推导完整性 |
+| **Counterexample** | 反例搜索与验证 |
 
 ---
 
@@ -224,12 +230,14 @@ flowchart LR
   MCPClient --> FS[文件系统]
   MCPClient --> SYMPY[SymPy 符号计算]
   MCPClient --> RAGMCP[RAG 按需检索]
+  MCPClient --> NUM[numerical 数值]
 
   WS -->|实时信息| Web[互联网]
   ARXIV -->|学术文献| Papers[论文库]
   FS -->|读写| DataFiles[实验/日志文件]
   SYMPY -->|梯度/Hessian| Math[符号验证]
   RAGMCP -->|会话内检索| ChromaDB[(向量库)]
+  NUM -->|临界点/谱/landscape| NumPy[数值验证]
 ```
 
 | 工具域 | 功能 |
@@ -239,6 +247,7 @@ flowchart LR
 | **文件系统** | 读取/写入允许的目录内实验日志与数据 |
 | **SymPy** | 微分、Hessian、特征值等符号验证 |
 | **RAG** | 从当前会话知识库检索相关片段 |
+| **numerical** | 梯度、Hessian 谱、临界点分类、loss landscape、SGD 轨迹 |
 
 ---
 
@@ -454,11 +463,16 @@ flowchart LR
 |----------|------|
 | `meta` | 会话 ID、当前 Agent、路由原因 |
 | `workflow_step` | 工作流节点（规划 / 验证 / 综合等） |
+| `pipeline_stage` | 多跳研究流水线阶段（可驱动工作台 Tab） |
+| `campaign_update` | Campaign 阶段推进 |
+| `artifact_saved` | 产物落盘通知 |
 | `tool_call_*` | MCP 工具调用开始、成功、失败 |
 | `reasoning` | 模型内部思考过程片段 |
 | `cot_step` | 结构化思维链小节（JSON） |
 | `content` | 最终回答正文片段 |
 | `verification_result` | Theory SymPy 验证结果 |
+| `numerical_verification_result` | 数值验证结果 |
+| `memory_warning` | L4 矛盾检测告警 |
 | `agent_handoff` | 多 Agent 切换通知 |
 | `done` | 流结束，含 token 用量 |
 
@@ -471,7 +485,9 @@ flowchart LR
 | **接入层** | 为用户提供对话入口（浏览器 / 终端） |
 | **API 层** | 请求校验、路由分发、SSE 流式推送 |
 | **Supervisor** | 意图识别与 Agent 委派 |
-| **四大 Agent** | 按领域执行专业化任务 |
+| **六大 Agent** | general / theory / experiment / literature / review / counterexample |
+| **Campaign** | S0–S8 多阶段研究战役与产物归档 |
+| **课题 / 验证账本** | Project 实体、任务看板、Claim 三层验证 |
 | **思维链模块** | 深度思考、结构化分步、工作流可视化 |
 | **工具循环** | 多轮调用 MCP，汇总结果后生成回答 |
 | **LLM 层** | 对接 DeepSeek，分离 reasoning 与 content |

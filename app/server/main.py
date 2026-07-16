@@ -9,8 +9,8 @@
 #     5. 应用生命周期：启动加载配置/打印摘要，关闭记录日志
 #
 # 启动：
-#     uvicorn server.main:app --host 127.0.0.1 --port 8000       # 生产
-#     uvicorn server.main:app --reload --host 0.0.0.0 --port 8000 # 开发
+#     uvicorn server.main:app --host 127.0.0.1 --port 8000 --app-dir app       # 生产
+#     uvicorn server.main:app --reload --host 0.0.0.0 --port 8000 --app-dir app # 开发
 #
 # Debug：
 #     - ValidationError → .env 未配置 DEEPSEEK_API_KEY
@@ -134,8 +134,8 @@ def create_app() -> FastAPI:
     """
     app = FastAPI(
         title="AI4S Research Agent",
-        description="深度学习损失函数极小值理论 — 科研辅助多智能体系统 Phase 2A/2B",
-        version="0.3.0",
+        description="深度学习损失函数极小值理论 — 科研辅助多智能体系统（v2.2）",
+        version="2.2.0",
         lifespan=lifespan,
     )
 

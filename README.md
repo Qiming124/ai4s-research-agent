@@ -1,50 +1,28 @@
 # AI4S 科研辅助 Agent
 
-面向「深度学习损失函数极小值理论」研究的 AI4S 智能体：对话、MCP 工具、多 Agent 路由、RAG 记忆、Docker 部署。
+面向「深度学习损失函数极小值理论」研究的 AI4S 智能体：对话、MCP 工具、多 Agent 路由、RAG 记忆、课题 / Campaign、验证账本、Docker 部署。
 
-**文档索引**：[`doc/README.md`](doc/README.md)（架构、API、环境变量、部署）
+**当前版本**：**v2.2**（分支 `v2.2`）  
+**文档索引**：[`doc/README.md`](doc/README.md) · API 清单 [`doc/API-COVERAGE.md`](doc/API-COVERAGE.md)（**67** 端点）· 数据约定 [`doc/DATA.md`](doc/DATA.md) · 已知问题 [`doc/KNOWN_ISSUES.md`](doc/KNOWN_ISSUES.md)
 
-**v2.0 全链路自动化（当前）**：
-
-| 模块 | 说明 |
-|------|------|
-| API 全覆盖测试 | `tests/api/` 冒烟 + 分域测试 + 黄金路径 workflow（90+ pytest） |
-| 课题-会话联动 | 按课题过滤会话、自动关联、首条消息命名 |
-| 流水线自动化 | SSE `pipeline_stage` 自动切换工作台 Tab |
-| 文献 | PDF/DOCX/arXiv 导入 UI、书目库、BibTeX 导出 |
-| 理论 | 假设 DAG、符号/假设速览、工作区在线编辑 |
-| 验证 | 手动重跑、验证账本、Agent 质量面板 |
-| 导出 | LaTeX / DOCX / PDF（按课题 `project_id`；PDF 保留 Markdown 表格与公式可读文本） |
-| E2E | Playwright 三场景（课题、文献、导出） |
-| 文档 | [`doc/API-COVERAGE.md`](doc/API-COVERAGE.md) 58 端点清单 |
-
-**当前能力概览（v1.0 产业化路线）**：
+### 当前能力（v2.2）
 
 | 模块 | 说明 |
 |------|------|
-| 课题工作台 | Project 实体、任务看板、科研工作台 Tabs（文献/理论/验证/图谱/实验/导出） |
-| 验证闭环 | 结构化 Claim → SymPy/数值/Torch 三层验证 → 验证账本 |
-| 记忆扩展 | 假设 DAG、BibTeX 文献库、L4 版本化、工作区在线预览 |
-| 协作 | 角色分工（PI/理论/实验/审稿/文献）、可选云端元数据同步 |
-| Counterexample Agent | 反例搜索与验证 |
-| 可观测性 | `/v1/observability/summary`、Agent 质量面板 |
+| 对话与编排 | DeepSeek 流式 reasoning + content（SSE）；`legacy` / `langgraph` 多 Agent |
+| 多 Agent | general / theory / experiment / literature / **review** / **counterexample** |
+| MCP | web_search / arxiv / filesystem / sympy / rag / **numerical** |
+| 课题工作台 | Project、任务看板、会话联动；Tabs：文献/理论/验证/图谱/实验/导出 |
+| Campaign | S0–S8 Supervisor；SSE `campaign_update` / `artifact_saved` |
+| 验证闭环 | Claim → SymPy / 数值 / Torch → 验证账本与仪表盘 |
+| 记忆 | L1–L4；假设 DAG；书目 BibTeX；理论工作区在线编辑 |
+| 文献 | PDF/DOCX/arXiv 入库 + RAG |
+| 导出 | preview / polish / **md** / latex / docx / pdf（按 `project_id`） |
+| 可观测 | Token、`/v1/observability/*`、Agent 质量面板 |
+| 测试 | `tests/api/` 冒烟 + 分域；Playwright 三场景（课题/文献/导出） |
+| Docker | 单镜像前端 + API（理论种子打包问题见 KNOWN_ISSUES C1） |
 
-**v0.4 基础能力**：
-
-| 模块 | 说明 |
-|------|------|
-| 对话 | DeepSeek V4 Pro 流式 reasoning + content（SSE） |
-| L2 会话 | SQLite 持久化，含 reasoning、tool_calls、workflow_steps |
-| L1 工作记忆 | 历史截断与可选 LLM 摘要 |
-| MCP | web_search / arxiv / filesystem / sympy / rag / **numerical**（stdio） |
-| 多 Agent | general / theory / experiment / literature / **review**（LangGraph 路由） |
-| 研究流水线 | `RESEARCH_PIPELINE_MODE=auto` 或 `/research` → 文献→理论→实验→审稿 |
-| RAG | Chroma + 文本/PDF 上传 + arXiv 入库 + rag MCP |
-| L4 记忆 | 定理/引理知识图谱 + 自动抽取 + 矛盾检测 |
-| Theory 闭环 | SymPy 验证 → 数值 fallback → `verification_result` / `numerical_verification_result` |
-| 理论工作区 | `data/theory/` 符号表、假设、引理、反例（注入 theory/review） |
-| Web 工作台 | 定理库、知识图谱、实验日志、工作区浏览器、Loss Landscape 可视化 |
-| Docker | 单镜像含前端 + API + 理论种子文件 |
+历史里程碑：`v0.4` 底座 · `v1.x` 产业化 · `v2.0`/`v2.1` Campaign 与渲染加固 → **`v2.2`** 当前线。
 
 ---
 
@@ -57,34 +35,33 @@
 │  Transport 层（SSE 流式推送）             │
 │  app/client/cli.py  /  app/web/src/     │
 ├─────────────────────────────────────────┤
-│  Route 层（FastAPI HTTP 端点）            │
-│  app/server/api/chat.py                  │
+│  Route 层（FastAPI · 15 域 API）         │
+│  app/server/api/*.py                     │
 ├─────────────────────────────────────────┤
-│  Agent 层（业务编排）                      │
-│  app/server/agents/base.py               │
+│  Agent 层（业务编排 + Campaign）          │
+│  app/server/agents/ · graph/             │
 ├──────────────┬──────────────────────────┤
-│  Memory 层    │  LLM 层                   │
-│  session.py   │  client.py + prompts.py  │
+│  Memory 层    │  LLM + MCP               │
+│  session/rag/ │  client.py + mcp/        │
+│  structured/  │                          │
+│  projects/    │                          │
 ├──────────────┴──────────────────────────┤
-│  Config 层（conf/.env → Settings）       │
-│  app/server/config.py                    │
-├─────────────────────────────────────────┤
-│  Schema 层（数据模型）                     │
-│  app/shared/schemas.py                   │
+│  Config：conf/.env → Settings            │
+│  Schema：app/shared/schemas.py           │
 └─────────────────────────────────────────┘
 ```
 
-> **路径说明**：Python 包名仍为 `server`、`client`、`shared`（代码在 `app/` 下）。启动 uvicorn 时需加 `--app-dir app`；根目录不再有 `web/`、`server/` 目录。
+> **路径说明**：Python 包名仍为 `server`、`client`、`shared`（代码在 `app/` 下）。启动 uvicorn 时需加 `--app-dir app`。
 
 ### 一次对话的完整链路
 
 ```
 用户输入 → CLI / Web → POST /v1/chat/stream (SSE)
   → app/server/api/chat.py        （路由：校验 + 序列化）
-    → app/server/agents/base.py   （Agent：读历史 → 拼消息 → 调 LLM）
-      → app/server/llm/client.py  （DeepSeek API：流式 reasoning + content）
-    → app/server/memory/session.py（写回 user + assistant 消息）
-  → SSE 事件流 → 客户端实时渲染
+    → agents / graph              （编排：历史 → MCP/RAG → LLM）
+      → app/server/llm/client.py  （DeepSeek：流式 reasoning + content）
+    → memory + verification       （写回会话 / 账本 / Campaign）
+  → SSE 事件流 → 客户端实时渲染（可自动切工作台 Tab）
 ```
 
 ### 目录布局
@@ -100,26 +77,23 @@ agent/
 ├── conf/                  # .env 模板、mcp_servers.json 等
 ├── doc/                   # 技术文档
 ├── log/                   # 运行时日志 app.log
-├── data/                  # sessions.db、chroma、theory/、experiments/、mcp_files
+├── data/                  # 运行时 DB/chroma + 理论种子（见 doc/DATA.md）
 └── docker/                # Dockerfile / compose
 ```
-
-Python 包名仍为 `server`、`client`、`shared`（位于 `app/` 下），import 写法不变。
 
 ### 主要模块
 
 | 路径 | 职责 |
 |------|------|
-| `app/shared/schemas.py` | 请求/响应/流式 chunk 数据结构 |
-| `app/shared/paths.py` | 仓库根、conf、log、data 路径常量 |
-| `app/server/config.py` | 从 `conf/.env` 加载配置 |
+| `app/shared/schemas.py` | 请求/响应/流式 chunk |
+| `app/server/config.py` | Settings（`conf/.env`） |
 | `app/server/llm/` | DeepSeek 客户端与 prompt |
-| `app/server/memory/` | 会话存储（SQLite / 内存） |
-| `app/server/agents/` | Agent 编排与 tool loop |
-| `app/server/api/` | HTTP 路由与 SSE |
-| `app/server/main.py` | FastAPI 入口、静态文件托管 |
+| `app/server/memory/` | 会话、RAG、L4、课题、Campaign |
+| `app/server/agents/` · `graph/` | Agent 与 LangGraph / Supervisor |
+| `app/server/api/` | HTTP 路由与 SSE（67 端点） |
+| `app/server/main.py` | FastAPI 入口 |
 | `app/client/cli.py` | 终端 CLI |
-| `app/web/` | React 聊天 UI |
+| `app/web/` | React 科研工作台 |
 
 ---
 
@@ -127,37 +101,29 @@ Python 包名仍为 `server`、`client`、`shared`（位于 `app/` 下），impo
 
 | 分支 | 用途 |
 |------|------|
-| **`dev`** | **日常开发分支**（推荐 checkout；含 MCP、RAG、多 Agent、Docker） |
-| `master` | 稳定发布线，定期从 `dev` 合并 |
-| `v0.1` | Phase 1 存档（单 GeneralAgent + CLI + Web） |
-| `v0.2`–`v1.1` | 里程碑存档分支，按需 checkout 回溯 |
-
-切换分支：
+| **`v2.2`** | **当前开发/发布线（推荐）** |
+| `v2.1` / `v2.0` | 里程碑存档 |
+| `dev` | 历史开发汇合线 |
+| `master` | 稳定发布线 |
+| `v0.1`–`v1.2` | 早期里程碑存档 |
 
 ```bash
-git checkout dev      # 日常开发（推荐）
-git checkout master   # 稳定线
-git checkout v0.1     # Phase 1 存档版
+git checkout v2.2
 ```
 
 ---
 
 ## 代码阅读顺序
 
-按依赖关系从底层数据结构到顶层入口，建议逐文件阅读：
-
 | 序号 | 文件 | 作用 |
 |------|------|------|
-| 1 | `app/shared/schemas.py` | 所有数据结构的定义 |
-| 2 | `app/server/llm/prompts.py` | System Prompt 常量 |
-| 3 | `app/server/config.py` | Settings — 从 conf/.env 加载 |
-| 4 | `app/server/memory/session.py` | SessionStore |
-| 5 | `app/server/llm/client.py` | DeepSeekClient |
-| 6 | `app/server/agents/base.py` | BaseAgent + GeneralAgent |
-| 7 | `app/server/api/chat.py` | HTTP 端点与 SSE |
-| 8 | `app/server/main.py` | FastAPI 入口 |
-| 9 | `app/client/cli.py` | 终端客户端 |
-| 10 | `app/web/src/` | React 前端（可选） |
+| 1 | `app/shared/schemas.py` | 数据结构 |
+| 2 | `app/server/config.py` | Settings |
+| 3 | `app/server/llm/` + `memory/` | LLM 与记忆 |
+| 4 | `app/server/agents/` + `graph/` | 编排与流水线 |
+| 5 | `app/server/api/` + `main.py` | HTTP / SSE |
+| 6 | `app/web/src/` | 科研工作台 UI |
+| 7 | `doc/API-COVERAGE.md` | 端点权威清单 |
 
 ---
 
@@ -166,340 +132,98 @@ git checkout v0.1     # Phase 1 存档版
 **要求**：Python 3.11+
 
 ```bash
-# 1. 进入项目目录
 cd /path/to/agent
-
-# 2. 创建虚拟环境
-python3 -m venv .venv
-source .venv/bin/activate
-
-# 3. 安装项目依赖
+python3 -m venv .venv && source .venv/bin/activate
 pip install -e .
-
-# 4. 配置 API Key
 cp conf/.env.example conf/.env
 # 编辑 conf/.env，填入 DEEPSEEK_API_KEY
 ```
 
-### 获取 DeepSeek API Key
+> `conf/.env.example` 为**演示配置**（MCP/RAG/langgraph 开启）。代码 `Settings` 默认更保守。详见 [`doc/ENV.md`](doc/ENV.md)。
 
-1. 访问 [DeepSeek 开放平台](https://platform.deepseek.com/)
-2. 注册/登录 → API Keys → 创建密钥
-3. 将密钥写入 `conf/.env` 的 `DEEPSEEK_API_KEY=sk-...`
-
-### 安全提示
-
-- `conf/.env` 包含真实密钥，已被 `.gitignore` 排除，**永远不会**被提交到 Git
-- `conf/.env.example` 是**公开模板**，值固定为占位符 `sk-your-api-key-here`，可以安全提交
-- 如果密钥曾泄露，请去 DeepSeek 控制台删除旧 Key 并生成新 Key
+密钥获取：[DeepSeek 开放平台](https://platform.deepseek.com/)。`conf/.env` 已 gitignore；公网部署须加鉴权（见 KNOWN_ISSUES C2）。
 
 ---
 
 ## 配置说明（conf/.env）
 
-完整变量表见 [`doc/ENV.md`](doc/ENV.md)。
+完整表：[`doc/ENV.md`](doc/ENV.md)。
 
-| 变量 | 默认值 | 说明 |
-|------|--------|------|
-| `DEEPSEEK_API_KEY` | （必填） | API 密钥 |
-| `DEEPSEEK_BASE_URL` | `https://api.deepseek.com` | API 地址 |
-| `MODEL` | `deepseek-v4-pro` | 模型 ID |
-| `MAX_TOKENS` | `384000` | 最大输出 token |
-| `REASONING_EFFORT` | `max` | 推理强度：`high` 或 `max` |
-| `LOG_LEVEL` | `INFO` | `DEBUG` 可打印 LLM 请求摘要 |
-| `LOG_FORMAT` | `text` | Docker 建议 `json` |
-| `ENABLE_TOKEN_STATS` | `true` | Token 用量写入 SQLite |
-| `HOST` | `0.0.0.0` | 监听地址 |
-| `PORT` | `8000` | 监听端口 |
-| `SESSION_STORE_BACKEND` | `sqlite` | `sqlite` 或 `memory` |
-| `SESSION_DB_PATH` | `./data/sessions.db` | SQLite 路径 |
-| `MAX_HISTORY_MESSAGES` | `0` | L1 截断条数，`0` 不限制 |
-| `ENABLE_HISTORY_SUMMARY` | `false` | 截断时 LLM 摘要 |
-| `ENABLE_MCP` | `false` | **启用 MCP 工具** |
-| `ORCHESTRATION_BACKEND` | `legacy` | `legacy` 单 Agent；`langgraph` 或 `multi` 多 Agent 编排 |
-| `ENABLE_RAG` | `false` | 启用 RAG 向量检索 |
-| `RESEARCH_PIPELINE_MODE` | `single` | `auto` 启用 literature→theory→experiment→review 多跳 |
-| `THEORY_WORKSPACE_PATH` | `./data/theory` | 理论工作区种子目录 |
-| `STRUCTURED_MEMORY_AGENTS` | `theory,experiment,review` | 注入 L4 记忆的 Agent |
-
-MCP、RAG、理论工作区其余变量见 `conf/.env.example` 与 [`doc/ENV.md`](doc/ENV.md)、[`doc/mcp-config.md`](doc/mcp-config.md)。
-
-## v0.4 能力补充（在 Phase 2A 之上）
-
-| 能力 | 说明 |
-|------|------|
-| numerical MCP | 梯度、Hessian 谱、临界点分类、loss landscape、SGD 轨迹 |
-| SymPy 扩展 | `positive_definite_check`、`substitute_and_simplify`、`convexity_check` |
-| L4 知识图谱 | `memory_edges`、矛盾检测 `memory_warning` |
-| Review Agent | 对照 `review-checklist.md` 审稿 |
-| 研究流水线 | `RESEARCH_PIPELINE_MODE=auto` 或 `/research` 前缀 |
-| PDF / arXiv 入库 | `POST /v1/documents/upload`、`from-arxiv` |
-| Web 科研工作台 | 定理库、知识图谱、实验日志、工作区浏览器 |
-| LaTeX / DOCX / PDF 导出 | `POST /v1/export/{latex,docx,pdf,md}`；无 xelatex 时用 HTML→reportlab，保留表格 |
-
-## Phase 2A 能力清单
-
-| 能力 | 说明 |
-|------|------|
-| L2 SQLite 持久化 | 重启后会话不丢失（`SESSION_STORE_BACKEND=sqlite`） |
-| L1 历史截断 | `MAX_HISTORY_MESSAGES>0` 时只向 LLM 发送最近 N 条 |
-| L1 可选 LLM 摘要 | `ENABLE_HISTORY_SUMMARY=true` 时压缩被截断的旧消息 |
-| reasoning 持久化 | assistant 思考过程写入 DB，Web 刷新后可恢复 |
-| Web 历史恢复 | 页面加载时 `GET /v1/sessions/{id}` 回填 |
-| Web/CLI Math 模式 | 请求 `mode=math` 使用数学推导 prompt |
-| Web/CLI L1 策略 | 客户端可覆盖 `max_history_messages` / `enable_history_summary` |
-| SSE agent_name | 流式 meta/done 事件携带 Agent 名称 |
-
-**L1 历史策略（客户端）**
-
-- 请求体字段 `max_history_messages`、`enable_history_summary` 为 `null`/省略时，使用服务端 `.env` 默认值
-- Web：顶栏下方「历史策略」区域；勾选「服务端默认」则不发送上述字段
-- CLI：`--max-history N`、`--history-summary on|off|default`
+| 变量 | 代码默认 | 演示（.env.example） | 说明 |
+|------|----------|----------------------|------|
+| `DEEPSEEK_API_KEY` | （必填） | 占位符 | API 密钥 |
+| `ENABLE_MCP` | `false` | `true` | MCP 工具 |
+| `ORCHESTRATION_BACKEND` | `legacy` | `langgraph` | 编排 |
+| `ENABLE_RAG` | `false` | `true` | 向量检索 |
+| `RESEARCH_PIPELINE_MODE` | `single` | `single` | `auto` 多跳 |
+| `ENABLE_CLOUD_SYNC` | `false` | `false` | 云端元数据同步 |
+| `THEORY_WORKSPACE_PATH` | `./data/theory` | 同左 | 理论种子 |
 
 ---
 
 ## 快速启动
 
-### 后端（Python Server）
+### 后端
 
 ```bash
 source .venv/bin/activate
-
-# 开发模式（带热重载）
 uvicorn server.main:app --reload --host 0.0.0.0 --port 8000 --app-dir app
-
-# 生产模式（配合 Nginx，无 reload 低 CPU）
-uvicorn server.main:app --host 127.0.0.1 --port 8000 --app-dir app
 ```
 
-启动后会打印配置摘要（API Key 脱敏）：
-
-```
-AI4S Research Agent Server 启动
-  模型: deepseek-v4-pro
-  推理强度: max
-  API Key: sk-***xxxx
-```
-
-### 终端 CLI 客户端
+### CLI
 
 ```bash
-source .venv/bin/activate
-python -m client.cli
-python -m client.cli --mode math          # 数学推导模式
-python -m client.cli --max-history 20     # L1 保留最近 20 条（覆盖 .env）
-python -m client.cli --history-summary on # 截断时 LLM 摘要旧消息
-python -m client.cli --no-show-reasoning  # 隐藏思考过程
-python -m client.cli --session my-work    # 固定会话 ID
-# 或：research-agent-cli
+python -m client.cli --mode math --agent theory
+python -m client.cli --agent counterexample
 ```
 
-### Web 前端
-
-**环境要求**：WSL 内使用 Linux 版 Node.js。
+### Web
 
 ```bash
-sudo apt install nodejs npm
-
-# 开发模式
-cd app/web && npm install && npm run dev   # → http://localhost:5173
-
-# 生产模式（与 API 同端口 8000）
-cd app/web && npm install && npm run build
-cd ../../ && uvicorn server.main:app --host 0.0.0.0 --port 8000 --app-dir app
-# → http://127.0.0.1:8000/
+cd app/web && npm install && npm run dev   # http://localhost:5173
+# 生产：npm run build 后由 FastAPI 托管 dist
 ```
 
-**Web 功能（v0.4）**：
+### 部署
 
-| 功能 | 说明 |
-|------|------|
-| 历史恢复 | 刷新页面后自动从 `GET /v1/sessions/{id}` 回填消息（需 `SESSION_STORE_BACKEND=sqlite`） |
-| 停止生成 | 流式过程中点击「停止」，保留已生成内容 |
-| 思考过程开关 | 顶栏勾选控制是否显示 ReasoningPanel，偏好存 localStorage |
-| 推理强度 / 深度思考 | 设置面板可覆盖 `enable_thinking`、`reasoning_effort`（默认读服务端） |
-| 思维链模式 | `cot_mode`：标准三节或严格 Markdown；Math 模式默认 strict |
-| 工作流时间线 | 规划 → 工具 → SymPy 验证 → 数值验证 → 综合回答 |
-| 多 Agent | general / theory / experiment / literature / review；顶栏显示当前 Agent |
-| 研究流水线 | `RESEARCH_PIPELINE_MODE=auto` 或消息前缀 `/research` |
-| 科研工作台 | 定理库、知识图谱、实验日志、理论工作区、RAG 文档 |
-| Loss Landscape | 数值工具返回 `viz_type` 时在消息内嵌 2D 图 |
-| 帮助面板 | 顶栏「帮助」— Agent、记忆层级、验证链、CLI/API 速查 |
-| Chat / Math 模式 | 切换对话模式，请求携带 `mode` 字段（math 路由 theory） |
-| 清空会话 | 调用 `DELETE /v1/sessions/{id}` 并清空 UI |
-
-### Web 数学公式（KaTeX）
-
-前端代码位于 `app/web/src/components/MarkdownContent.tsx` 与 `app/web/src/utils/preprocessMath.ts`。
-
-| 场景 | 行为 |
-|------|------|
-| 生成中 | 纯文本显示，避免未闭合 LaTeX 触发 KaTeX 报错 |
-| 生成完成 | `remark-math` + `rehype-katex` 渲染 |
-| 自动修复 | 裸 `\begin{cases}...\end{cases}`、缺开头 `$$`、跨行 `$...$`、未闭合 `$` 等会预处理 |
-
-**推荐写法（Math 模式）**：
-
-- 简单符号：行内 `$y$`、`$\hat{y}$`、`$L_{\text{MSE}}$`（**同一行内**，不要换行拆开）
-- 分段函数 / 矩阵 / 多行推导：独立成行的 `$$...$$`，例如：
-
-```latex
-$$
-\begin{cases}
-\frac{1}{2}(y-\hat{y})^2, & |y-\hat{y}| \le \delta \\
-\delta|y-\hat{y}| - \frac{1}{2}\delta^2, & \text{otherwise}
-\end{cases}
-$$
-```
-
-**仍可能显示异常的情况**（预处理无法完全修复）：
-
-- 公式被截断（缺 `\end{cases}`、行末单独 `&` 且无后续行）
-- 只用 `\begin{cases}...\end{cases}$$` 且内容不完整
-- 中文与 `$` 混排时把 `$...$` 拆到多行
-
-**建议**：数学-heavy 问题请切换到 **Math 模式**；若仍异常，可让模型「用完整 `$$...$$` 重写公式块」。渲染失败时以琥珀色保留原文，页面不会崩溃。详见 Web 内「帮助 → 公式显示」。
-
-### 生产部署
-
-- **Docker**：见 [`doc/docker.md`](doc/docker.md) 与 [`doc/DEPLOY.md`](doc/DEPLOY.md)
-- **Nginx + systemd**：见下方示例（SSE 需关闭 `proxy_buffering`）
-- **自签名 HTTPS（公网 IP）**：`./scripts/gen-self-signed-cert.sh <公网IP>` + [`conf/nginx/ai4s.conf`](conf/nginx/ai4s.conf)，详见 [`doc/DEPLOY.md`](doc/DEPLOY.md)「四-B」
-
-```bash
-# 1. 安装 Nginx
-apt install nginx -y
-
-# 2. 配置 Nginx 反代（80 → 127.0.0.1:8000）
-cat > /etc/nginx/sites-available/ai4s << 'EOF'
-server {
-    listen 80;
-    server_name _;
-    location / {
-        proxy_pass http://127.0.0.1:8000;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_buffering off;        # SSE 必须关缓冲
-        proxy_cache off;
-        proxy_read_timeout 600s;    # thinking max 可能很久
-    }
-}
-EOF
-ln -sf /etc/nginx/sites-available/ai4s /etc/nginx/sites-enabled/
-rm -f /etc/nginx/sites-enabled/default
-nginx -t && systemctl reload nginx
-
-# 3. 后台运行（退出终端不挂）
-nohup uvicorn server.main:app --host 127.0.0.1 --port 8000 --app-dir app \
-      > /var/log/ai4s-agent.log 2>&1 &
-
-# 4. 用 systemd 守护（推荐生产环境）
-cat > /etc/systemd/system/ai4s-agent.service << 'EOF'
-[Unit]
-Description=AI4S Research Agent
-After=network.target
-[Service]
-Type=simple
-WorkingDirectory=/root/ai4s-research-agent
-ExecStart=/usr/bin/uvicorn server.main:app --host 127.0.0.1 --port 8000 --app-dir app
-Restart=always
-RestartSec=3
-[Install]
-WantedBy=multi-user.target
-EOF
-systemctl daemon-reload && systemctl enable --now ai4s-agent
-```
+[`doc/docker.md`](doc/docker.md) · [`doc/DEPLOY.md`](doc/DEPLOY.md) · Nginx SSE 须 `proxy_buffering off`。
 
 ---
 
 ## API 参考
 
-详见 [`doc/API.md`](doc/API.md)。
+[`doc/API-COVERAGE.md`](doc/API-COVERAGE.md)（67 端点）· [`doc/API.md`](doc/API.md) · `GET /docs`
 
 ```bash
 curl http://127.0.0.1:8000/health
-# → {"status":"ok","model":"deepseek-v4-pro","reasoning_effort":"max"}
-```
-
-### POST /v1/chat（非流式）
-
-```bash
-curl -X POST http://127.0.0.1:8000/v1/chat \
-  -H "Content-Type: application/json" \
-  -d '{"message":"什么是损失函数的极小值？","session_id":"test"}'
-```
-
-### POST /v1/chat/stream（SSE 流式）
-
-```bash
 curl -N -X POST http://127.0.0.1:8000/v1/chat/stream \
   -H "Content-Type: application/json" \
-  -d '{"message":"简要解释 SGD 收敛性","session_id":"test","mode":"math"}'
+  -d '{"message":"二次损失临界点","session_id":"test","mode":"math","agent":"theory"}'
 ```
 
-请求体可选字段：`session_id`、`system_prompt`、`mode`（`chat` 或 `math`）、`enable_thinking`、`reasoning_effort`（`high`/`max`）、`cot_mode`（`off`/`standard`/`strict`）。
-
-SSE 事件 type：`meta` → `pipeline_stage`（多跳流水线）→ `workflow_step`（规划/验证/综合）→ `tool_call_*` → `reasoning` → `cot_step` → `content` → `verification_result` / `numerical_verification_result`（Theory）→ `memory_warning` → `done`
-
-### GET /v1/sessions/{id} | DELETE /v1/sessions/{id}
-
-查询/清空会话历史。
-
----
-
-## CLI 命令
-
-```bash
-python -m client.cli --server http://127.0.0.1:8000
-python -m client.cli --mode math --agent theory    # 数学推导 + Theory Agent
-python -m client.cli --agent review                # 审稿清单检查
-python -m client.cli --agent experiment            # 数值实验
-python -m client.cli --session my-work             # 固定会话 ID
-python -m client.cli --no-show-reasoning           # 隐藏推理过程
-```
-
-交互命令：`/clear`（清空会话）| `/history`（查看历史）| `exit` / `quit`（退出）| 行末 `\` 回车（多行输入）。消息前缀 `/research` 可在 `RESEARCH_PIPELINE_MODE=auto` 时触发多跳流水线。
+SSE：`meta` → `pipeline_stage` / `campaign_update` → `workflow_step` → `tool_call_*` → `reasoning` → `content` → `verification_result` → `done`
 
 ---
 
 ## 调试指南
 
-| 现象 | 可能原因 | 排查步骤 |
-|------|----------|----------|
-| 启动报 `ValidationError` | `conf/.env` 未配置 | `cp conf/.env.example conf/.env` 并填入密钥 |
-| `401 Unauthorized` | API Key 无效 | 检查 DeepSeek 控制台 |
-| CLI `Connection refused` | Server 未启动 | 先运行 uvicorn |
-| SSE 无输出后中断 | 网络/API 限流 | `LOG_LEVEL=DEBUG` 查日志 |
-| 多轮对话无上下文 | session_id 不一致 | CLI 用 `--session` 固定 |
-| 重启后会话丢失 | `SESSION_STORE_BACKEND=memory` | 改为 `sqlite`（默认）；或确认 `data/sessions.db` 存在 |
-| reasoning 为空 | 配置问题 | 确认 `REASONING_EFFORT=max` |
-| 部署后访问白屏 | 浏览器缓存 | Ctrl+Shift+R 硬刷新 |
-| Nginx 访问 502 | 后端未启动 | `systemctl status ai4s-agent` |
-| 公式显示为原文或逐字换行 | LaTeX 不完整或 `$...$` 被换行拆开 | 用 **Math 模式**；复杂公式用 `$$...$$`；见上文「Web 数学公式」 |
-| 找不到 `web/` 或 `server/` 目录 | 已迁移至 `app/` | 前端 `cd app/web`；后端 `--app-dir app` |
+| 现象 | 排查 |
+|------|------|
+| `ValidationError` | 配置 `conf/.env` |
+| Connection refused | 先启动 uvicorn |
+| 重启丢会话 | `SESSION_STORE_BACKEND=sqlite` |
+| 公式异常 | Math 模式 + `$$...$$`，见 `doc/web.md` |
+| 找不到 `web/` | 路径为 `app/web`，后端加 `--app-dir app` |
+| Docker 无理论 md | KNOWN_ISSUES C1（`.dockerignore`） |
 
 ---
 
 ## 扩展指引
 
-v0.4 已实现多 Agent（`app/server/agents/`）、LangGraph 编排（`app/server/graph/`）、MCP Server（`app/server/mcp/servers/`）与 L4 记忆。扩展时：
-
-1. 新建 Agent 继承 `BaseAgent`，在 `AGENT_NAMES` 与 `mcp_tool_whitelist.json` 注册
-2. 可选：在 `research_pipeline.py` 增加流水线阶段
-3. 自研 MCP：在 `mcp/servers/` 添加模块并在 `mcp_servers.json` 启用
-
-详见 [`doc/ARCHITECTURE.md`](doc/ARCHITECTURE.md) 与 [`doc/mcp-config.md`](doc/mcp-config.md)。
+新建 Agent → 白名单注册；流水线见 `graph/`；MCP 见 [`doc/mcp-config.md`](doc/mcp-config.md) · [`doc/ARCHITECTURE.md`](doc/ARCHITECTURE.md)。
 
 ---
 
-## 依赖
+## 依赖与许可证
 
-见 `pyproject.toml`。核心：`fastapi`、`uvicorn`、`openai`、`pydantic-settings`、`httpx`、`httpx-sse`、`rich`、`prompt-toolkit`。
-
-前端：`react`、`vite`、`react-markdown`、`remark-math`、`remark-gfm`、`rehype-katex`、`rehype-highlight`（均在 `app/web/`）。
-
----
-
-## 许可证
-
-MIT（科研辅助工具，请遵守 DeepSeek API 使用条款）。
+见 `pyproject.toml`（包版本 **2.2.0**）。MIT；请遵守 DeepSeek API 使用条款。

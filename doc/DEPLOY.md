@@ -32,7 +32,7 @@ cd ../../ && uvicorn server.main:app --host 0.0.0.0 --port 8000 --app-dir app
 
 ## 二、Docker Compose
 
-详见 [doc/docker.md](../doc/docker.md)。
+详见 [docker.md](docker.md)。
 
 ```bash
 cp conf/.env.example conf/.env
@@ -65,7 +65,7 @@ mkdir -p ~/ai4s-research-agent/data/mcp_files ~/ai4s-research-agent/data/chroma
 
 ```bash
 docker login --username=<用户名> crpi-xxx.cn-shenzhen.personal.cr.aliyuncs.com
-docker pull crpi-xxx.cn-shenzhen.personal.cr.aliyuncs.com/<命名空间>/research-agent:v1.0
+docker pull crpi-xxx.cn-shenzhen.personal.cr.aliyuncs.com/<命名空间>/research-agent:v2.2
 ```
 
 ### 3. 启动
@@ -75,15 +75,20 @@ docker run -d \
   --name ai4s \
   --restart unless-stopped \
   -p 8000:8000 \
-  --env-file ~/ai4s-research-agent/.env \
-  -v ~/ai4s-research-agent/data:/app/data \
-  -e SESSION_DB_PATH=/app/data/sessions.db \
-  -e MCP_ALLOWED_DIRS=/app/data/mcp_files \
-  -e RAG_CHROMA_PATH=/app/data/chroma \
-  -e MCP_CONFIG_PATH=/app/mcp_servers.json \
+  --env-file ~/ai4s-research-agent/conf/.env \
+  -v ~/ai4s-research-agent/data:/repo/data \
+  -v ~/ai4s-research-agent/conf:/repo/conf:ro \
+  -e SESSION_DB_PATH=/repo/data/sessions.db \
+  -e MCP_ALLOWED_DIRS=/repo/data/mcp_files:/repo/data/theory:/repo/data/experiments \
+  -e RAG_CHROMA_PATH=/repo/data/chroma \
+  -e MCP_CONFIG_PATH=/repo/conf/mcp_servers.json \
+  -e THEORY_WORKSPACE_PATH=/repo/data/theory \
+  -e EXPERIMENTS_PATH=/repo/data/experiments \
   -e LOG_FORMAT=json \
-  crpi-xxx.cn-shenzhen.personal.cr.aliyuncs.com/<命名空间>/research-agent:v1.0
+  crpi-xxx.cn-shenzhen.personal.cr.aliyuncs.com/<命名空间>/research-agent:v2.2
 ```
+
+> 镜像 `WORKDIR` 为 `/repo`（见 `docker/Dockerfile`）。优先使用 Compose：`docker compose -f docker/docker-compose.yml up -d`。
 
 ### 4. 验证
 
