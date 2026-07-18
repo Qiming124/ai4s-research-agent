@@ -81,8 +81,8 @@ async def numerical_gradient(
         variables: 变量名（决定维度）
         epsilon: 差分步长
     """
-    np = _import_numpy()
     try:
+        np = _import_numpy()
         var_names = [v.strip() for v in variables.split(",") if v.strip()]
         dim = max(len(var_names), 2)
         x0 = _parse_point(point, dim)
@@ -107,7 +107,10 @@ async def numerical_gradient(
             ensure_ascii=False,
         )
     except Exception as exc:
-        return json.dumps({"expression": expression, "error": str(exc)}, ensure_ascii=False)
+        return json.dumps(
+            {"expression": expression, "error": str(exc) or "numerical_gradient failed"},
+            ensure_ascii=False,
+        )
 
 
 @mcp.tool()
@@ -125,8 +128,8 @@ async def hessian_spectrum(
         variables: 变量名列表
         epsilon: 差分步长
     """
-    np = _import_numpy()
     try:
+        np = _import_numpy()
         var_names = [v.strip() for v in variables.split(",") if v.strip()]
         dim = max(len(var_names), 2)
         x0 = _parse_point(point, dim)
@@ -176,7 +179,10 @@ async def hessian_spectrum(
             ensure_ascii=False,
         )
     except Exception as exc:
-        return json.dumps({"expression": expression, "error": str(exc)}, ensure_ascii=False)
+        return json.dumps(
+            {"expression": expression, "error": str(exc) or "hessian_spectrum failed"},
+            ensure_ascii=False,
+        )
 
 
 @mcp.tool()
@@ -186,14 +192,33 @@ async def critical_point_classify(
     variables: str = "x0,x1",
 ) -> str:
     """综合梯度与 Hessian 对临界点分类。"""
+    if not (expression or "").strip():
+        return json.dumps(
+            {"expression": expression, "error": "empty expression"},
+            ensure_ascii=False,
+        )
     grad_raw = await numerical_gradient(expression, point, variables)
+    if not (grad_raw or "").strip():
+        return json.dumps(
+            {"expression": expression, "error": "empty MCP response"},
+            ensure_ascii=False,
+        )
     grad_data = json.loads(grad_raw)
     if "error" in grad_data:
-        return grad_raw
+        err = grad_data.get("error") or "gradient failed"
+        grad_data["error"] = err
+        return json.dumps(grad_data, ensure_ascii=False)
     hess_raw = await hessian_spectrum(expression, point, variables)
+    if not (hess_raw or "").strip():
+        return json.dumps(
+            {"expression": expression, "error": "empty MCP response"},
+            ensure_ascii=False,
+        )
     hess_data = json.loads(hess_raw)
     if "error" in hess_data:
-        return hess_raw
+        err = hess_data.get("error") or "hessian failed"
+        hess_data["error"] = err
+        return json.dumps(hess_data, ensure_ascii=False)
     return json.dumps(
         {
             "expression": expression,

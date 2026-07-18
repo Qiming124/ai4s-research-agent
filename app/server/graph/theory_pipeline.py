@@ -17,15 +17,58 @@ from shared.schemas import PersistedToolCall, StreamChunk
 logger = logging.getLogger(__name__)
 
 _EXPRESSION_PATTERNS = [
-    re.compile(r"L\s*=\s*([^;\n]+)"),
-    re.compile(r"损失函数[^$]*\$\$(.+?)\$\$", re.DOTALL),
-    re.compile(r"\$\$(.+?)\$\$", re.DOTALL),
+    re.compile(r"L\s*\(\s*[^)]+\)\s*=\s*([^\n;]+)"),
+    re.compile(r"L\s*=\s*([^\n;]+)"),
+    re.compile(r"损失函数[^$]*\$\$([^$]+?)\$\$", re.DOTALL),
+    re.compile(r"\$\$([^$]+?)\$\$", re.DOTALL),
 ]
+
+_LATEX_NOISE = re.compile(
+    r"(\\begin|\\end|\\mathbb|\\quad|\\qquad|\\in\b|\\top|\\cdot|\\frac|\\\\)",
+    re.I,
+)
 
 
 def parse_verifiable_claim_from_content(content: str) -> dict[str, Any] | None:
     """解析结构化 verifiable Claim 块。"""
     return parse_verifiable_claim(content)
+
+
+def _looks_like_python_expr(expr: str) -> bool:
+    """拒绝整段 LaTeX / 叙述句，只保留可数值求值的表达式。"""
+    compact = expr.replace(" ", "")
+    if len(compact) < 3 or len(compact) > 200:
+        return False
+    if _LATEX_NOISE.search(expr):
+        return False
+    # 去反斜杠后的 LaTeX 残留词
+    if re.search(r"\b(mathbb|quad|qquad|dfrac|frac|cdot|times)\b", expr, re.I):
+        return False
+    # 方程左右两边（f(x)=...）通常不是纯表达式
+    if "=" in expr and not expr.strip().startswith("="):
+        if re.search(r"(?<![*=<>!])=(?!=)", expr):
+            return False
+    if not re.search(r"(theta|\bx\d*\b|\*\*|\^|\*)", expr, re.I):
+        return False
+    # 允许的字符大致对齐 numerical MCP
+    cleaned = expr.replace("^", "**").replace("\\theta", "theta")
+    cleaned = re.sub(r"\\", "", cleaned)
+    return bool(re.match(r"^[\w\s+\-*/().,**]+$", cleaned.replace(" ", "")))
+
+
+def _normalize_captured_expr(raw: str) -> str:
+    """清洗捕获串：去 LaTeX 命令、去掉 ``L =`` 前缀、截断中文叙述。"""
+    expr = raw.strip()
+    expr = expr.replace("\\theta", "theta")
+    expr = re.sub(r"\\text\{[^}]+\}", "", expr)
+    expr = expr.replace("\\", "")
+    # $$L = theta**2 + 1$$ → theta**2 + 1
+    expr = re.sub(r"^[Ll]\s*\([^)]*\)\s*=\s*", "", expr)
+    expr = re.sub(r"^[Ll]\s*=\s*", "", expr)
+    # 截断中文/叙述
+    expr = re.split(r"[\u4e00-\u9fff]", expr, maxsplit=1)[0]
+    expr = expr.strip().rstrip(".,;，。；")
+    return expr
 
 
 def extract_loss_expression(content: str) -> str | None:
@@ -36,17 +79,18 @@ def extract_loss_expression(content: str) -> str | None:
     for pattern in _EXPRESSION_PATTERNS:
         match = pattern.search(content)
         if match:
-            expr = match.group(1).strip()
-            expr = expr.replace("\\theta", "theta").replace("\\", "")
-            expr = re.sub(r"\\text\{[^}]+\}", "", expr)
-            if len(expr) > 3 and ("**" in expr or "*" in expr or "theta" in expr or "x" in expr):
+            expr = _normalize_captured_expr(match.group(1))
+            if _looks_like_python_expr(expr):
                 return expr
     return None
 
 
 def to_numerical_expression(expr: str) -> str:
     """将符号表达式转为 numerical MCP 可用的 x0,x1 形式。"""
-    out = expr.replace("theta", "x0").replace("theta1", "x0").replace("theta2", "x1")
+    # 必须先替换长标识，避免 theta1 → x01
+    out = expr
+    out = out.replace("theta2", "x1").replace("theta1", "x0").replace("theta0", "x0")
+    out = out.replace("theta", "x0")
     out = re.sub(r"\bx\b", "x0", out)
     out = re.sub(r"\by\b", "x1", out)
     return out

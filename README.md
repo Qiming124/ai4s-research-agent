@@ -3,7 +3,7 @@
 面向「深度学习损失函数极小值理论」研究的 AI4S 智能体：对话、MCP 工具、多 Agent 路由、RAG 记忆、课题 / Campaign、验证账本、Docker 部署。
 
 **当前版本**：**v2.2**（分支 `v2.2`）  
-**文档索引**：[`doc/README.md`](doc/README.md) · API 清单 [`doc/API-COVERAGE.md`](doc/API-COVERAGE.md)（**67** 端点）· 数据约定 [`doc/DATA.md`](doc/DATA.md) · 已知问题 [`doc/KNOWN_ISSUES.md`](doc/KNOWN_ISSUES.md)
+**文档索引**：[`doc/README.md`](doc/README.md) · API 清单 [`doc/API-COVERAGE.md`](doc/API-COVERAGE.md)（**67** 端点）· 全路径 [`doc/API-ROUTES.md`](doc/API-ROUTES.md) · 量化 [`doc/API-QUANT-TEST-RESULTS.md`](doc/API-QUANT-TEST-RESULTS.md) · 数据约定 [`doc/DATA.md`](doc/DATA.md) · 已知问题 [`doc/KNOWN_ISSUES.md`](doc/KNOWN_ISSUES.md)
 
 ### 当前能力（v2.2）
 
@@ -17,7 +17,7 @@
 | 验证闭环 | Claim → SymPy / 数值 / Torch → 验证账本与仪表盘 |
 | 记忆 | L1–L4；假设 DAG；书目 BibTeX；理论工作区在线编辑 |
 | 文献 | PDF/DOCX/arXiv 入库 + RAG |
-| 导出 | preview / polish / **md** / latex / docx / pdf（按 `project_id`） |
+| 导出 | preview / polish / **md** / latex / docx / pdf（正文按 session；latex 可带课题书目） |
 | 可观测 | Token、`/v1/observability/*`、Agent 质量面板 |
 | 测试 | `tests/api/` 冒烟 + 分域；Playwright 三场景（课题/文献/导出） |
 | Docker | 单镜像前端 + API（理论种子打包问题见 KNOWN_ISSUES C1） |
@@ -123,7 +123,7 @@ git checkout v2.2
 | 4 | `app/server/agents/` + `graph/` | 编排与流水线 |
 | 5 | `app/server/api/` + `main.py` | HTTP / SSE |
 | 6 | `app/web/src/` | 科研工作台 UI |
-| 7 | `doc/API-COVERAGE.md` | 端点权威清单 |
+| 7 | `doc/API-COVERAGE.md` + `doc/API-ROUTES.md` | 端点清单与全路径链路 |
 
 ---
 
@@ -192,7 +192,7 @@ cd app/web && npm install && npm run dev   # http://localhost:5173
 
 ## API 参考
 
-[`doc/API-COVERAGE.md`](doc/API-COVERAGE.md)（67 端点）· [`doc/API.md`](doc/API.md) · `GET /docs`
+[`doc/API-COVERAGE.md`](doc/API-COVERAGE.md)（67 端点）· [`doc/API-ROUTES.md`](doc/API-ROUTES.md)（全路径链路）· [`doc/API.md`](doc/API.md) · `GET /docs`
 
 ```bash
 curl http://127.0.0.1:8000/health
@@ -201,7 +201,27 @@ curl -N -X POST http://127.0.0.1:8000/v1/chat/stream \
   -d '{"message":"二次损失临界点","session_id":"test","mode":"math","agent":"theory"}'
 ```
 
-SSE：`meta` → `pipeline_stage` / `campaign_update` → `workflow_step` → `tool_call_*` → `reasoning` → `content` → `verification_result` → `done`
+SSE：`meta` → `pipeline_stage` / `campaign_update` → `workflow_step` → `tool_call_*` → `reasoning` → `content` → `verification_result` / `numerical_verification_result` → `done`
+
+### 理论验证本地重跑
+
+```bash
+# 单元 / 回归
+pytest tests/test_theory_pipeline.py tests/test_research_supervisor.py \
+  tests/test_verification_executor_async.py tests/derivation_benchmark/ -q
+
+# 数值 Claim（主循环 await，成功 status=completed + overall_passed）
+curl -s -X POST http://127.0.0.1:8000/v1/verification/run \
+  -H "Content-Type: application/json" \
+  -d '{"claim":{"expression":"x0**2 + x1**2","point":"0,0","variables":"x0,x1","expected":{"classification":"local_minimum"},"tier_hint":"numerical"},"session_id":"demo-v"}'
+
+# 实验配置 quadratic_minimum（须 await run_config_async，勿嵌套 event loop）
+curl -s -X POST http://127.0.0.1:8000/v1/experiments/runs \
+  -H "Content-Type: application/json" \
+  -d '{"config_path":"quadratic_minimum.yaml"}'
+```
+
+成功时实验日志顶层为 `status: completed`，分层里 numerical 为 `pass`；Campaign S5 按 `overall_passed` / `completed` 判定 `quadratic_pass`，不再误把成功当成失败。
 
 ---
 
@@ -212,9 +232,11 @@ SSE：`meta` → `pipeline_stage` / `campaign_update` → `workflow_step` → `t
 | `ValidationError` | 配置 `conf/.env` |
 | Connection refused | 先启动 uvicorn |
 | 重启丢会话 | `SESSION_STORE_BACKEND=sqlite` |
-| 公式异常 | Math 模式 + `$$...$$`，见 `doc/web.md` |
+| 公式异常 / 橙色原文乱码 | 优先 `cd app/web && npm run test:math`；见 `doc/web.md`（粘连/pmatrix/表/代码围栏） |
 | 找不到 `web/` | 路径为 `app/web`，后端加 `--app-dir app` |
 | Docker 无理论 md | KNOWN_ISSUES C1（`.dockerignore`） |
+| 实验 API 报 event loop / 整站卡死 | 须 `await run_config_async`；禁止在 async 路由里 `new_event_loop` 调 MCP |
+| 数值验证「失败」但无原因 | 看 `tiers.numerical.reason`；脏 LaTeX 不会再当表达式 |
 
 ---
 

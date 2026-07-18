@@ -154,7 +154,12 @@ class MCPClient:
 
     async def close(self) -> None:
         if self._exit_stack is not None:
-            await self._exit_stack.aclose()
+            try:
+                await self._exit_stack.aclose()
+            except RuntimeError as exc:
+                # stdio MCP sessions bind AsyncExitStack to the connect task;
+                # reload from a different request task cannot aclose cleanly.
+                logger.warning("MCP exit stack close skipped (cross-task): %s", exc)
             self._exit_stack = None
         self._adapter = None
         self._sessions.clear()

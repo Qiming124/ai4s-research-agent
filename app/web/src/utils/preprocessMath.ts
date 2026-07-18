@@ -159,16 +159,19 @@ function fixMalformedSubscripts(content: string): string {
   return result;
 }
 
-/** cases/aligned 环境内误用单反斜杠换行 */
+/** cases/aligned/matrix 环境内误用单反斜杠换行 */
 function fixEnvRowSeparators(content: string): string {
   return content.replace(
-    /\\begin\{(cases|aligned|align)\}([\s\S]*?)\\end\{\1\}/g,
+    /\\begin\{(cases|aligned|align|pmatrix|bmatrix|matrix)\}([\s\S]*?)\\end\{\1\}/g,
     (_, env: string, inner: string) => {
       let fixed = inner;
       if (env === "cases") {
         fixed = fixed.replace(/&([^&\n]*?)\s+\\\s+(-)/g, "&$1 \\\\ $2");
-      } else {
+      } else if (env === "aligned" || env === "align") {
         fixed = fixed.replace(/\s+\\\s+&/g, " \\\\ &");
+      } else {
+        // matrix 族：行尾单 \ 改为 \\
+        fixed = fixed.replace(/([^\\])\\\s*(?=\n|$)/g, "$1\\\\");
       }
       return `\\begin{${env}}${fixed}\\end{${env}}`;
     },
@@ -269,19 +272,49 @@ function separateGluedAfterDisplay(
   });
 }
 
+const MATRIX_LIKE_ENVS =
+  "pmatrix|bmatrix|vmatrix|Vmatrix|matrix|cases|aligned|align";
+
 function separateGluedMarkdown(content: string): string {
   let result = content.replace(/([^\n#])(#{1,6}\s)/g, "$1\n\n$2");
   result = result.replace(/(\\square)(#{1,6}\s)/g, "$1\n\n$2");
-  result = result.replace(/(\\end\{(?:cases|aligned|align)\}\$\$)([^\s\n$\\])/g, "$1\n\n$2");
-  result = result.replace(/(\\end\{(?:cases|aligned|align)\}\$\$)(\*\*)/g, "$1\n\n$2");
+  result = result.replace(
+    new RegExp(`(\\\\end\\{(?:${MATRIX_LIKE_ENVS})\\}\\$\\$)([^\\s\\n$\\\\])`, "g"),
+    "$1\n\n$2",
+  );
+  result = result.replace(
+    new RegExp(`(\\\\end\\{(?:${MATRIX_LIKE_ENVS})\\}\\$\\$)(\\*\\*)`, "g"),
+    "$1\n\n$2",
+  );
   result = result.replace(/(\$\$\\square\$)(\*\*)/g, "$1\n\n$2");
   result = separateGluedAfterDisplay(
     result,
     /\$\$(其中|令|因子|即|故|则)/g,
   );
   result = separateGluedAfterDisplay(result, /\$\$([\u4e00-\u9fff])/g);
+  // 中文标点不在基本汉字区，需单独拆开
+  result = separateGluedAfterDisplay(result, /\$\$([，。；：）】」])/g);
   result = separateGluedAfterDisplay(result, /\$\$(\*\*)/g);
   return result;
+}
+
+/** 保护代码围栏与行内 code，避免 wrapProseLatex 注入 $ */
+const CODE_SLOT_RE = /\uE000CODE(\d+)\uE001/g;
+
+function protectCodeSegments(content: string): { text: string; slots: string[] } {
+  const slots: string[] = [];
+  const stash = (m: string) => {
+    const i = slots.length;
+    slots.push(m);
+    return `\uE000CODE${i}\uE001`;
+  };
+  let text = content.replace(/```[\s\S]*?```/g, stash);
+  text = text.replace(/`[^`\n]+`/g, stash);
+  return { text, slots };
+}
+
+function restoreCodeSegments(text: string, slots: string[]): string {
+  return text.replace(CODE_SLOT_RE, (_, idx: string) => slots[Number(idx)] ?? "");
 }
 
 /**
@@ -564,9 +597,9 @@ function wrapDisplayEquationLines(content: string): string {
       const trimmed = line.trim();
       if (!trimmed || /^[#>|*-]/.test(trimmed)) return line;
       if (/[\u4e00-\u9fff]/.test(trimmed)) return line;
-      // 含 cases/aligned 的整行方程（如 Softmax 雅可比矩阵）
+      // 含 cases/aligned/pmatrix 的整行方程
       if (
-        /\\begin\{(?:cases|aligned|align)\}/.test(trimmed) &&
+        /\\begin\{(?:cases|aligned|align|pmatrix|bmatrix)\}/.test(trimmed) &&
         /=/.test(trimmed) &&
         !/^=\s*\\begin/.test(trimmed)
       ) {
@@ -590,10 +623,10 @@ function wrapDisplayEquationLines(content: string): string {
     .join("\n");
 }
 
-/** 将「前缀 = $$\\begin{cases}...$$」合并为单个块级公式 */
+/** 将「前缀 = $$\\begin{cases|pmatrix|...}...$$」合并为单个块级公式 */
 function mergePrefixWithWrappedEnv(content: string): string {
   return content.replace(
-    /([^\n$]+?)\s*=\s*\$\$(\\begin\{(?:cases|aligned|align)\}[\s\S]*?\\end\{(?:cases|aligned|align)\})\$\$/g,
+    /([^\n$]+?)\s*=\s*\$\$(\\begin\{(?:cases|aligned|align|pmatrix|bmatrix|matrix)\}[\s\S]*?\\end\{(?:cases|aligned|align|pmatrix|bmatrix|matrix)\})\$\$/g,
     (_, prefix: string, envBlock: string) => `$$${prefix.trim()} = ${envBlock}$$`,
   );
 }
@@ -943,7 +976,8 @@ function trimOrphanTrailingDollars(content: string): string {
  * 对 Markdown 文本中的数学片段做预处理。
  */
 export function preprocessMathContent(content: string): string {
-  let result = normalizeLatexDelimiters(content);
+  const { text: protectedContent, slots } = protectCodeSegments(content);
+  let result = normalizeLatexDelimiters(protectedContent);
   result = removeCorruptMashedDisplayPrefix(result);
   result = dedupeAdjacentPhrases(result);
   result = separateGluedMarkdown(result);
@@ -960,7 +994,9 @@ export function preprocessMathContent(content: string): string {
   result = wrapDisplayEquationLines(result);
 
   if (!containsLatex(result)) {
-    return wrapProseLatex(result);
+    result = wrapProseLatex(result);
+    result = separateGluedMarkdown(result);
+    return restoreCodeSegments(result, slots);
   }
 
   result = normalizeDollarRuns(result);
@@ -986,6 +1022,8 @@ export function preprocessMathContent(content: string): string {
   result = trimOrphanTrailingDollars(result);
   // remark-math：单行 $$x$$ 会被当成 inlineMath，末尾统一成 $$\n...\n$$
   result = replaceDisplayMathBlocks(result, (inner) => inner.trim());
+  // 包裹后再拆一次残留粘连（如 $$\n...\n$$，）
+  result = separateGluedMarkdown(result);
 
-  return result;
+  return restoreCodeSegments(result, slots);
 }

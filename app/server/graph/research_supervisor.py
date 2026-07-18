@@ -469,7 +469,8 @@ class ResearchSupervisorPipeline:
                 continue
 
             if stage == "S5_experiment":
-                exp_results = run_campaign_experiments(
+                # 必须 await：禁止同步嵌套 event loop 调用主循环 MCP（会死锁）
+                exp_results = await run_campaign_experiments(
                     theory_content or clean_message,
                     session_id=session_id,
                     campaign=campaign,

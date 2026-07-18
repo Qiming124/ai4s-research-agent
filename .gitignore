@@ -51,6 +51,9 @@ data/experiments/notebooks/results/
 data/experiments/configs/campaign_dynamic_symbolic.yaml
 data/experiments/configs/campaign_tmp*.yaml
 
+# API 量化探针原始输出（计划/结果见 doc/API-QUANT-*.md）
+data/quant_probe/
+
 # 课题运行时工作区（default 等由 API 创建）
 data/projects/*
 !data/projects/.gitkeep

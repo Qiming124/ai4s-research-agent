@@ -1,8 +1,11 @@
 # API 覆盖清单
 
-> **67** 个 REST 端点 · **15** 域 · 更新于 **v2.2**（`app/server/api/*.py`）
+> **67** 个 REST 端点 · **15** 域 · 更新于 **v2.2**（`app/server/api/*.py`）  
+> **调用链路详解**：[`API-ROUTES.md`](API-ROUTES.md)（契约 + HTTP→实现全路径）
 
 图例：**UI** = 前端已接线 · **Test** = pytest/smoke · **Auto** = 自动化等级 (A=全自动/H=半自动/M=手动)
+
+> 表中 `{id}` / `{path}` / `{cid}` 为简写；代码参数名见 API-ROUTES（如 `{session_id}`、`{project_id}`、`{file_path:path}`）。
 
 | 域 | 方法 | 路径 | UI | Test | Auto | 说明 |
 |----|------|------|:--:|:----:|:----:|------|
@@ -79,7 +82,7 @@
 ```
 课题选择 → 新建会话(自动关联) → 文献导入(arXiv/PDF) → 对话(SSE流水线)
   → 自动切Tab → Campaign 阶段推进(可选) → 验证仪表盘刷新
-  → 导出 preview/polish → LaTeX/DOCX/PDF/MD(按课题)
+  → 导出 preview/polish → LaTeX/DOCX/PDF/MD（正文按 session；latex 可带课题书目）
 ```
 
 ## 测试入口
@@ -89,4 +92,4 @@
 - `pytest tests/api/test_smoke_all.py` — 全量冒烟（CI）
 - `cd app/web && npx playwright test` — 浏览器 E2E（课题 / 文献 / 导出）
 
-字段与 SSE 细节见 [`API.md`](API.md)；OpenAPI：`GET /docs`。
+字段与 SSE 细节见 [`API.md`](API.md)；**全路径链路**见 [`API-ROUTES.md`](API-ROUTES.md)；OpenAPI：`GET /docs`。

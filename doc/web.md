@@ -48,8 +48,10 @@ Vite 将 `/v1`、`/health` 代理到 8000；SSE 已设 `X-Accel-Buffering: no`�
 ## 数学公式（KaTeX）
 
 - 生成中：纯文本，避免未闭合公式报错  
-- 生成后：`remark-math` + `rehype-katex`；`preprocessMath.ts` 做常见修复  
+- 生成后：`remark-gfm` → `remark-math` → `rehype-katex`；[`preprocessMath.ts`](../app/web/src/utils/preprocessMath.ts) 做常见修复  
 - 推荐：行内 `$...$` 同一行；复杂式用独立 `$$...$$`  
+- 已覆盖的乱码场景：`pmatrix`/`bmatrix` 后粘中文标点、`$$` 粘「其中/故」、GFM 表内 `L_0`、代码围栏内裸 LaTeX（不注入 `$`）  
+- 回归：`cd app/web && npm run test:math`  
 - 详情见应用内「帮助 → 公式显示」
 
 ## E2E

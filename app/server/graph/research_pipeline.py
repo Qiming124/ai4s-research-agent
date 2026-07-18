@@ -148,14 +148,17 @@ class ResearchPipeline:
 
         # Stage 3: Experiment (conditional)
         if needs_experiment_handoff(sympy_result, num_result):
-            from server.experiments.runner import run_config
+            from server.experiments.runner import run_config_async
 
             exp_prompt = (
                 f"请对以下理论推导进行数值验证（使用 numerical MCP）：\n\n"
                 f"{theory_content[:3000] if theory_content else clean_message}"
             )
             try:
-                auto_record = run_config("quadratic_minimum.yaml", session_id=session_id)
+                auto_record = await run_config_async(
+                    "quadratic_minimum.yaml",
+                    session_id=session_id,
+                )
                 yield StreamChunk(
                     type="numerical_verification_result",
                     content=json.dumps(auto_record.get("summary", auto_record), ensure_ascii=False),

@@ -27,6 +27,7 @@
 | M1 | open | `main.py` 启动注释缺 `--app-dir app` |
 | M2 | open | `data/theory/lemmas/` 为空，全局引理同步收益有限 |
 | L1 | open | LangGraph / Starlette / Chroma 弃用警告较多 |
+| M3 | fixed | `POST /v1/mcp/reload` 跨 task `aclose` 曾 500；`MCPClient.close` 已容忍并重建（量化 Batch-1 / `mcp/client.py`） |
 
 ## 建议修复顺序
 

@@ -9,7 +9,7 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException
 
 from server.config import get_settings
-from server.experiments.runner import run_config
+from server.experiments.runner import run_config_async
 from shared.schemas import (
     ExperimentRunInfo,
     ExperimentRunRequest,
@@ -51,7 +51,8 @@ def _list_runs() -> list[ExperimentRunInfo]:
 @router.post("/v1/experiments/runs")
 async def create_experiment_run(request: ExperimentRunRequest) -> dict:
     try:
-        return run_config(request.config_path, session_id=request.session_id)
+        # 在主事件循环 await，复用已连接的 MCP，避免嵌套 loop 报错/死锁
+        return await run_config_async(request.config_path, session_id=request.session_id)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Exception as exc:

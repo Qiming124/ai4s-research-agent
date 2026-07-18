@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 import uuid
 from datetime import datetime, timezone
@@ -10,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from server.config import get_settings
+from server.experiments.async_utils import run_coro_sync
 from server.graph.theory_pipeline import to_numerical_expression
 from server.memory.claim_parser import claim_from_content_or_expression, parse_verifiable_claim
 from server.memory.verification import get_verification_ledger
@@ -28,6 +28,14 @@ def _eval_polynomial_local(expression: str, point: list[float]) -> float:
         "abs": abs,
     }
     return float(eval(expression.replace("^", "**"), {"__builtins__": {}}, env))  # noqa: S307
+
+
+def _nonempty_reason(*parts: Any, fallback: str) -> str:
+    for part in parts:
+        text = str(part or "").strip()
+        if text:
+            return text
+    return fallback
 
 
 async def execute_claim_verification(
@@ -55,17 +63,35 @@ async def execute_claim_verification(
                 "sympy__differentiate",
                 {"expression": sym_expr, "variable": "theta"},
             )
-            grad_data = json.loads(grad_raw)
-            if "error" not in grad_data:
+            if not (grad_raw or "").strip():
                 sympy_result = {
-                    "status": "pass",
-                    "reason": "SymPy 梯度验证通过",
-                    "details": grad_data,
+                    "status": "fail",
+                    "reason": "empty MCP response",
+                    "details": {},
                 }
             else:
-                sympy_result = {"status": "fail", "reason": grad_data["error"], "details": grad_data}
+                grad_data = json.loads(grad_raw)
+                if "error" in grad_data:
+                    sympy_result = {
+                        "status": "fail",
+                        "reason": _nonempty_reason(
+                            grad_data.get("error"),
+                            fallback="SymPy 梯度验证失败",
+                        ),
+                        "details": grad_data,
+                    }
+                else:
+                    sympy_result = {
+                        "status": "pass",
+                        "reason": "SymPy 梯度验证通过",
+                        "details": grad_data,
+                    }
         except Exception as exc:
-            sympy_result = {"status": "fail", "reason": str(exc), "details": {}}
+            sympy_result = {
+                "status": "fail",
+                "reason": _nonempty_reason(exc, fallback="SymPy 验证异常"),
+                "details": {},
+            }
     results["tiers"]["symbolic"] = sympy_result
 
     ledger = get_verification_ledger()
@@ -89,27 +115,45 @@ async def execute_claim_verification(
             "numerical__critical_point_classify",
             {"expression": num_expr, "point": point, "variables": variables},
         )
-        data = json.loads(raw)
-        if "error" in data:
-            num_result = {"status": "fail", "reason": data["error"], "details": data}
-        else:
-            classification = data.get("classification", "unknown")
-            expected_cls = expected.get("classification")
-            passed = True
-            if expected_cls:
-                passed = classification == expected_cls
-            elif classification in ("local_minimum", "saddle", "local_maximum"):
-                passed = True
-            else:
-                passed = False
+        if not (raw or "").strip():
             num_result = {
-                "status": "pass" if passed else "fail",
-                "reason": f"分类={classification}",
-                "details": data,
-                "passed": passed,
+                "status": "fail",
+                "reason": "empty MCP response",
+                "details": {},
             }
+        else:
+            data = json.loads(raw)
+            if "error" in data:
+                num_result = {
+                    "status": "fail",
+                    "reason": _nonempty_reason(
+                        data.get("error"),
+                        fallback="numerical tool returned error",
+                    ),
+                    "details": data,
+                }
+            else:
+                classification = data.get("classification", "unknown")
+                expected_cls = expected.get("classification")
+                passed = True
+                if expected_cls:
+                    passed = classification == expected_cls
+                elif classification in ("local_minimum", "saddle", "local_maximum"):
+                    passed = True
+                else:
+                    passed = False
+                num_result = {
+                    "status": "pass" if passed else "fail",
+                    "reason": f"分类={classification}",
+                    "details": data,
+                    "passed": passed,
+                }
     except Exception as exc:
-        num_result = {"status": "fail", "reason": str(exc), "details": {}}
+        num_result = {
+            "status": "fail",
+            "reason": _nonempty_reason(exc, fallback="numerical verification exception"),
+            "details": {},
+        }
 
     results["tiers"]["numerical"] = num_result
     ledger.append(
@@ -129,6 +173,7 @@ async def execute_claim_verification(
 
         exp_result = run_torch_experiment(claim)
         results["tiers"]["experiment"] = exp_result
+        exp_status = exp_result.get("status")
         ledger.append(
             project_id=project_id,
             session_id=session_id,
@@ -137,26 +182,33 @@ async def execute_claim_verification(
             tier="experiment",
             executor="torch_runner",
             agent_name=agent_name,
-            passed=exp_result.get("status") == "completed",
+            # skipped 不计入失败
+            passed=exp_status in ("completed", "skipped"),
             result=exp_result,
             artifacts=[exp_result.get("log_path", "")] if exp_result.get("log_path") else [],
         )
 
-    results["overall_passed"] = all(
-        t.get("status") in ("pass", "completed", "skipped")
-        for t in results["tiers"].values()
-        if t.get("status") != "skipped"
+    active = [
+        t for t in results["tiers"].values() if t.get("status") not in ("skipped", None)
+    ]
+    if not active:
+        results["overall_passed"] = True
+    else:
+        results["overall_passed"] = all(
+            t.get("status") in ("pass", "completed") for t in active
+        )
+    results["has_skips"] = any(
+        t.get("status") == "skipped" for t in results["tiers"].values()
     )
     return results
 
 
-def run_verification_from_config(config: dict[str, Any], config_path: str = "") -> dict[str, Any]:
-    """同步包装：从 YAML 配置或 Claim 字典执行验证并写实验日志。"""
-    settings = get_settings()
-    run_id = str(uuid.uuid4())[:8]
+def _claim_from_config(config: dict[str, Any]) -> dict[str, Any] | None:
     claim = config.get("verifiable") or config.get("claim")
-    if not claim and config.get("expression"):
-        claim = {
+    if claim:
+        return claim
+    if config.get("expression"):
+        return {
             "expression": config["expression"],
             "point": config.get("point", "0,0"),
             "variables": config.get("variables", "x0,x1"),
@@ -164,7 +216,19 @@ def run_verification_from_config(config: dict[str, Any], config_path: str = "") 
             "tier_hint": config.get("tier_hint", "numerical"),
             "network": config.get("network"),
         }
+    return None
 
+
+async def run_verification_from_config_async(
+    config: dict[str, Any],
+    config_path: str = "",
+    *,
+    session_id: str | None = None,
+) -> dict[str, Any]:
+    """异步执行 YAML/Claim 验证并写实验日志（供 FastAPI / S5 主循环 await）。"""
+    settings = get_settings()
+    run_id = str(uuid.uuid4())[:8]
+    claim = _claim_from_config(config)
     if not claim:
         return {
             "run_id": run_id,
@@ -172,19 +236,26 @@ def run_verification_from_config(config: dict[str, Any], config_path: str = "") 
             "reason": "配置缺少 verifiable/claim/expression",
         }
 
-    loop = asyncio.new_event_loop()
-    try:
-        result = loop.run_until_complete(
-            execute_claim_verification(claim, project_id=config.get("project_id", "default"))
-        )
-    finally:
-        loop.close()
+    result = await execute_claim_verification(
+        claim,
+        project_id=config.get("project_id", "default"),
+        session_id=session_id,
+    )
+
+    tiers = result.get("tiers") or {}
+    active = [t for t in tiers.values() if t.get("status") not in ("skipped", None)]
+    if not active and tiers:
+        status = "skipped"
+    elif result.get("overall_passed"):
+        status = "completed"
+    else:
+        status = "failed"
 
     record = {
         "run_id": run_id,
         "name": config.get("name", "verification_run"),
         "config_path": config_path,
-        "status": "completed" if result.get("overall_passed") else "failed",
+        "status": status,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "summary": result,
         "verification": result,
@@ -198,6 +269,11 @@ def run_verification_from_config(config: dict[str, Any], config_path: str = "") 
     return record
 
 
+def run_verification_from_config(config: dict[str, Any], config_path: str = "") -> dict[str, Any]:
+    """同步包装：仅用于 CLI / 无事件循环场景。"""
+    return run_coro_sync(run_verification_from_config_async(config, config_path))
+
+
 def run_verification_from_content(content: str, **kwargs: Any) -> dict[str, Any]:
     """从 Theory 输出文本执行验证。"""
     claim = parse_verifiable_claim(content)
@@ -208,8 +284,4 @@ def run_verification_from_content(content: str, **kwargs: Any) -> dict[str, Any]
         claim = claim_from_content_or_expression(content, expr)
     if not claim:
         return {"status": "skipped", "reason": "无可验证 Claim"}
-    loop = asyncio.new_event_loop()
-    try:
-        return loop.run_until_complete(execute_claim_verification(claim, **kwargs))
-    finally:
-        loop.close()
+    return run_coro_sync(execute_claim_verification(claim, **kwargs))

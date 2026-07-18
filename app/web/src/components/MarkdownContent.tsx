@@ -15,7 +15,7 @@ interface MarkdownContentProps {
 
 const MAX_MARKDOWN_CHARS = 50000;
 
-const remarkPlugins: PluggableList = [remarkMath, remarkGfm];
+const remarkPlugins: PluggableList = [remarkGfm, remarkMath];
 const rehypePlugins: PluggableList = [
   [rehypeKatex, { strict: "ignore", errorColor: "#b45309" }],
 ];

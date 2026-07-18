@@ -88,7 +88,7 @@ class ChatRequest(BaseModel):
         max_history_messages: L1 保留最近 N 条历史（None=服务端 .env 默认）
         enable_history_summary: 截断时是否 LLM 摘要（None=服务端 .env 默认）
         enable_tools: 是否启用 MCP 工具（None=服务端 .env 默认）
-        agent: 指定 Agent（general/theory/experiment/literature）
+        agent: 指定 Agent（general/theory/experiment/literature/review/counterexample）
         auto_route: 未指定 agent 时是否自动意图路由
     """
 

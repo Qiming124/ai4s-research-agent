@@ -23,6 +23,7 @@
 | `data/explore_outputs/*` | SkillsBridge / 探索输出 |
 | `data/experiments/logs/*` | 实验运行日志 |
 | `data/experiments/notebooks/results/` | Jupyter 回传结果 |
+| `data/quant_probe/` | API 量化探针 JSONL/汇总（live RTT；勿提交） |
 | `data/projects/*` | 课题运行时工作区 |
 | `data/theory/smoke_test_file.md`、`*-problem.md` | 冒烟/流水线临时稿 |
 | `data/theory/counterexamples/*`（除 `relu_saddle.md`） | 自动生成的反例 |

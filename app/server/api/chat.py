@@ -9,11 +9,12 @@
 #     本模块调用 GeneralAgent（业务层）与 SessionStore（会话层）
 #
 # 端点一览：
-#     GET  /health                  — 健康检查
-#     POST /v1/chat                 — 非流式对话
-#     POST /v1/chat/stream          — 流式对话（SSE）
-#     GET  /v1/sessions/{id}        — 查询会话历史
-#     DELETE /v1/sessions/{id}      — 清空会话历史
+#     GET  /health                          — 健康检查
+#     POST /v1/chat                         — 非流式对话
+#     POST /v1/chat/stream                  — 流式对话（SSE）
+#     GET  /v1/sessions                     — 会话列表
+#     GET  /v1/sessions/{session_id}        — 查询会话历史
+#     DELETE /v1/sessions/{session_id}      — 清空/删除会话
 #
 # SSE 说明：基于 HTTP 的单向推送（服务端→客户端），每条事件格式 data: {json}\n\n
 #           FastAPI 用 StreamingResponse 把 async generator 转成 text/event-stream。

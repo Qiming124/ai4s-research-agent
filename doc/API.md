@@ -2,7 +2,9 @@
 
 Base URL 默认：`http://127.0.0.1:8000`。  
 数据模型：`app/shared/schemas.py`。  
-**完整端点矩阵（67）**：[`API-COVERAGE.md`](API-COVERAGE.md)。交互式文档：`GET /docs`。
+**完整端点矩阵（67）**：[`API-COVERAGE.md`](API-COVERAGE.md)。  
+**全路径调用链路**：[`API-ROUTES.md`](API-ROUTES.md)。  
+交互式文档：`GET /docs`。
 
 ---
 
@@ -40,7 +42,7 @@ curl -s http://127.0.0.1:8000/health
 | `enable_thinking` | bool? | DeepSeek thinking |
 | `reasoning_effort` | `high` \| `max`? | 推理强度 |
 | `cot_mode` | `off` \| `standard` \| `strict` | 结构化思维链（Math 默认 strict） |
-| `project_id` | string? | 关联课题（工作台 / 导出作用域） |
+| `project_id` | string? | 关联课题（Campaign / 工作台；对话编排上下文） |
 | `campaign_id` | string? | 关联 Campaign（多阶段研究） |
 
 **SSE 事件 `type`**：
@@ -159,7 +161,7 @@ Campaign 阶段（S0–S8）：`S0_campaign` → literature → formalization �
 |------|------|------|
 | GET/POST | `/v1/experiments/runs` | 列表 / 触发 |
 | GET | `/v1/experiments/runs/{id}` | 详情 |
-| GET | `/v1/export/preview` | 按课题预览草稿 |
+| GET | `/v1/export/preview` | 预览草稿（`session_id` / `include_global` / `include_chat`；**无** `project_id`） |
 | POST | `/v1/export/polish` | LLM 润色 |
 | POST | `/v1/export/{md,latex,docx,pdf}` | 导出文件 |
 | GET | `/v1/jupyter/template` | 笔记本模板 |
@@ -167,7 +169,7 @@ Campaign 阶段（S0–S8）：`S0_campaign` → literature → formalization �
 | POST | `/v1/sync/metadata` | 云端元数据同步（`ENABLE_CLOUD_SYNC=true`，否则 403） |
 | GET | `/v1/sync/audit/{project_id}` | 同步审计 |
 
-导出支持查询参数 `project_id`（按课题作用域）。无 xelatex 时 PDF 走 HTML→reportlab 回退。
+导出正文按 **session + 全局记忆** 收集（`collect_export_entries`）。`LatexExportRequest.project_id` 主要用于 **LaTeX/BibTeX 书目**；preview/md/docx/pdf **不会**按课题过滤正文。无 xelatex 时 PDF 走 HTML→reportlab 回退。全链路见 [`API-ROUTES.md`](API-ROUTES.md#8-export)。
 
 ---
 
