@@ -10,10 +10,11 @@ import { preprocessMathContent } from "./preprocessMath";
 
 async function renderToHast(markdown: string): Promise<Root> {
   const processed = preprocessMathContent(markdown);
+  // 与 MarkdownContent 一致：GFM 先于 math，保护表格
   const processor = unified()
     .use(remarkParse)
-    .use(remarkMath)
     .use(remarkGfm)
+    .use(remarkMath)
     .use(remarkRehype)
     .use(rehypeKatex, { strict: "ignore", errorColor: "#b45309" });
 
@@ -44,6 +45,14 @@ function countBrokenEmphasis(tree: Root): number {
     if (text.length === 1 && /[0-9A-Za-z]/.test(text)) {
       count++;
     }
+  });
+  return count;
+}
+
+function countTableRows(tree: Root): number {
+  let count = 0;
+  visit(tree, "element", (node: Element) => {
+    if (node.tagName === "tr") count++;
   });
   return count;
 }
@@ -94,6 +103,31 @@ const renderCases = [
     name: "frac display tokens inside partial",
     input: String.raw`\frac{$$\partial$$ $$\ell$$}{$$\partial$$ $$z_k$$}`,
   },
+  {
+    name: "A render: pmatrix then Chinese comma",
+    input: String.raw`$$\begin{pmatrix} 2 & 0 \\ 0 & 2 \end{pmatrix}$$，特征值均为正`,
+  },
+  {
+    name: "B render: pmatrix then 其中",
+    input: String.raw`$$\begin{pmatrix} 2 & 0 \\ 0 & 2 \end{pmatrix}$$其中 H 为正定`,
+  },
+  {
+    name: "C render: bare bmatrix",
+    input: String.raw`H=\begin{bmatrix} 2 & 0 \\ 0 & 2 \end{bmatrix}`,
+  },
+  {
+    name: "D render: GFM table with math",
+    input: `| 符号 | 含义 |\n| --- | --- |\n| $L_0$ | 原始损失 |\n| $\\lambda$ | 正则 |`,
+    expectMinTableRows: 2,
+  },
+  {
+    name: "E render: code fence untouched",
+    input: "```tex\n\\begin{pmatrix} 1 & 0 \\\\ 0 & 1 \\end{pmatrix}\n```\n正文 $\\lambda$",
+  },
+  {
+    name: "F render: cases then 故得",
+    input: String.raw`$$\begin{cases} a \\ b \end{cases}$$故得局部极小`,
+  },
 ];
 
 let failed = 0;
@@ -101,9 +135,13 @@ for (const c of renderCases) {
   const tree = await renderToHast(c.input);
   const errors = countKatexErrors(tree);
   const brokenEm = countBrokenEmphasis(tree);
-  if (errors > 0 || brokenEm > 0) {
+  const tableRows = countTableRows(tree);
+  const minRows = (c as { expectMinTableRows?: number }).expectMinTableRows;
+  if (errors > 0 || brokenEm > 0 || (minRows != null && tableRows < minRows)) {
     failed++;
-    console.error(`FAIL render ${c.name}: katex-error=${errors}, broken-em=${brokenEm}`);
+    console.error(
+      `FAIL render ${c.name}: katex-error=${errors}, broken-em=${brokenEm}, table-rows=${tableRows}`,
+    );
   } else {
     console.log(`OK render ${c.name}`);
   }

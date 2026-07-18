@@ -197,3 +197,24 @@ async def test_run_sympy_verification_with_prior_tool_call():
     ]
     result = await run_sympy_verification(None, "content", records)  # type: ignore[arg-type]
     assert result["status"] == "pass"
+
+
+def test_extract_loss_expression_accepts_l_theta():
+    from server.graph.theory_pipeline import extract_loss_expression
+
+    assert extract_loss_expression("证明 L(theta)=theta**2 在原点为极小") == "theta**2"
+    assert extract_loss_expression("损失 L = x0**2 + x1**2") == "x0**2 + x1**2"
+
+
+def test_extract_loss_expression_rejects_latex_dump():
+    from server.graph.theory_pipeline import extract_loss_expression
+
+    dirty = r"$$\theta^\top x, \quad \theta \in \mathbb{R}^d$$"
+    assert extract_loss_expression(dirty) is None
+
+
+def test_to_numerical_expression_long_names_first():
+    from server.graph.theory_pipeline import to_numerical_expression
+
+    assert to_numerical_expression("theta1**2 + theta2**2") == "x0**2 + x1**2"
+    assert to_numerical_expression("theta**2") == "x0**2"

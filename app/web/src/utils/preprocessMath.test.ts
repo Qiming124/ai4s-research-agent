@@ -287,6 +287,48 @@ $\square$`,
 $$\nabla L(\theta) = 0$$`,
     expectIncludes: ["**证明**", String.raw`$$\nabla L(\theta) = 0$$`],
   },
+  // --- 产出乱码复现实验 A–F ---
+  {
+    name: "A: pmatrix end glued to Chinese punctuation",
+    input: String.raw`$$\begin{pmatrix} 2 & 0 \\ 0 & 2 \end{pmatrix}$$，特征值均为正`,
+    expectIncludes: ["\\end{pmatrix}", "特征值"],
+    expectNotIncludes: ["\\end{pmatrix}$$，"],
+  },
+  {
+    name: "B: pmatrix display then 其中",
+    input: String.raw`H = $$\begin{pmatrix} 2 & 0 \\ 0 & 2 \end{pmatrix}$$其中 H 为正定`,
+    expectIncludes: ["\\begin{pmatrix}", "其中"],
+    expectNotIncludes: ["\\end{pmatrix}$$其中"],
+  },
+  {
+    name: "C: bare bmatrix equation",
+    input: String.raw`H=\begin{bmatrix} 2 & 0 \\ 0 & 2 \end{bmatrix}`,
+    expectIncludes: ["$$", "\\begin{bmatrix}", "\\end{bmatrix}", "$$"],
+  },
+  {
+    name: "D: GFM table with L_0 and lambda",
+    input: `| 符号 | 含义 |\n| --- | --- |\n| L_0 | 原始损失 |\n| \\lambda | 正则系数 |`,
+    expectIncludes: ["$L_0$", "| --- |", "$\\lambda$"],
+    expectNotIncludes: ["$| L_0"],
+  },
+  {
+    name: "E: code fence pmatrix not wrapped",
+    input: "示例：\n```tex\n\\begin{pmatrix} 1 & 0 \\\\ 0 & 1 \\end{pmatrix}\n```\n",
+    expectIncludes: ["```tex", "\\begin{pmatrix}"],
+    expectNotIncludes: ["```tex\n$$", "$$\\begin{pmatrix}"],
+  },
+  {
+    name: "E2: inline code lambda not wrapped",
+    input: "请使用 `\\lambda_max` 表示最大特征值",
+    expectIncludes: ["`\\lambda_max`"],
+    expectNotIncludes: ["$\\lambda_max$", "`$\\lambda"],
+  },
+  {
+    name: "F: cases end then Chinese and bold",
+    input: String.raw`$$\begin{cases} a \\ b \end{cases}$$故得 **结论**`,
+    expectIncludes: ["\\end{cases}", "故得", "**结论**"],
+    expectNotIncludes: ["\\end{cases}$$故"],
+  },
 ];
 
 let failed = 0;

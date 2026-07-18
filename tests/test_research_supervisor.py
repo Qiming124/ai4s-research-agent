@@ -47,13 +47,75 @@ def test_mentions_overparameterization():
     assert not _mentions_overparameterization("二次损失 x^2")
 
 
-def test_run_campaign_experiments_quadratic():
-    result = run_campaign_experiments(
-        "损失 L(theta) = theta**2 在 0 处为局部极小",
+@pytest.mark.asyncio
+async def test_run_campaign_experiments_quadratic(monkeypatch):
+    async def _fake_verify(claim, **kwargs):
+        return {
+            "overall_passed": True,
+            "tiers": {
+                "symbolic": {"status": "skipped", "reason": "tier_hint=numerical"},
+                "numerical": {
+                    "status": "pass",
+                    "reason": "分类=local_minimum",
+                    "passed": True,
+                },
+            },
+        }
+
+    monkeypatch.setattr(
+        "server.experiments.campaign_experiments.execute_claim_verification",
+        _fake_verify,
+    )
+    result = await run_campaign_experiments(
+        "损失 L = x0**2 + x1**2 在 (0,0) 处为局部极小",
         session_id="test-supervisor",
+        campaign={"compute_budget": {"max_torch_runs": 0}},
     )
     assert "runs" in result
-    assert isinstance(result["quadratic_pass"], bool)
+    assert result["quadratic_pass"] is True
+    assert result["summary"]["status"] == "pass"
+    assert result["summary"].get("reason")
+
+
+@pytest.mark.asyncio
+async def test_run_campaign_experiments_status_vocab(monkeypatch):
+    """成功时 executor 返回 completed/overall_passed，不得误判为 fail。"""
+
+    async def _fake_verify(claim, **kwargs):
+        return {
+            "overall_passed": True,
+            "status": "completed",
+            "tiers": {
+                "numerical": {"status": "pass", "reason": "分类=local_minimum"},
+            },
+        }
+
+    monkeypatch.setattr(
+        "server.experiments.campaign_experiments.execute_claim_verification",
+        _fake_verify,
+    )
+    result = await run_campaign_experiments(
+        "L = x0**2 + x1**2",
+        session_id="test-status-vocab",
+        campaign={"compute_budget": {"max_torch_runs": 0}},
+    )
+    assert result["quadratic_pass"] is True
+    assert any(
+        (r.get("result") or {}).get("status") in ("completed", "pass")
+        or (r.get("result") or {}).get("overall_passed") is True
+        for r in result["runs"]
+        if "result" in r
+    )
+
+
+def test_is_quad_success_accepts_completed():
+    from server.experiments.campaign_experiments import _is_quad_success
+
+    assert _is_quad_success({"status": "completed", "overall_passed": True})
+    assert _is_quad_success(
+        {"summary": {"overall_passed": True, "tiers": {"numerical": {"status": "pass"}}}}
+    )
+    assert not _is_quad_success({"status": "failed", "overall_passed": False})
 
 
 def test_check_gates():
