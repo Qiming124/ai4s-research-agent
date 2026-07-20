@@ -1,25 +1,26 @@
-"""Token 用量持久化：写入 SQLite 事件表 + 聚合查询 API。
-
-职责：
-    - record():    每条 chat turn 结束后写入 token 用量事件
-    - query():     按 session_id / agent_name / day 聚合查询
-    - maintain():  auto-create table + indexes on first use
-
-存储位置：
-    - SESSION_STORE_BACKEND=sqlite → 写入 sessions.db（同数据库，不同表）
-    - SESSION_STORE_BACKEND=memory → 写入 data/token_usage.db
-
-表结构：
-    token_usage_events(
-        id, session_id, agent_name,
-        prompt_tokens, completion_tokens, total_tokens,
-        usage_day, recorded_at
-    )
-    索引：session_id 索引 + (agent_name, usage_day) 复合索引
-
-API 端点：
-    GET /v1/stats/tokens?session_id=xxx&agent_name=yyy&day=2025-01-01
-"""
+# =============================================================================
+# Token 用量持久化与聚合查询。
+#
+# 职责：
+#     1. record() 每条 chat turn 结束后写入 token_usage_events 表
+#     2. query() 按 session_id / agent_name / day 聚合
+#     3. maintain() 首次使用时自动建表与索引
+#
+# 架构位置：
+#     - 被调用：server/api/stats.py、server/llm/client.py（record）
+#     - 调用：SQLite（sessions.db 或 data/token_usage.db）
+#
+# 阅读提示：
+#     - 新人先看 TokenUsageStore.record 与 query
+#
+# 存储：
+#     SESSION_STORE_BACKEND=sqlite → sessions.db 同库不同表
+#     SESSION_STORE_BACKEND=memory → data/token_usage.db
+#
+# Debug：
+#     - 统计为空 → chat 未调用 record 或 filter 条件过严
+#     - 表不存在 → 首次 query 前须 maintain()
+# =============================================================================
 
 from __future__ import annotations
 

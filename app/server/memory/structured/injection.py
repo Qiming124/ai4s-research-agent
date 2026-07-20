@@ -1,4 +1,21 @@
+# =============================================================================
 # L4 结构化记忆注入：将定理/假设写入 system prompt。
+#
+# 职责：
+#     1. format_structured_context() 格式化条目列表
+#     2. build_structured_augmented_prompt() 合并工作区 + L4 记忆
+#     3. 按 session 与 project 配置截断长度
+#
+# 架构位置：
+#     - 被调用：server/agents/base.py、subagent.py
+#     - 调用：memory/structured/store.py、theory_workspace.py
+#
+# 阅读提示：
+#     - 新人先看 build_structured_augmented_prompt
+#
+# Debug：
+#     - prompt 无 L4 内容 → ENABLE_STRUCTURED_MEMORY 或 session 无条目
+# =============================================================================
 
 from __future__ import annotations
 
@@ -44,13 +61,22 @@ def build_structured_augmented_prompt(
         return base_prompt
 
     parts = [base_prompt]
+    project_id = "default"
+    if session_id:
+        try:
+            from server.memory.projects import get_project_store
+
+            project_id = get_project_store().get_project_for_session(session_id)
+        except Exception:
+            project_id = "default"
+
     if agent_name in ("theory", "review"):
-        workspace_ctx = format_workspace_context(cfg)
+        workspace_ctx = format_workspace_context(cfg, project_id=project_id)
         if workspace_ctx:
             parts.append(workspace_ctx)
     if agent_name == "review":
         from server.memory.theory_workspace import load_review_checklist
-        checklist = load_review_checklist(cfg)
+        checklist = load_review_checklist(cfg, project_id=project_id)
         if checklist:
             parts.append("### 审稿清单\n" + checklist)
 

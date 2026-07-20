@@ -1,4 +1,23 @@
-# 科研 Campaign API。
+# =============================================================================
+# 科研 Campaign HTTP API。
+#
+# 职责：
+#     1. 创建、查询、更新、列出课题下的 Research Campaign
+#     2. 校验 project_id 存在性
+#     3. 暴露 Campaign 阶段、门禁与产物元数据
+#
+# 架构位置：
+#     - 被调用：server/main.py include_router
+#     - 调用：server/memory/campaigns.py、projects.py
+#
+# 阅读提示：
+#     - 新人先看 create_campaign 与 get_campaign
+#     - 阶段常量 CAMPAIGN_STAGES 在 memory/campaigns.py
+#
+# Debug：
+#     - 404 → _require_project 未解析到课题
+#     - Campaign 卡住 → 查 gates 字段与 research_supervisor 日志
+# =============================================================================
 
 from __future__ import annotations
 
@@ -30,7 +49,8 @@ def _require_project(project_id: str) -> str:
 )
 async def get_active_campaign(project_id: str) -> ResearchCampaignInfo:
     pid = _require_project(project_id)
-    camp = get_campaign_store().get_active_campaign(pid)
+    # 展示用：优先最近更新（含已完成），避免被更旧的未结束演示 Campaign 盖住进度
+    camp = get_campaign_store().get_active_campaign(pid, prefer_open=False)
     if not camp:
         raise HTTPException(status_code=404, detail="无活跃 Campaign")
     return ResearchCampaignInfo(**camp)

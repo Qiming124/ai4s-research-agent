@@ -1,4 +1,22 @@
-# PyTorch 神经网络实验：宽度缩放、Hessian 最小特征值、SGD 轨迹。
+# =============================================================================
+# PyTorch 神经网络实验：宽度缩放、Hessian、SGD 轨迹。
+#
+# 职责：
+#     1. run_torch_experiment() 执行小型 MLP 训练与 Hessian 最小特征值
+#     2. PyTorch 不可用时返回 status=skipped
+#     3. 写 experiments/torch/ 标准化 JSON 日志
+#
+# 架构位置：
+#     - 被调用：experiments/verification_executor.py（width scaling 分支）
+#     - 调用：torch（可选）、server/config.py
+#
+# 阅读提示：
+#     - 新人先看 run_torch_experiment
+#
+# Debug：
+#     - skipped PyTorch 未安装 → 预期行为，非错误
+#     - NaN metrics → 学习率或宽度配置极端
+# =============================================================================
 
 from __future__ import annotations
 

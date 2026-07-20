@@ -1,4 +1,22 @@
-# Chroma 向量库 + SQLite 文档元数据注册表（按 session_id 隔离）。
+# =============================================================================
+# Chroma 向量库 + SQLite 文档元数据注册表。
+#
+# 职责：
+#     1. 文档切块、嵌入并写入 Chroma collection（按 project rag_namespace 隔离）
+#     2. SQLite 维护 doc_id、hash、标题等元数据
+#     3. 检索、删除、purge 与 namespace 解析
+#
+# 架构位置：
+#     - 被调用：server/api/documents.py、memory/rag/retrieval.py、mcp/servers/rag.py
+#     - 调用：memory/rag/chunking.py、embeddings.py、server/config.py
+#
+# 阅读提示：
+#     - 新人先看 RagStore.add_document、search、resolve_rag_project_id
+#
+# Debug：
+#     - Chroma 锁 → 多进程同时写，检查 threading 与 persist 目录
+#     - 检索跨课题 → rag_namespace 与 project_id 映射错误
+# =============================================================================
 
 from __future__ import annotations
 
@@ -23,18 +41,33 @@ logger = logging.getLogger(__name__)
 _COLLECTION_NAME = "ai4s_documents"
 
 
-def doc_id_from_file_path(path: Path, session_id: str) -> str:
-    """由 session + 文件绝对路径生成稳定 doc_id。"""
+def doc_id_from_file_path(path: Path, scope_id: str) -> str:
+    """由课题/会话 scope + 文件绝对路径生成稳定 doc_id。"""
     resolved = path.resolve()
-    payload = f"{session_id}:{resolved}"
+    payload = f"{scope_id}:{resolved}"
     digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()[:32]
     return f"file-{digest}"
+
+
+def resolve_rag_project_id(session_id: str | None = None, project_id: str | None = None) -> str:
+    """解析 RAG 课题命名空间：显式 project_id 优先，否则由会话反查。"""
+    if project_id and project_id.strip():
+        return project_id.strip()
+    if session_id and session_id.strip():
+        try:
+            from server.memory.projects import get_project_store
+
+            return get_project_store().get_project_for_session(session_id.strip())
+        except Exception:
+            return "default"
+    return "default"
 
 
 _REGISTRY_SCHEMA = """
 CREATE TABLE IF NOT EXISTS rag_documents (
     doc_id       TEXT PRIMARY KEY,
     session_id   TEXT NOT NULL DEFAULT '__legacy__',
+    project_id   TEXT NOT NULL DEFAULT 'default',
     title        TEXT NOT NULL,
     source       TEXT NOT NULL DEFAULT '',
     chunk_count  INTEGER NOT NULL DEFAULT 0,
@@ -58,6 +91,7 @@ class DocumentRecord:
     source: str
     chunk_count: int
     created_at: str
+    project_id: str = "default"
 
 
 @dataclass
@@ -68,6 +102,7 @@ class RetrievedSnippet:
     source: str
     content: str
     score: float | None = None
+    project_id: str = "default"
 
 
 class RagStore:
@@ -109,13 +144,19 @@ class RagStore:
                     ON rag_documents(session_id)
                 """,
             )
+            self._registry_conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_rag_documents_project
+                    ON rag_documents(project_id)
+                """,
+            )
             self._registry_conn.commit()
 
     def _now_iso(self) -> str:
         return datetime.now(timezone.utc).isoformat()
 
     def _migrate_registry_schema(self) -> None:
-        """兼容旧 registry：补 session_id 列、重建 rag_deleted_sources。"""
+        """兼容旧 registry：补 session_id / project_id 列、重建 rag_deleted_sources。"""
         cols = {
             row[1]
             for row in self._registry_conn.execute(
@@ -126,6 +167,27 @@ class RagStore:
             self._registry_conn.execute(
                 "ALTER TABLE rag_documents ADD COLUMN session_id TEXT NOT NULL DEFAULT '__legacy__'",
             )
+        if "project_id" not in cols:
+            self._registry_conn.execute(
+                "ALTER TABLE rag_documents ADD COLUMN project_id TEXT NOT NULL DEFAULT 'default'",
+            )
+            # 按会话反查课题，回填 project_id
+            try:
+                from server.memory.projects import get_project_store
+
+                proj = get_project_store()
+                rows = self._registry_conn.execute(
+                    "SELECT DISTINCT session_id FROM rag_documents"
+                ).fetchall()
+                for row in rows:
+                    sid = row["session_id"]
+                    pid = proj.get_project_for_session(sid) if sid and sid != "__legacy__" else "default"
+                    self._registry_conn.execute(
+                        "UPDATE rag_documents SET project_id = ? WHERE session_id = ?",
+                        (pid, sid),
+                    )
+            except Exception:
+                logger.debug("RAG project_id 回填跳过", exc_info=True)
         deleted_cols = {
             row[1]
             for row in self._registry_conn.execute(
@@ -240,10 +302,12 @@ class RagStore:
         title: str | None = None,
         source: str = "",
         doc_id: str | None = None,
+        project_id: str | None = None,
     ) -> DocumentRecord:
         session_id = session_id.strip()
         if not session_id:
             raise ValueError("session_id 不能为空")
+        pid = resolve_rag_project_id(session_id=session_id, project_id=project_id)
 
         chunks = chunk_text(
             content,
@@ -260,16 +324,17 @@ class RagStore:
             row = self._registry_conn.execute(
                 """
                 SELECT created_at FROM rag_documents
-                WHERE doc_id = ? AND session_id = ?
+                WHERE doc_id = ? AND project_id = ?
                 """,
-                (resolved_id, session_id),
+                (resolved_id, pid),
             ).fetchone()
             created_at = row["created_at"] if row else self._now_iso()
 
-        ids = [f"{session_id}::{resolved_id}::{idx}" for idx in range(len(chunks))]
+        ids = [f"{pid}::{resolved_id}::{idx}" for idx in range(len(chunks))]
         metadatas = [
             {
                 "session_id": session_id,
+                "project_id": pid,
                 "doc_id": resolved_id,
                 "chunk_index": idx,
                 "title": resolved_title,
@@ -279,7 +344,7 @@ class RagStore:
         ]
 
         with self._lock:
-            self._delete_chroma_chunks(resolved_id, session_id)
+            self._delete_chroma_chunks(resolved_id, session_id, project_id=pid)
 
             self._collection.add(
                 ids=ids,
@@ -290,12 +355,13 @@ class RagStore:
             self._registry_conn.execute(
                 """
                 INSERT OR REPLACE INTO rag_documents
-                    (doc_id, session_id, title, source, chunk_count, created_at)
-                VALUES (?, ?, ?, ?, ?, ?)
+                    (doc_id, session_id, project_id, title, source, chunk_count, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     resolved_id,
                     session_id,
+                    pid,
                     resolved_title,
                     source,
                     len(chunks),
@@ -305,7 +371,8 @@ class RagStore:
             self._registry_conn.commit()
 
         logger.info(
-            "RAG indexed session=%s doc_id=%s title=%s chunks=%d",
+            "RAG indexed project=%s session=%s doc_id=%s title=%s chunks=%d",
+            pid,
             session_id,
             resolved_id,
             resolved_title,
@@ -314,6 +381,7 @@ class RagStore:
         return DocumentRecord(
             doc_id=resolved_id,
             session_id=session_id,
+            project_id=pid,
             title=resolved_title,
             source=source,
             chunk_count=len(chunks),
@@ -350,61 +418,79 @@ class RagStore:
         *,
         session_id: str,
         title: str | None = None,
+        project_id: str | None = None,
     ) -> DocumentRecord:
         session_id = session_id.strip()
         if not session_id:
             raise ValueError("session_id 不能为空")
+        pid = resolve_rag_project_id(session_id=session_id, project_id=project_id)
 
         resolved = path.resolve()
-        stable_id = doc_id_from_file_path(resolved, session_id)
+        stable_id = doc_id_from_file_path(resolved, pid)
         self._unmark_source_deleted(session_id, str(resolved))
         self._cleanup_legacy_file_duplicates(resolved, stable_id, session_id)
         text = resolved.read_text(encoding="utf-8")
         return self.add_document(
             text,
             session_id=session_id,
+            project_id=pid,
             title=title or resolved.name,
             source=str(resolved),
             doc_id=stable_id,
         )
 
-    def list_documents(self, session_id: str) -> list[DocumentRecord]:
-        session_id = session_id.strip()
-        if not session_id:
-            return []
+    def _row_to_record(self, row: sqlite3.Row) -> DocumentRecord:
+        keys = row.keys()
+        return DocumentRecord(
+            doc_id=row["doc_id"],
+            session_id=row["session_id"],
+            project_id=row["project_id"] if "project_id" in keys else "default",
+            title=row["title"],
+            source=row["source"],
+            chunk_count=row["chunk_count"],
+            created_at=row["created_at"],
+        )
+
+    def list_documents(
+        self,
+        session_id: str | None = None,
+        *,
+        project_id: str | None = None,
+    ) -> list[DocumentRecord]:
+        pid = resolve_rag_project_id(session_id=session_id, project_id=project_id)
         with self._lock:
             rows = self._registry_conn.execute(
                 """
-                SELECT doc_id, session_id, title, source, chunk_count, created_at
+                SELECT doc_id, session_id, project_id, title, source, chunk_count, created_at
                 FROM rag_documents
-                WHERE session_id = ?
+                WHERE project_id = ?
                 ORDER BY created_at DESC
                 """,
-                (session_id,),
+                (pid,),
             ).fetchall()
-        return [
-            DocumentRecord(
-                doc_id=row["doc_id"],
-                session_id=row["session_id"],
-                title=row["title"],
-                source=row["source"],
-                chunk_count=row["chunk_count"],
-                created_at=row["created_at"],
-            )
-            for row in rows
-        ]
+        return [self._row_to_record(row) for row in rows]
 
     def get_document(
         self,
         doc_id: str,
         *,
         session_id: str | None = None,
+        project_id: str | None = None,
     ) -> DocumentRecord | None:
+        pid = resolve_rag_project_id(session_id=session_id, project_id=project_id) if (session_id or project_id) else None
         with self._lock:
-            if session_id:
+            if pid:
                 row = self._registry_conn.execute(
                     """
-                    SELECT doc_id, session_id, title, source, chunk_count, created_at
+                    SELECT doc_id, session_id, project_id, title, source, chunk_count, created_at
+                    FROM rag_documents WHERE doc_id = ? AND project_id = ?
+                    """,
+                    (doc_id, pid),
+                ).fetchone()
+            elif session_id:
+                row = self._registry_conn.execute(
+                    """
+                    SELECT doc_id, session_id, project_id, title, source, chunk_count, created_at
                     FROM rag_documents WHERE doc_id = ? AND session_id = ?
                     """,
                     (doc_id, session_id),
@@ -412,32 +498,38 @@ class RagStore:
             else:
                 row = self._registry_conn.execute(
                     """
-                    SELECT doc_id, session_id, title, source, chunk_count, created_at
+                    SELECT doc_id, session_id, project_id, title, source, chunk_count, created_at
                     FROM rag_documents WHERE doc_id = ?
                     """,
                     (doc_id,),
                 ).fetchone()
         if row is None:
             return None
-        return DocumentRecord(
-            doc_id=row["doc_id"],
-            session_id=row["session_id"],
-            title=row["title"],
-            source=row["source"],
-            chunk_count=row["chunk_count"],
-            created_at=row["created_at"],
-        )
+        return self._row_to_record(row)
 
-    def _delete_chroma_chunks(self, doc_id: str, session_id: str) -> None:
+    def _delete_chroma_chunks(
+        self,
+        doc_id: str,
+        session_id: str,
+        *,
+        project_id: str | None = None,
+    ) -> None:
+        pid = project_id or resolve_rag_project_id(session_id=session_id)
         try:
             existing = self._collection.get(
-                where={"$and": [{"doc_id": doc_id}, {"session_id": session_id}]},
+                where={
+                    "$or": [
+                        {"$and": [{"doc_id": doc_id}, {"project_id": pid}]},
+                        {"$and": [{"doc_id": doc_id}, {"session_id": session_id}]},
+                    ]
+                },
             )
             if existing["ids"]:
                 self._collection.delete(ids=existing["ids"])
         except Exception:
             logger.exception(
-                "RAG Chroma 删除 chunk 失败 session=%s doc_id=%s，将继续清理 registry",
+                "RAG Chroma 删除 chunk 失败 project=%s session=%s doc_id=%s，将继续清理 registry",
+                pid,
                 session_id,
                 doc_id,
             )
@@ -458,12 +550,22 @@ class RagStore:
         doc_id: str,
         *,
         session_id: str | None = None,
+        project_id: str | None = None,
     ) -> bool:
+        pid = resolve_rag_project_id(session_id=session_id, project_id=project_id) if (session_id or project_id) else None
         with self._lock:
-            if session_id:
+            if pid:
                 row = self._registry_conn.execute(
                     """
-                    SELECT doc_id, session_id, title, source, chunk_count, created_at
+                    SELECT doc_id, session_id, project_id, title, source, chunk_count, created_at
+                    FROM rag_documents WHERE doc_id = ? AND project_id = ?
+                    """,
+                    (doc_id, pid),
+                ).fetchone()
+            elif session_id:
+                row = self._registry_conn.execute(
+                    """
+                    SELECT doc_id, session_id, project_id, title, source, chunk_count, created_at
                     FROM rag_documents WHERE doc_id = ? AND session_id = ?
                     """,
                     (doc_id, session_id),
@@ -471,7 +573,7 @@ class RagStore:
             else:
                 row = self._registry_conn.execute(
                     """
-                    SELECT doc_id, session_id, title, source, chunk_count, created_at
+                    SELECT doc_id, session_id, project_id, title, source, chunk_count, created_at
                     FROM rag_documents WHERE doc_id = ?
                     """,
                     (doc_id,),
@@ -481,7 +583,8 @@ class RagStore:
 
             sid = row["session_id"]
             source = row["source"]
-            self._delete_chroma_chunks(doc_id, sid)
+            row_pid = row["project_id"] if "project_id" in row.keys() else pid
+            self._delete_chroma_chunks(doc_id, sid, project_id=row_pid)
 
             self._registry_conn.execute(
                 "DELETE FROM rag_documents WHERE doc_id = ? AND session_id = ?",
@@ -494,14 +597,31 @@ class RagStore:
         return True
 
     def clear_session_documents(self, session_id: str) -> int:
-        """删除指定会话的全部 RAG 文档。"""
+        """删除指定会话上传的 RAG 文档（不影响同课题其它会话上传的文档）。"""
         session_id = session_id.strip()
         if not session_id:
             return 0
-        records = self.list_documents(session_id)
+        with self._lock:
+            rows = self._registry_conn.execute(
+                """
+                SELECT doc_id, session_id FROM rag_documents WHERE session_id = ?
+                """,
+                (session_id,),
+            ).fetchall()
+        count = 0
+        for row in rows:
+            if self.delete_document(row["doc_id"], session_id=session_id):
+                count += 1
+        logger.info("RAG 已清空会话上传文档 session=%s count=%d", session_id, count)
+        return count
+
+    def clear_project_documents(self, project_id: str) -> int:
+        """删除指定课题的全部 RAG 文档。"""
+        pid = (project_id or "").strip() or "default"
+        records = self.list_documents(project_id=pid)
         for record in records:
-            self.delete_document(record.doc_id, session_id=session_id)
-        logger.info("RAG 已清空会话文档 session=%s count=%d", session_id, len(records))
+            self.delete_document(record.doc_id, session_id=record.session_id, project_id=pid)
+        logger.info("RAG 已清空课题文档 project=%s count=%d", pid, len(records))
         return len(records)
 
     def clear_all_documents(self) -> int:
@@ -524,20 +644,48 @@ class RagStore:
         *,
         session_id: str,
         top_k: int | None = None,
+        project_id: str | None = None,
     ) -> list[RetrievedSnippet]:
         session_id = session_id.strip()
         if not session_id:
             return []
+        pid = resolve_rag_project_id(session_id=session_id, project_id=project_id)
 
         normalized = query.strip()
         if not normalized:
             return []
 
+        # 兼容旧向量（仅有 session_id）：纳入本课题下全部会话
+        session_ids = [session_id]
+        try:
+            from server.memory.projects import get_project_store
+
+            linked = get_project_store().list_sessions(pid)
+            session_ids = list({s["session_id"] for s in linked} | {session_id})
+        except Exception:
+            pass
+
         k = top_k or self._settings.rag_retrieval_top_k
+        where: dict[str, Any]
+        if len(session_ids) == 1:
+            where = {
+                "$or": [
+                    {"project_id": pid},
+                    {"session_id": session_ids[0]},
+                ]
+            }
+        else:
+            where = {
+                "$or": [
+                    {"project_id": pid},
+                    {"session_id": {"$in": session_ids}},
+                ]
+            }
+
         result = self._collection.query(
             query_texts=[normalized],
             n_results=k,
-            where={"session_id": session_id},
+            where=where,
             include=["documents", "metadatas", "distances"],
         )
 
@@ -553,6 +701,7 @@ class RagStore:
                 RetrievedSnippet(
                     doc_id=str(meta.get("doc_id", "")),
                     session_id=str(meta.get("session_id", session_id)),
+                    project_id=str(meta.get("project_id", pid)),
                     title=str(meta.get("title", "")),
                     source=str(meta.get("source", "")),
                     content=doc,
@@ -561,11 +710,17 @@ class RagStore:
             )
         return snippets
 
-    def index_mcp_files(self, session_id: str) -> list[DocumentRecord]:
-        """索引 MCP_ALLOWED_DIRS 下的文件到指定会话（跳过该会话已删除的源文件）。"""
+    def index_mcp_files(
+        self,
+        session_id: str,
+        *,
+        project_id: str | None = None,
+    ) -> list[DocumentRecord]:
+        """索引 MCP_ALLOWED_DIRS 下的文件到指定课题（跳过该会话已删除的源文件）。"""
         session_id = session_id.strip()
         if not session_id:
             return []
+        pid = resolve_rag_project_id(session_id=session_id, project_id=project_id)
 
         indexed: list[DocumentRecord] = []
         skipped = 0
@@ -573,17 +728,13 @@ class RagStore:
         for path in self._iter_mcp_file_paths():
             if self._is_source_deleted(session_id, path):
                 skipped += 1
-                logger.debug(
-                    "RAG 跳过会话 %s 已删除的 MCP 文件: %s",
-                    session_id,
-                    path,
-                )
                 continue
             try:
-                indexed.append(self.add_file(path, session_id=session_id))
+                indexed.append(self.add_file(path, session_id=session_id, project_id=pid))
             except Exception:
                 logger.exception(
-                    "RAG 索引文件失败 session=%s path=%s",
+                    "RAG 索引文件失败 project=%s session=%s path=%s",
+                    pid,
                     session_id,
                     path,
                 )
@@ -596,13 +747,19 @@ class RagStore:
             )
         return indexed
 
-    def ensure_mcp_files_indexed(self, session_id: str) -> list[DocumentRecord]:
-        """若会话尚无 MCP 文件索引且配置启用，则按需索引。"""
+    def ensure_mcp_files_indexed(
+        self,
+        session_id: str,
+        *,
+        project_id: str | None = None,
+    ) -> list[DocumentRecord]:
+        """若课题尚无 MCP 文件索引且配置启用，则按需索引。"""
         if not self._settings.rag_index_mcp_files:
             return []
-        if self.list_documents(session_id):
+        pid = resolve_rag_project_id(session_id=session_id, project_id=project_id)
+        if self.list_documents(session_id=session_id, project_id=pid):
             return []
-        return self.index_mcp_files(session_id)
+        return self.index_mcp_files(session_id, project_id=pid)
 
 
 _rag_store: RagStore | None = None

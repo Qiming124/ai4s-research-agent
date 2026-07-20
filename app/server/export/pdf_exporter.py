@@ -1,4 +1,22 @@
-# PDF 导出（Markdown 渲染 → HTML → PDF；Docker 可用 pandoc+xelatex）。
+# =============================================================================
+# PDF 导出：Markdown 渲染 → HTML → PDF / pandoc+xelatex。
+#
+# 职责：
+#     1. build_pdf_bytes() 主入口，解析标题并选择渲染路径
+#     2. Docker 环境优先 pandoc+xelatex；本地回退 html_pdf_renderer
+#     3. 解析 CJK 字体路径（pdf_fonts）
+#
+# 架构位置：
+#     - 被调用：server/api/export.py
+#     - 调用：export/html_pdf_renderer.py、pandoc_converter.py、pdf_fonts.py
+#
+# 阅读提示：
+#     - 新人先看 build_pdf_bytes 与 _title_from_markdown
+#
+# Debug：
+#     - 中文方块 → resolve_cjk_font_path 未找到字体
+#     - pandoc PDF 失败 → xelatex 未安装，自动回退 reportlab 路径
+# =============================================================================
 
 from __future__ import annotations
 
@@ -128,12 +146,12 @@ def _unicode_text_pdf(*, title: str, entries: list[dict]) -> bytes:
 
     pdf.add_font(_CJK_FONT_FAMILY, "", str(font_path))
     pdf.set_font(_CJK_FONT_FAMILY, size=16)
-    pdf.multi_cell(w, 10, title or "研究报告")
-    pdf.ln(4)
-    pdf.set_font(_CJK_FONT_FAMILY, size=11)
+    pdf.multi_cell(w, 9, title or "研究报告")
+    pdf.ln(3)
+    pdf.set_font(_CJK_FONT_FAMILY, size=10.5)
 
     if not entries:
-        pdf.multi_cell(w, 8, "（暂无定理/引理条目）")
+        pdf.multi_cell(w, 7, "（暂无定理/引理条目）")
     else:
         labels = {
             "theorem": "定理",
@@ -149,12 +167,12 @@ def _unicode_text_pdf(*, title: str, entries: list[dict]) -> bytes:
             body = entry.get("body", "") or ""
             label = labels.get(kind, kind)
             pdf.set_font(_CJK_FONT_FAMILY, size=12)
-            pdf.multi_cell(w, 8, f"{label}：{entry_title}")
-            pdf.set_font(_CJK_FONT_FAMILY, size=11)
+            pdf.multi_cell(w, 7, f"{label}：{entry_title}")
+            pdf.set_font(_CJK_FONT_FAMILY, size=10.5)
             for line in body.split("\n"):
                 chunk = line[:800]
                 if chunk.strip():
-                    pdf.multi_cell(w, 6, chunk)
+                    pdf.multi_cell(w, 5.5, chunk)
             pdf.ln(2)
 
     out = pdf.output()

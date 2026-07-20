@@ -32,6 +32,12 @@ from langchain_mcp_adapters.client import MultiServerMCPClient
 from langchain_mcp_adapters.sessions import StdioConnection
 from pydantic import BaseModel, Field
 
+from shared.paths import PROJECT_ROOT, conf_path
+
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 class MCPServerConfig(BaseModel):
     """单个 MCP Server 的配置模型。"""
@@ -39,6 +45,26 @@ class MCPServerConfig(BaseModel):
     args: list[str] = Field(default_factory=list)   # 命令行参数列表
     env: dict[str, str] = Field(default_factory=dict)  # 环境变量（已展开 ${VAR}）
     enabled: bool = True                            # 是否启用此 Server
+
+
+def resolve_mcp_config_path(config_path: str | Path) -> Path:
+    """
+    解析 mcp_servers.json 路径：相对路径相对仓库根；文件不存在时回退到 conf/mcp_servers.json。
+    """
+    path = Path(config_path)
+    if not path.is_absolute():
+        path = (PROJECT_ROOT / path).resolve()
+    if path.is_file():
+        return path
+    fallback = conf_path("mcp_servers.json")
+    if fallback.is_file() and path != fallback:
+        logger.warning(
+            "MCP 配置不存在: %s，回退到 %s",
+            config_path,
+            fallback,
+        )
+        return fallback
+    return path
 
 
 def _expand_env(value: str) -> str:
@@ -78,8 +104,8 @@ def load_mcp_servers(config_path: str | Path) -> dict[str, MCPServerConfig]:
     返回:
         {server_name: MCPServerConfig} 字典；文件不存在或为空时返回 {}
     """
-    path = Path(config_path)
-    if not path.exists():
+    path = resolve_mcp_config_path(config_path)
+    if not path.is_file():
         return {}
 
     raw: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))

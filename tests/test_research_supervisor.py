@@ -140,6 +140,26 @@ def test_check_gates():
     )
     assert status3 == "fail"
 
+    # 误报回归：正文回顾「致命」但结论为有条件通过
+    status4, reason4 = _check_gate(
+        "S7_review",
+        {
+            "summary": (
+                "审稿建议：**通过（有条件）**——致命问题已修复，剩余问题为次要。\n"
+                "第一轮指出的致命错误已在第二轮修复。"
+            ),
+        },
+        None,
+    )
+    assert status4 == "pass", reason4
+
+    status5, _ = _check_gate(
+        "S7_review",
+        {"summary": "综合意见良好，建议接受并做 minor revision。"},
+        None,
+    )
+    assert status5 == "pass"
+
 
 def test_context_pack():
     camp = {

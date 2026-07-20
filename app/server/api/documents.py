@@ -1,12 +1,30 @@
 # =============================================================================
 # 文档 ingestion API — L3 RAG 向量记忆（按 session_id 隔离）。
 #
+# 职责：
+#     1. 上传 PDF/DOCX/文本并切块嵌入到 Chroma 向量库
+#     2. 列出、删除会话文档；支持 purge 清空
+#     3. 暴露会话 RAG 引用（doc_id + snippet）供前端展示
+#
+# 架构位置：
+#     - 被调用：server/main.py include_router
+#     - 调用：server/memory/rag/store.py、pdf_ingest.py、doc_ingest.py、session_refs.py
+#
+# 阅读提示：
+#     - 新人先看 upload_document 与 list_documents
+#     - 向量隔离逻辑在 rag/store.py 的 project namespace
+#
 # 端点：
 #     POST   /v1/documents           — 上传/索引文档到指定会话
 #     GET    /v1/documents           — 列出某会话已索引文档（?session_id=）
 #     DELETE /v1/documents           — purge=true 时清空全部 RAG 文档
 #     DELETE /v1/documents/{doc_id}  — 删除文档及向量（?session_id=）
 #     GET    /v1/sessions/{id}/rag-refs — 会话 RAG 引用（doc_id + snippet）
+#
+# Debug：
+#     - 上传 403 → ENABLE_RAG=false
+#     - 检索无结果 → embedding 模型或 chunk 为空
+#     - PDF 解析失败 → 检查 pdf_ingest 日志与文件编码
 # =============================================================================
 
 from __future__ import annotations
@@ -44,6 +62,7 @@ def _to_info(record) -> DocumentInfo:
     return DocumentInfo(
         doc_id=record.doc_id,
         session_id=record.session_id,
+        project_id=getattr(record, "project_id", "default") or "default",
         title=record.title,
         source=record.source,
         chunk_count=record.chunk_count,
@@ -70,6 +89,7 @@ async def upload_document(request: DocumentUploadRequest) -> DocumentUploadRespo
         record = get_rag_store().add_document(
             request.content,
             session_id=request.session_id,
+            project_id=request.project_id,
             title=request.title,
             source=request.source,
             doc_id=request.doc_id,
@@ -89,6 +109,7 @@ async def upload_document_file(
     file: UploadFile = File(...),
     title: str | None = Form(default=None),
     arxiv_id: str | None = Form(default=None),
+    project_id: str | None = Form(default=None),
 ) -> DocumentUploadResponse:
     """上传 PDF 文件并解析入库。"""
     settings = get_settings()
@@ -131,6 +152,7 @@ async def upload_document_file(
         record = get_rag_store().add_document(
             content,
             session_id=session_id,
+            project_id=project_id,
             title=title or filename,
             source=source,
         )
@@ -146,6 +168,7 @@ async def ingest_from_arxiv(
     session_id: str = Query(..., min_length=1),
     arxiv_id: str = Query(..., min_length=1, description="如 2301.00001"),
     title: str | None = Query(default=None),
+    project_id: str | None = Query(default=None),
 ) -> DocumentUploadResponse:
     """从 arXiv 下载 PDF 并入库。"""
     settings = get_settings()
@@ -171,6 +194,7 @@ async def ingest_from_arxiv(
     record = get_rag_store().add_document(
         content,
         session_id=session_id,
+        project_id=project_id,
         title=title or f"arXiv:{aid}",
         source=f"{pdf_url}|meta:{aid}",
         doc_id=f"arxiv-{aid}",
@@ -180,16 +204,19 @@ async def ingest_from_arxiv(
 
 @router.get("/v1/documents", response_model=DocumentListResponse)
 async def list_documents(
-    session_id: str = Query(..., min_length=1, description="会话 ID"),
+    session_id: str | None = Query(None, description="会话 ID（用于反查课题）"),
+    project_id: str | None = Query(None, description="课题 ID"),
 ) -> DocumentListResponse:
     """
-    列出指定会话已索引的 RAG 文档（ENABLE_RAG=false 时返回空列表）。
+    列出指定课题已索引的 RAG 文档（ENABLE_RAG=false 时返回空列表）。
     """
     settings = get_settings()
     if not settings.enable_rag:
         return DocumentListResponse(documents=[], total=0)
+    if not session_id and not project_id:
+        raise HTTPException(status_code=400, detail="需要 session_id 或 project_id")
 
-    records = get_rag_store().list_documents(session_id)
+    records = get_rag_store().list_documents(session_id=session_id, project_id=project_id)
     docs = [_to_info(r) for r in records]
     return DocumentListResponse(documents=docs, total=len(docs))
 

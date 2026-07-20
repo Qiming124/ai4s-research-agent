@@ -1,4 +1,22 @@
-# Token 用量统计 API（Phase 6）。
+# =============================================================================
+# Token 用量统计 HTTP API（Phase 6）。
+#
+# 职责：
+#     1. 暴露 GET /v1/stats/tokens 聚合查询端点
+#     2. 按 session_id / agent_name / day 过滤 SQLite 事件表
+#     3. 返回 prompt / completion / total tokens 汇总
+#
+# 架构位置：
+#     - 被调用：server/main.py include_router
+#     - 调用：server/observability/token_usage.py
+#
+# 阅读提示：
+#     - 新人先看 get_token_stats 与 token_usage.query()
+#
+# Debug：
+#     - 统计为空 → chat turn 未调用 record() 或 SESSION_STORE_BACKEND 切换
+#     - 日期过滤无效 → day 格式须 YYYY-MM-DD
+# =============================================================================
 
 from __future__ import annotations
 

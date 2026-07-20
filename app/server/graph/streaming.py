@@ -22,7 +22,11 @@ from typing import Any
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage
 
-from server.graph.workflow import workflow_step_chunk, workflow_step_record
+from server.graph.workflow import (
+    upsert_workflow_record,
+    workflow_step_chunk,
+    workflow_step_record,
+)
 from shared.schemas import PersistedToolCall, StreamChunk
 
 logger = logging.getLogger(__name__)
@@ -114,7 +118,8 @@ async def stream_react_graph(
         ),
         None,
     )
-    wf_records.append(
+    upsert_workflow_record(
+        wf_records,
         workflow_step_record(
             "plan",
             status="running",
@@ -185,6 +190,27 @@ async def stream_react_graph(
 
     # ── 第二步：子图已结束处理 ──
 
+    # 规划阶段结束（无论是否实际调用了工具，都要关闭「进行中」）
+    yield (
+        workflow_step_chunk(
+            "plan",
+            status="done",
+            title="分析问题并规划工具调用",
+            detail="工具规划完成" if all_records else "无需调用工具",
+            agent_name=agent_name,
+        ),
+        None,
+    )
+    upsert_workflow_record(
+        wf_records,
+        workflow_step_record(
+            "plan",
+            status="done",
+            title="分析问题并规划工具调用",
+            detail="工具规划完成" if all_records else "无需调用工具",
+        ),
+    )
+
     # 若子图在工具轮次中已产出最终 content（非工具调用情况）
     if early_content is not None:
         yield (
@@ -204,10 +230,6 @@ async def stream_react_graph(
             max_tool_rounds,
         )
 
-    wf_records.append(
-        workflow_step_record("plan", status="done", title="工具规划完成"),
-    )
-
     # ── 第三步：用 final_model 流式生成最终回答（含 reasoning） ──
     yield (
         workflow_step_chunk(
@@ -218,7 +240,8 @@ async def stream_react_graph(
         ),
         None,
     )
-    wf_records.append(
+    upsert_workflow_record(
+        wf_records,
         workflow_step_record(
             "synthesize",
             status="running",
@@ -259,8 +282,19 @@ async def stream_react_graph(
             # 最终 message 可能含 token 用量
             usage = _usage_from_message(chunk) or usage
 
-    wf_records.append(
-        workflow_step_record("synthesize", status="done", title="回答生成完成"),
+    upsert_workflow_record(
+        wf_records,
+        workflow_step_record("synthesize", status="done", title="综合信息并生成回答", detail="回答生成完成"),
+    )
+    yield (
+        workflow_step_chunk(
+            "synthesize",
+            status="done",
+            title="综合信息并生成回答",
+            detail="回答生成完成",
+            agent_name=agent_name,
+        ),
+        None,
     )
 
     # ── 第四步：发送 done 事件（含累积工具记录与 token 用量） ──

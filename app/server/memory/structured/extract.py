@@ -1,4 +1,22 @@
-# 从 Theory Agent 输出中抽取引理/定理并写入 L4 结构化记忆。
+# =============================================================================
+# 从 Theory Agent 输出抽取引理/定理并写入 L4 记忆。
+#
+# 职责：
+#     1. 正则解析 ## 引理/定理 章节
+#     2. 调用 graph 模块检测矛盾、提取 depends_on 元数据
+#     3. persist_theory_sections() 批量写入 StructuredMemoryStore
+#
+# 架构位置：
+#     - 被调用：server/agents/subagent.py（theory 角色后处理）
+#     - 调用：memory/structured/graph.py、store.py
+#
+# 阅读提示：
+#     - 新人先看 _SECTION_PATTERN 与 persist_theory_sections
+#
+# Debug：
+#     - 未抽取 → 标题格式不符 ## 引理 N 模板
+#     - 重复条目 → 同 session 多次 persist 未去重
+# =============================================================================
 
 from __future__ import annotations
 

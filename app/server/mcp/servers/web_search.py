@@ -1,4 +1,22 @@
-# MCP Server：Web 搜索（Tavily API 优先；备用 DuckDuckGo / Wikipedia）。
+# =============================================================================
+# MCP Server：Web 搜索（Tavily / DuckDuckGo / Wikipedia）。
+#
+# 职责：
+#     1. web_search 工具：TAVILY_API_KEY 优先，否则 DuckDuckGo HTML
+#     2. wikipedia_summary 备用百科摘要
+#     3. 统一 JSON 结果格式与超时控制
+#
+# 架构位置：
+#     - 被调用：MCP Client stdio 子进程
+#     - 调用：httpx、可选 Tavily API
+#
+# 阅读提示：
+#     - 新人先看 web_search 分支逻辑
+#
+# Debug：
+#     - 无 Tavily → 环境变量 TAVILY_API_KEY 未设，走 DuckDuckGo
+#     - DuckDuckGo 空 → HTML 结构变化或 IP 限流
+# =============================================================================
 
 from __future__ import annotations
 

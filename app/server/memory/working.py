@@ -5,9 +5,10 @@
 #       L2 数据库仍保留完整记录，此处只做读取侧变换。
 #
 # 策略：
-#     1. max_messages <= 0 → 不截断
-#     2. len(history) <= max_messages → 不截断
-#     3. 否则保留最近 max_messages 条；丢弃部分可选 LLM 摘要（enable_summary）
+#     1. max_messages < 0 → 空历史（收尾等轻量场景）
+#     2. max_messages == 0 → 不截断
+#     3. len(history) <= max_messages → 不截断
+#     4. 否则保留最近 max_messages 条；丢弃部分可选 LLM 摘要（enable_summary）
 # =============================================================================
 
 from __future__ import annotations
@@ -64,10 +65,12 @@ async def prepare_history_for_llm(
 ) -> list[ChatMessage]:
     # 将 L2 完整历史处理为注入 LLM 的上下文列表。
     #
-    # 参数 max_messages — 保留最近 N 条；0 表示不截断。
+    # 参数 max_messages — 保留最近 N 条；0 表示不截断；负数表示空历史。
     # 参数 enable_summary — 截断时是否对丢弃部分做 LLM 摘要。
     # 返回处理后的 ChatMessage 列表（可能含一条 system 摘要消息 + kept）。
-    if max_messages <= 0 or len(history) <= max_messages:
+    if max_messages < 0:
+        return []
+    if max_messages == 0 or len(history) <= max_messages:
         return list(history)
 
     dropped = history[:-max_messages]

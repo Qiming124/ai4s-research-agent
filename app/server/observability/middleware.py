@@ -1,16 +1,23 @@
-"""
-FastAPI 中间件：请求追踪与 HTTP 延迟日志。
-
-RequestContextMiddleware：
-    - 为每个 HTTP 请求分配 request_id（优先读取 X-Request-ID header）
-    - 设置 ContextVar（供 StructuredLogFormatter 自动注入）
-    - 记录 request_start / request_complete / request_error 结构化日志
-    - 在响应头中回传 X-Request-ID
-
-架构位置：
-    server/main.py → create_app → app.add_middleware(RequestContextMiddleware)
-    在所有 API 路由之前执行
-"""
+# =============================================================================
+# FastAPI 请求追踪中间件。
+#
+# 职责：
+#     1. 为每个 HTTP 请求分配 request_id（优先 X-Request-ID）
+#     2. 设置 ContextVar 供 StructuredLogFormatter 自动注入
+#     3. 记录 request_start / complete / error 结构化日志
+#     4. 在响应头回传 X-Request-ID
+#
+# 架构位置：
+#     - 被调用：server/main.py → app.add_middleware(RequestContextMiddleware)
+#     - 调用：server/observability/structured.py（log_event）
+#
+# 阅读提示：
+#     - 新人先看 RequestContextMiddleware.dispatch
+#
+# Debug：
+#     - 日志无 request_id → 中间件未挂载或非 HTTP 路径
+#     - 延迟异常高 → request_complete 日志中的 duration_ms
+# =============================================================================
 
 from __future__ import annotations
 

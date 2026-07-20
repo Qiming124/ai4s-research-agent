@@ -1,4 +1,22 @@
+# =============================================================================
 # Pandoc 格式转换（Markdown → DOCX / PDF）。
+#
+# 职责：
+#     1. pandoc_available() 检测系统 pandoc 可执行文件
+#     2. convert_markdown_to_docx / convert_markdown_to_pdf 子进程调用
+#     3. convert_bytes() 通用字节流格式互转
+#
+# 架构位置：
+#     - 被调用：server/export/docx_exporter.py、pdf_exporter.py
+#     - 调用：subprocess + 临时目录
+#
+# 阅读提示：
+#     - 新人先看 pandoc_available 与 convert_markdown_to_docx
+#
+# Debug：
+#     - RuntimeError pandoc 未安装 → which pandoc 为空
+#     - PDF 失败 → 缺少 xelatex 或字体配置
+# =============================================================================
 
 from __future__ import annotations
 

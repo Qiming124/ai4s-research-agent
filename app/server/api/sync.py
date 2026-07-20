@@ -1,4 +1,23 @@
-# 可选云端元数据同步（本地数据主权，仅同步元数据）。
+# =============================================================================
+# 可选云端元数据同步 HTTP API。
+#
+# 职责：
+#     1. 在 ENABLE_CLOUD_SYNC=true 时上传课题与结构化记忆元数据摘要
+#     2. 保持本地 data/ 数据主权，不同步原始会话消息与向量
+#     3. 返回同步条目计数与目标 URL
+#
+# 架构位置：
+#     - 被调用：server/main.py include_router
+#     - 调用：server/memory/projects.py、structured/store.py、server/config.py
+#
+# 阅读提示：
+#     - 新人先看 sync_metadata 端点
+#
+# Debug：
+#     - 403 → ENABLE_CLOUD_SYNC=false
+#     - 404 → project_id 不存在
+#     - 远程失败 → CLOUD_SYNC_URL 或网络配置
+# =============================================================================
 
 from __future__ import annotations
 

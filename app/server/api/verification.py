@@ -1,4 +1,22 @@
-# 验证账本 API。
+# =============================================================================
+# 验证账本 HTTP API。
+#
+# 职责：
+#     1. 列出 SymPy / 数值验证记录（按 project / session / entry 过滤）
+#     2. 触发单条 Claim 验证（execute_claim_verification）
+#     3. 提供验证仪表盘聚合数据
+#
+# 架构位置：
+#     - 被调用：server/main.py include_router
+#     - 调用：server/experiments/verification_executor.py、memory/verification.py
+#
+# 阅读提示：
+#     - 新人先看 list_verification_records 与 run_verification
+#
+# Debug：
+#     - 仪表盘为空 → project_id 与 session 所属课题不一致
+#     - 验证失败 → MCP numerical/sympy 未连接或 claim 无法解析
+# =============================================================================
 
 from __future__ import annotations
 
@@ -64,11 +82,20 @@ async def verification_dashboard(
 
 @router.post("/v1/verification/run")
 async def run_verification(request: VerificationClaimRequest) -> dict:
+    project_id = request.project_id or "default"
+    # 有会话时以会话所属课题为准，避免写入 default 导致仪表盘按课题查询为空
+    if request.session_id:
+        from server.memory.projects import get_project_store
+
+        linked = get_project_store().get_project_for_session(request.session_id)
+        if linked:
+            project_id = linked
     result = await execute_claim_verification(
         request.claim,
         session_id=request.session_id,
-        project_id=request.project_id,
+        project_id=project_id,
         entry_id=request.entry_id,
         agent_name="api",
+        persist=request.persist,
     )
     return result

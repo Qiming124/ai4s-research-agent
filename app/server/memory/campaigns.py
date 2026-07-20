@@ -1,14 +1,37 @@
+# =============================================================================
 # 科研 Campaign 存储：8 阶段流水线状态与产物。
+#
+# 职责：
+#     1. CRUD Campaign 记录、阶段、门禁 gates 与 status
+#     2. 管理 data/campaigns/{project_id}/{campaign_id}/ 产物目录
+#     3. delete_campaigns_for_project() 批量清理课题下 Campaign
+#
+# 架构位置：
+#     - 被调用：server/api/campaigns.py、graph/research_supervisor.py、api/projects.py
+#     - 调用：shared/paths.DATA_ROOT、server/config.py
+#
+# 阅读提示：
+#     - 新人先看 CAMPAIGN_STAGES、CampaignStore.create_campaign、
+#       update_campaign、delete_campaigns_for_project
+#
+# Debug：
+#     - 阶段不推进 → gates JSON 或 advance_stage 调用
+#     - 产物目录缺失 → campaign_artifacts_dir 与 mkdir 逻辑
+# =============================================================================
 
 from __future__ import annotations
 
 import json
+import logging
+import shutil
 import sqlite3
 import threading
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from server.config import get_settings
 from shared.paths import DATA_ROOT
@@ -24,6 +47,17 @@ CAMPAIGN_STAGES: tuple[str, ...] = (
     "S7_review",
     "S8_archive",
 )
+
+
+def campaign_stage_rank(stage: str | None) -> int:
+    """阶段进度排序：越大越接近完成；complete / S8 视为最高。"""
+    s = str(stage or "")
+    if s in ("complete", "S8_archive"):
+        return len(CAMPAIGN_STAGES)
+    try:
+        return CAMPAIGN_STAGES.index(s)
+    except ValueError:
+        return -1
 
 DEFAULT_GATES: dict[str, str] = {
     "S1_literature": "pending",
@@ -156,22 +190,100 @@ class CampaignStore:
             ).fetchone()
         return self._row_to_dict(row) if row else None
 
+    def get_campaign_for_session(
+        self,
+        project_id: str,
+        session_id: str | None,
+    ) -> dict[str, Any] | None:
+        """优先返回绑定到该会话的 Campaign（含已完成），用于会话-课题对齐。"""
+        if not session_id:
+            return None
+        matches: list[dict[str, Any]] = []
+        for camp in self.list_campaigns(project_id):
+            if camp.get("session_id") != session_id:
+                continue
+            # 忽略 done 且停在 S0 的空壳
+            if (
+                camp.get("status") == "done"
+                and str(camp.get("current_stage") or "") in ("", "S0_campaign")
+            ):
+                continue
+            matches.append(camp)
+        if not matches:
+            return None
+        # 同会话多条时取进度最深的，避免新开的浅进度盖住已完成
+        return max(
+            matches,
+            key=lambda c: (
+                campaign_stage_rank(c.get("current_stage")),
+                1 if c.get("status") == "done" else 0,
+                str(c.get("updated_at") or ""),
+            ),
+        )
+
     def get_active_campaign(
         self,
         project_id: str,
         campaign_id: str | None = None,
+        *,
+        session_id: str | None = None,
+        prefer_open: bool = True,
     ) -> dict[str, Any] | None:
         if campaign_id:
             camp = self.get_campaign(campaign_id)
             if camp and camp["project_id"] == project_id:
                 return camp
             return None
-        campaigns = self.list_campaigns(project_id)
-        for camp in campaigns:
-            if camp["status"] in ("active", "blocked", "iterate"):
-                return camp
-        return campaigns[0] if campaigns else None
 
+        # 会话绑定优先，避免同课题下不同会话串到别的 Campaign
+        if session_id:
+            bound = self.get_campaign_for_session(project_id, session_id)
+            if bound:
+                return bound
+
+        # list_campaigns 已按 updated_at DESC
+        campaigns = self.list_campaigns(project_id)
+        if not campaigns:
+            return None
+
+        # 忽略「done 且仍停在 S0」的空壳，避免盖住真实进度
+        visible = [
+            c
+            for c in campaigns
+            if not (
+                c.get("status") == "done"
+                and str(c.get("current_stage") or "") in ("", "S0_campaign")
+            )
+        ] or campaigns
+
+        open_camps = [
+            c for c in visible if c.get("status") in ("active", "blocked", "iterate")
+        ]
+        # 其它会话绑定的未结束 Campaign 不抢当前会话
+        if session_id:
+            open_camps = [
+                c
+                for c in open_camps
+                if not c.get("session_id") or c.get("session_id") == session_id
+            ]
+        if prefer_open and open_camps:
+            # 执行路径：优先未结束；同状态下取进度更深、更新更近的
+            return max(
+                open_camps,
+                key=lambda c: (
+                    campaign_stage_rank(c.get("current_stage")),
+                    str(c.get("updated_at") or ""),
+                ),
+            )
+        # 展示路径：按阶段进度取最深的，避免「新开的 S1」盖住已完成的 S8
+        return max(
+            visible,
+            key=lambda c: (
+                campaign_stage_rank(c.get("current_stage")),
+                1 if c.get("status") == "done" else 0,
+                str(c.get("updated_at") or ""),
+            ),
+        )
     def create_campaign(
         self,
         project_id: str,
@@ -294,6 +406,37 @@ class CampaignStore:
 
     def advance_stage(self, campaign_id: str, next_stage: str) -> dict[str, Any] | None:
         return self.update_campaign(campaign_id, current_stage=next_stage)
+
+    def delete_campaigns_for_project(self, project_id: str) -> int:
+        """
+        删除课题下全部 Campaign 记录，并移除 data/campaigns/{project_id}/。
+
+        参数:
+            project_id: 课题 ID
+
+        返回:
+            删除的 Campaign 行数
+        """
+        pid = (project_id or "").strip()
+        if not pid:
+            return 0
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT id FROM research_campaigns WHERE project_id = ?",
+                (pid,),
+            ).fetchall()
+            self._conn.execute(
+                "DELETE FROM research_campaigns WHERE project_id = ?",
+                (pid,),
+            )
+            self._conn.commit()
+        root = DATA_ROOT / "campaigns" / pid
+        if root.exists():
+            try:
+                shutil.rmtree(root)
+            except OSError:
+                logger.exception("删除 Campaign 目录失败 project_id=%s path=%s", pid, root)
+        return len(rows)
 
     @staticmethod
     def _row_to_dict(row: sqlite3.Row | None) -> dict[str, Any] | None:

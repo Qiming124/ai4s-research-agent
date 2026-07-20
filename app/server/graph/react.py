@@ -89,7 +89,15 @@ def messages_from_api_dicts(messages: list[dict[str, Any]]) -> list[BaseMessage]
                     )
                 result.append(AIMessage(content=content, tool_calls=lc_tool_calls))
             else:
-                result.append(AIMessage(content=content))
+                additional: dict[str, Any] = {}
+                if msg.get("reasoning_content"):
+                    additional["reasoning_content"] = msg["reasoning_content"]
+                result.append(
+                    AIMessage(
+                        content=content,
+                        additional_kwargs=additional,
+                    )
+                )
         elif role == "tool":
             # 工具返回消息，含 tool_call_id 用于关联请求
             result.append(

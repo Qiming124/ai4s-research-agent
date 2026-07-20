@@ -1,4 +1,24 @@
-# MCP Client：通过 langchain-mcp-adapters MultiServerMCPClient 连接多个 stdio MCP Server。
+# =============================================================================
+# MCP Client：MultiServerMCPClient 连接多个 stdio MCP Server。
+#
+# 职责：
+#     1. 加载 mcp_servers.json，通过 langchain-mcp-adapters 连接各 Server
+#     2. 维护 ToolRegistry 与 OpenAI 工具白名单过滤
+#     3. connect / disconnect 生命周期与结构化日志
+#
+# 架构位置：
+#     - 被调用：server/agents/base.py、subagent.py、orchestrator.py、
+#               experiments/verification_executor.py、graph/theory_pipeline.py
+#     - 调用：server/mcp/config.py、registry.py、whitelist.py、langchain/mcp.py
+#
+# 阅读提示：
+#     - 新人先看 MCPClient.connect 与 call_tool
+#
+# Debug：
+#     - 工具列表空 → Server 子进程启动失败，查 stderr
+#     - connect 超时 → mcp_servers.json 路径或 Python 解释器
+#     - 嵌套 event loop → 在 async 路由里勿 run_coro_sync 调 MCP
+# =============================================================================
 
 from __future__ import annotations
 
@@ -110,6 +130,11 @@ class MCPClient:
     async def call_tool(self, qualified_name: str, arguments: dict[str, Any]) -> str:
         registered = self._registry.get(qualified_name)
         if registered is None:
+            if not self._connected or not self._sessions:
+                raise ValueError(
+                    f"MCP 未连接或配置未加载，无法调用工具: {qualified_name}。"
+                    "请检查 MCP_CONFIG_PATH（应为 conf/mcp_servers.json）后调用 POST /v1/mcp/reload"
+                )
             raise ValueError(f"未知工具: {qualified_name}")
 
         session = self._sessions.get(registered.server_name)

@@ -1,4 +1,22 @@
-# 从结构化记忆构建导出内容。
+# =============================================================================
+# 导出内容构建器：从记忆层聚合 LaTeX / Markdown 源。
+#
+# 职责：
+#     1. collect_export_entries() 合并 L4 结构化记忆、参考文献、工作区
+#     2. build_markdown_document / build_latex_document 生成完整文档字符串
+#     3. describe_export_sources() 返回预览用来源摘要
+#
+# 架构位置：
+#     - 被调用：server/api/export.py、export/docx_exporter.py、pdf_exporter.py
+#     - 调用：server/memory/structured/store.py、bibliography.py、manager.py
+#
+# 阅读提示：
+#     - 新人先看 collect_export_entries 与 build_markdown_document
+#
+# Debug：
+#     - 导出缺章节 → session_id 过滤或 include_global=false
+#     - LaTeX 编译错误 → 特殊字符未转义，查 _escape_latex
+# =============================================================================
 
 from __future__ import annotations
 

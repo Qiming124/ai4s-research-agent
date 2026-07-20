@@ -1,4 +1,22 @@
-# Jupyter 实验结果桥接 API。
+# =============================================================================
+# Jupyter 实验结果桥接 HTTP API。
+#
+# 职责：
+#     1. 接收 Notebook 上传的 JSON 结果并持久化到 experiments/notebooks/results/
+#     2. 生成 run_id 与时间戳元数据
+#     3. 供 Campaign S5 阶段或前端实验面板引用
+#
+# 架构位置：
+#     - 被调用：server/main.py include_router
+#     - 调用：server/config.py（experiments_path）
+#
+# 阅读提示：
+#     - 新人先看 upload_notebook_result
+#
+# Debug：
+#     - 写入失败 → experiments_path 目录权限
+#     - 404 读取 → run_id 与存储路径不一致
+# =============================================================================
 
 from __future__ import annotations
 

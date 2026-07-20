@@ -1,4 +1,23 @@
-# L4 结构化科研记忆：定理、假设、实验结论与引用关系（SQLite）。
+# =============================================================================
+# L4 结构化科研记忆：定理、假设、实验结论与引用关系。
+#
+# 职责：
+#     1. SQLite 存储 structured_memory 表与 memory_edges 图谱边
+#     2. CRUD 条目、按 session/kind 查询、图谱导出
+#     3. get_structured_memory_store() 线程安全单例
+#
+# 架构位置：
+#     - 被调用：server/api/structured_memory.py、export/builder.py、
+#               memory/structured/extract.py、graph.py、dag.py、injection.py
+#     - 调用：server/config.py
+#
+# 阅读提示：
+#     - 新人先看 StructuredMemoryStore.create_entry / list_entries / add_edge
+#
+# Debug：
+#     - kind CHECK 失败 → 仅允许 theorem/hypothesis/conclusion/citation/note
+#     - 图谱为空 → memory_edges 未创建或 session 过滤
+# =============================================================================
 
 from __future__ import annotations
 
@@ -164,13 +183,34 @@ class StructuredMemoryStore:
         ]
 
     def get_graph(self, *, session_id: str | None = None) -> dict[str, Any]:
-        """返回节点 + 边（知识图谱）。"""
+        """返回节点 + 边（知识图谱）。
+
+        刷新时按 metadata / 正文中的依据引用补建缺失的 depends_on 边，
+        使「关系图谱」在仅有正文引用时也能显示依赖。
+        """
         nodes = self.list_entries(session_id=session_id, limit=200)
         global_nodes = self.list_entries(global_only=True, limit=100)
         seen_ids = {n["id"] for n in nodes}
         for gn in global_nodes:
             if gn["id"] not in seen_ids:
                 nodes.append(gn)
+                seen_ids.add(gn["id"])
+
+        from server.memory.structured.graph import (
+            extract_metadata_from_body,
+            link_depends_on_from_metadata,
+        )
+
+        for node in list(nodes):
+            meta = dict(node.get("metadata") or {})
+            if not meta.get("depends_on_refs") and node.get("body"):
+                extracted = extract_metadata_from_body(node["body"])
+                if extracted.get("depends_on_refs"):
+                    meta["depends_on_refs"] = extracted["depends_on_refs"]
+                    node = {**node, "metadata": meta}
+            if meta.get("depends_on_refs"):
+                link_depends_on_from_metadata(self, node, session_id)
+
         edges = self.list_edges(session_id=session_id)
         return {"nodes": nodes, "edges": edges}
 

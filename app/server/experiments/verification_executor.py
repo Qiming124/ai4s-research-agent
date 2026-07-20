@@ -1,4 +1,23 @@
+# =============================================================================
 # 验证执行器：将 Claim 或 YAML 配置转为可执行数值验证。
+#
+# 职责：
+#     1. execute_claim_verification() 调用 MCP numerical/sympy 并写验证账本
+#     2. run_verification_from_config_async() 执行完整 yaml 实验流程
+#     3. 本地多项式 eval 回退（MCP 不可用时）
+#
+# 架构位置：
+#     - 被调用：server/api/verification.py、experiments/runner.py、
+#               campaign_experiments.py、graph/theory_pipeline.py
+#     - 调用：server/mcp/client.py、memory/verification.py、claim_parser.py
+#
+# 阅读提示：
+#     - 新人先看 execute_claim_verification 与 run_verification_from_config_async
+#
+# Debug：
+#     - persist 后查不到 → project_id 与 session 所属课题不一致
+#     - MCP 超时 → get_mcp_client 未 connect
+# =============================================================================
 
 from __future__ import annotations
 
@@ -45,8 +64,9 @@ async def execute_claim_verification(
     project_id: str = "default",
     entry_id: int | None = None,
     agent_name: str = "verification_executor",
+    persist: bool = True,
 ) -> dict[str, Any]:
-    """对结构化 Claim 执行 Tier1/2 验证并写入账本。"""
+    """对结构化 Claim 执行 Tier1/2 验证；persist=True 时写入账本。"""
     mcp = await get_mcp_client()
     expression = claim.get("expression", "")
     point = claim.get("point", "0,0")
@@ -95,7 +115,7 @@ async def execute_claim_verification(
     results["tiers"]["symbolic"] = sympy_result
 
     ledger = get_verification_ledger()
-    if sympy_result.get("status") == "pass":
+    if persist and sympy_result.get("status") == "pass":
         ledger.append(
             project_id=project_id,
             session_id=session_id,
@@ -156,17 +176,18 @@ async def execute_claim_verification(
         }
 
     results["tiers"]["numerical"] = num_result
-    ledger.append(
-        project_id=project_id,
-        session_id=session_id,
-        entry_id=entry_id,
-        claim_id=expression[:64],
-        tier="numerical",
-        executor="numerical__critical_point_classify",
-        agent_name=agent_name,
-        passed=num_result.get("status") == "pass",
-        result=num_result,
-    )
+    if persist:
+        ledger.append(
+            project_id=project_id,
+            session_id=session_id,
+            entry_id=entry_id,
+            claim_id=expression[:64],
+            tier="numerical",
+            executor="numerical__critical_point_classify",
+            agent_name=agent_name,
+            passed=num_result.get("status") == "pass",
+            result=num_result,
+        )
 
     if tier_hint == "experiment" or claim.get("network"):
         from server.experiments.torch_runner import run_torch_experiment
@@ -174,19 +195,20 @@ async def execute_claim_verification(
         exp_result = run_torch_experiment(claim)
         results["tiers"]["experiment"] = exp_result
         exp_status = exp_result.get("status")
-        ledger.append(
-            project_id=project_id,
-            session_id=session_id,
-            entry_id=entry_id,
-            claim_id=expression[:64],
-            tier="experiment",
-            executor="torch_runner",
-            agent_name=agent_name,
-            # skipped 不计入失败
-            passed=exp_status in ("completed", "skipped"),
-            result=exp_result,
-            artifacts=[exp_result.get("log_path", "")] if exp_result.get("log_path") else [],
-        )
+        if persist:
+            ledger.append(
+                project_id=project_id,
+                session_id=session_id,
+                entry_id=entry_id,
+                claim_id=expression[:64],
+                tier="experiment",
+                executor="torch_runner",
+                agent_name=agent_name,
+                # skipped 不计入失败
+                passed=exp_status in ("completed", "skipped"),
+                result=exp_result,
+                artifacts=[exp_result.get("log_path", "")] if exp_result.get("log_path") else [],
+            )
 
     active = [
         t for t in results["tiers"].values() if t.get("status") not in ("skipped", None)

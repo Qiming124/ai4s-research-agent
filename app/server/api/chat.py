@@ -250,6 +250,9 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
 async def list_sessions() -> SessionListResponse:
     """列出服务端已持久化的会话（SQLite 后端含 updated_at 与消息条数）。"""
     store = get_session_store()
+    from server.memory.projects import get_project_store
+
+    proj_store = get_project_store()
     if hasattr(store, "list_session_summaries"):
         raw = store.list_session_summaries()
         sessions = [
@@ -258,6 +261,7 @@ async def list_sessions() -> SessionListResponse:
                 created_at=item.get("created_at"),
                 updated_at=item.get("updated_at"),
                 message_count=int(item.get("message_count", 0)),
+                project_id=proj_store.get_project_for_session(str(item["session_id"])),
             )
             for item in raw
             if int(item.get("message_count", 0)) > 0
@@ -267,6 +271,7 @@ async def list_sessions() -> SessionListResponse:
             SessionSummary(
                 session_id=sid,
                 message_count=len(store.get_messages(sid)),
+                project_id=proj_store.get_project_for_session(sid),
             )
             for sid in store.list_session_ids()
             if len(store.get_messages(sid)) > 0

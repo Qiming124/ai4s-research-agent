@@ -1,4 +1,22 @@
+# =============================================================================
 # MCP Server：RAG 按需检索（按 session_id 隔离）。
+#
+# 职责：
+#     1. rag_retrieve 工具：检查 ENABLE_RAG 后调用 retrieve_for_query
+#     2. 要求非空 session_id，返回 JSON 片段列表
+#     3. 供 Agent 在对话中主动检索课题知识库
+#
+# 架构位置：
+#     - 被调用：MCP Client stdio 子进程
+#     - 调用：server/memory/rag/retrieval.py、server/config.py
+#
+# 阅读提示：
+#     - 新人先看 _retrieve 与 rag_retrieve 工具定义
+#
+# Debug：
+#     - error RAG 未启用 → ENABLE_RAG=false
+#     - 空 session_id → 工具参数校验拒绝
+# =============================================================================
 
 from __future__ import annotations
 

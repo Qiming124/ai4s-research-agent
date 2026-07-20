@@ -1,0 +1,8 @@
+arXiv format notes (from 1608.04636, 1406.2572, 2003.00307)
+- Title: centered, ~14-17pt
+- Abstract: labeled, slightly smaller than body (~9-10pt), single block
+- Body: ~10-11pt, justified
+- Section: numbered, bold ~12pt
+- Subsection / theorem: ~11pt
+- Margins: ~20mm (A4) / ~1in (letter)
+Our HTML-PDF renderer targets: H1=16, H2=12, H3=11, body=10.5, abstract=9.5, margin=20mm

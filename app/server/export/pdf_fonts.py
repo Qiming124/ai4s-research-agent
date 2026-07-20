@@ -1,4 +1,22 @@
-# PDF 导出用 CJK 字体解析。
+# =============================================================================
+# PDF 导出用 CJK 字体解析与下载。
+#
+# 职责：
+#     1. resolve_cjk_font_path() 按 bundled → cache → system → download 顺序查找
+#     2. 缓存 NotoSansSC 到 data/fonts/
+#     3. 供 pandoc xelatex 与 reportlab 注册字体
+#
+# 架构位置：
+#     - 被调用：server/export/pdf_exporter.py、html_pdf_renderer.py
+#     - 调用：urllib 下载、Path 文件系统
+#
+# 阅读提示：
+#     - 新人先看 resolve_cjk_font_path
+#
+# Debug：
+#     - 字体下载失败 → 网络或 _DOWNLOAD_URL 不可达
+#     - 仍乱码 → 系统字体路径未列入 _SYSTEM_FONT_CANDIDATES
+# =============================================================================
 
 from __future__ import annotations
 

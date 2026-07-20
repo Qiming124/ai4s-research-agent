@@ -1,4 +1,25 @@
-# 科研 Supervisor 流水线：8 阶段 Campaign 编排 + 门禁 + 上下文传递。
+# =============================================================================
+# 科研 Supervisor 流水线：8 阶段 Campaign 编排。
+#
+# 职责：
+#     1. 管理 S0–S8 Campaign 阶段推进、门禁与上下文传递
+#     2. 各阶段委派 SubAgent 并写入 campaign 产物目录
+#     3. S5 调用 campaign_experiments；S8 归档与收尾
+#
+# 架构位置：
+#     - 被调用：server/agents/orchestrator.py（/research 路径）
+#     - 调用：server/agents/subagent.py、memory/campaigns.py、projects.py、
+#             experiments/campaign_experiments.py、graph/research_pipeline.py
+#
+# 阅读提示：
+#     - 新人先看 ResearchSupervisorPipeline.execute() 主循环
+#     - 阶段映射见 _STAGE_PIPELINE_NAMES 与 CAMPAIGN_STAGES
+#
+# Debug：
+#     - 阶段 blocked → gates 字段或上一阶段产物缺失
+#     - 重复开 Campaign → /research new 与普通 /research 行为不同
+#     - 实验未跑 → S5 门禁或 theory_content 无 loss 表达式
+# =============================================================================
 
 from __future__ import annotations
 
@@ -79,18 +100,50 @@ def _format_context_prompt(context: dict[str, Any]) -> str:
     ]
     lit = context.get("literature_digest") or {}
     if lit.get("summary"):
-        parts.append(f"【文献摘要】\n{lit['summary']}")
+        parts.append(f"【文献摘要】\n{_truncate(str(lit['summary']), 1500)}")
     prob = context.get("problem_statement") or {}
     if prob.get("summary"):
-        parts.append(f"【问题陈述】\n{prob['summary']}")
+        parts.append(f"【问题陈述】\n{_truncate(str(prob['summary']), 1500)}")
     theory = context.get("theory_summary") or {}
     if theory.get("summary"):
-        parts.append(f"【已有理论】\n{_truncate(theory['summary'], 2000)}")
+        parts.append(f"【已有理论】\n{_truncate(str(theory['summary']), 2000)}")
+    counter = context.get("counterexample_summary") or {}
+    if counter.get("summary"):
+        parts.append(f"【反例】\n{_truncate(str(counter['summary']), 1200)}")
+    exp = context.get("experiment_summary") or {}
+    if exp.get("summary"):
+        parts.append(f"【实验】\n{_truncate(str(exp['summary']), 1200)}")
     return "\n\n".join(parts)
 
 
+def _wrapup_user_prompt(clean_message: str, campaign: dict[str, Any]) -> tuple[str, str]:
+    """已完成 Campaign 的收尾提示。
+
+    返回 (短用户句, 系统侧产物上下文)。
+    短用户句写入会话历史，避免每次收尾把整包产物再塞进 L1。
+    """
+    context = _build_context_pack(campaign)
+    context_block = _format_context_prompt(context)
+    user_part = (clean_message or "").strip()
+    bootstrap_phrases = (
+        "请对损失函数局部极小值进行完整研究",
+        "对损失函数局部极小值进行完整研究",
+    )
+    if not user_part or user_part in bootstrap_phrases or user_part.startswith("请对损失函数"):
+        user_part = (
+            "请对本课题已完成研究进行收尾总结："
+            "汇总定理/引理状态、反例、实验结论与开放问题，给出最终结论。"
+            "不要重新从文献检索或形式化阶段开始。"
+        )
+    system_extra = (
+        "【收尾模式】Campaign 已结束；只做收尾综合，不要重启 S0–S7 流水线。\n\n"
+        f"{context_block}"
+    )
+    return user_part, system_extra
+
+
 def _check_gate(stage: str, artifact: dict[str, Any], exp_results: dict[str, Any] | None) -> tuple[str, str]:
-    """返回 (status, reason)。status: pass|fail|skipped"""
+    """返回 (status, reason)。status: pass|fail|skipped|partial_pass"""
     if stage == "S1_literature":
         count = int(artifact.get("reference_count", 0))
         if count >= 1 or artifact.get("summary"):
@@ -113,15 +166,61 @@ def _check_gate(stage: str, artifact: dict[str, Any], exp_results: dict[str, Any
         return "fail", "实验未成功执行"
 
     if stage == "S7_review":
-        text = artifact.get("summary", "")
-        fatal = ("致命", "fatal", "major flaw", "严重缺陷")
-        if any(f in text.lower() or f in text for f in fatal):
-            return "fail", "审稿发现致命缺陷"
-        if text:
-            return "pass", "审稿完成"
-        return "fail", "审稿未产出意见"
+        return _check_review_gate(str(artifact.get("summary", "")))
 
     return "skipped", "无门禁"
+
+
+def _check_review_gate(text: str) -> tuple[str, str]:
+    """审稿门禁：避免把「致命问题已修复」误判为 fail。"""
+    import re
+
+    text = (text or "").strip()
+    if not text:
+        return "fail", "审稿未产出意见"
+
+    lower = text.lower()
+    pass_markers = (
+        "有条件通过",
+        "审稿建议**：通过",
+        "审稿建议:**通过",
+        "审稿建议：通过",
+        "建议接受",
+        "建议：通过",
+        "recommendation: accept",
+        "accept with minor",
+        "minor revision",
+    )
+    if any(m in text or m in lower for m in pass_markers):
+        return "pass", "审稿完成（建议通过）"
+
+    unresolved_markers = (
+        "仍存在致命",
+        "尚有致命",
+        "仍有致命",
+        "存在致命缺陷",
+        "发现致命缺陷",
+        "致命缺陷未",
+        "fatal flaw",
+        "major flaw",
+    )
+    if any(m in text or m in lower for m in unresolved_markers):
+        return "fail", "审稿发现未解决的致命缺陷"
+
+    # 逐句看「致命」：历史回顾 / 已修复 → 忽略；当前仍判定有致命 → fail
+    for part in re.split(r"[。！？\n；;]", text):
+        if "致命" not in part and "严重缺陷" not in part:
+            continue
+        if any(
+            x in part
+            for x in ("已修复", "已解决", "已处理", "已消除", "不存在", "没有", "无致命", "均已")
+        ):
+            continue
+        if any(x in part for x in ("第一轮", "上轮", "此前", "指出的致命", "曾有致命")):
+            continue
+        return "fail", "审稿发现致命缺陷"
+
+    return "pass", "审稿完成"
 
 
 def _sync_task_for_stage(project_id: str, stage: str, status: str) -> None:
@@ -164,19 +263,37 @@ class ResearchSupervisorPipeline:
         campaign_id: str | None,
         session_id: str | None,
         clean_message: str,
+        *,
+        force_new: bool = False,
+        prefer_open: bool = True,
     ) -> dict[str, Any]:
         store = get_campaign_store()
-        camp = store.get_active_campaign(project_id, campaign_id)
-        if camp:
-            if session_id and not camp.get("session_id"):
-                store.update_campaign(camp["id"], session_id=session_id)
-                camp = store.get_campaign(camp["id"]) or camp
-            return camp
+        if not force_new:
+            camp = store.get_active_campaign(
+                project_id, campaign_id, session_id=session_id, prefer_open=prefer_open,
+            )
+            if camp:
+                if session_id and not camp.get("session_id"):
+                    store.update_campaign(camp["id"], session_id=session_id)
+                    camp = store.get_campaign(camp["id"]) or camp
+                return camp
         return store.create_campaign(
             project_id,
             title=clean_message[:120] or "新科研 Campaign",
             assumptions=["A1", "A4", "A6"],
             session_id=session_id,
+        )
+
+    def _campaign_finished(self, campaign: dict[str, Any]) -> bool:
+        stage = str(campaign.get("current_stage") or "")
+        return campaign.get("status") == "done" or stage in ("complete", "S8_archive")
+
+    @staticmethod
+    def _is_wrapup_intent(message: str, clean_message: str) -> bool:
+        text = f"{message}\n{clean_message}"
+        return any(
+            kw in text
+            for kw in ("收尾", "总结研究", "研究总结", "归档", "结题", "最终结论", "不要重新开跑")
         )
 
     async def _emit_campaign_update(
@@ -271,6 +388,18 @@ class ResearchSupervisorPipeline:
         campaign_id: str | None = None,
         **run_kwargs,
     ) -> AsyncIterator[StreamChunk]:
+        """
+        执行 8 阶段 Campaign 主管道，按当前阶段委派 SubAgent 并更新门禁。
+
+        参数:
+            message: 用户输入（/research 前缀会触发 Campaign 逻辑）
+            session_id: 会话 ID
+            project_id / campaign_id: 课题与 Campaign 上下文
+            run_kwargs: 透传给 SubAgent.run 的推理与工具选项
+
+        返回:
+            StreamChunk 异步迭代器
+        """
         a2a_task_id = str(uuid.uuid4())
         clean_message = message.removeprefix("/research").strip() or message
         proj_store = get_project_store()
@@ -284,16 +413,127 @@ class ResearchSupervisorPipeline:
             proj_store.link_session(resolved_pid, session_id)
 
         camp_store = get_campaign_store()
-        campaign = self._resolve_campaign(
-            resolved_pid, campaign_id, session_id, clean_message
+        explicit_new = message.strip().startswith("/research")
+        # 仅「/research new」或「/research 重新开始」才强制新开；普通 /research 在已完成时走收尾对话
+        force_restart = bool(
+            re.match(
+                r"^/research\s+(new|重新开始|重启)\b",
+                message.strip(),
+                flags=re.IGNORECASE,
+            )
         )
-        campaign_id = campaign["id"]
+        wrapup_intent = self._is_wrapup_intent(message, clean_message) and not force_restart
+        # 收尾：按「展示进度最深」解析，避免未绑定会话的浅层测试 Campaign 抢走已完成课题
+        campaign = self._resolve_campaign(
+            resolved_pid,
+            campaign_id,
+            session_id,
+            clean_message,
+            prefer_open=not wrapup_intent,
+        )
+        if (
+            not force_restart
+            and not self._campaign_finished(campaign)
+            and campaign_id is None
+        ):
+            # UI 以 prefer_open=False 展示已完成体；执行侧若误拿到浅层 active，改绑到更深的已完成 Campaign
+            from server.memory.campaigns import campaign_stage_rank
 
+            display = camp_store.get_active_campaign(
+                resolved_pid, prefer_open=False,
+            )
+            if (
+                display
+                and self._campaign_finished(display)
+                and campaign_stage_rank(display.get("current_stage"))
+                > campaign_stage_rank(campaign.get("current_stage"))
+            ):
+                logger.info(
+                    "课题 %s 已有完成 Campaign %s，忽略浅层 %s（%s/%s）",
+                    resolved_pid,
+                    display.get("id"),
+                    campaign.get("id"),
+                    campaign.get("status"),
+                    campaign.get("current_stage"),
+                )
+                campaign = display
+                if session_id and not campaign.get("session_id"):
+                    camp_store.update_campaign(campaign["id"], session_id=session_id)
+                    campaign = camp_store.get_campaign(campaign["id"]) or campaign
+
+        if self._campaign_finished(campaign) and force_restart and campaign_id is None:
+            campaign = self._resolve_campaign(
+                resolved_pid, None, session_id, clean_message, force_new=True,
+            )
+        elif self._campaign_finished(campaign) and explicit_new and campaign_id is None:
+            # 兼容旧行为提示：不再静默开新 Campaign，避免进度「回退」到 S0/S1
+            logger.info(
+                "Campaign %s 已完成；普通 /research 不新开，改走收尾对话"
+                "（需要新开请用 /research new）",
+                campaign.get("id"),
+            )
+        campaign_id = campaign["id"]
         yield await self._emit_campaign_update(
             campaign, a2a_task_id, detail="Campaign 已加载",
         )
 
+        # 已完成的 Campaign：注入产物上下文，走普通 Agent 收尾（禁止空跑 S8 / 重开流水线）
+        if self._campaign_finished(campaign):
+            logger.info(
+                "Campaign %s 已结束(%s/%s)，改走普通对话收尾",
+                campaign_id,
+                campaign.get("status"),
+                campaign.get("current_stage"),
+            )
+            # 收尾固定 general：避免 Math/theory + thinking 在残缺历史上触发
+            # DeepSeek「reasoning_content must be passed back」400
+            agent_name: AgentName = "general"
+            yield StreamChunk(
+                type="agent_handoff",
+                content="campaign_complete_fallback",
+                from_agent="supervisor",
+                to_agent=agent_name,
+                route_reason="campaign_complete_fallback",
+                agent_name=agent_name,
+                a2a_task_id=a2a_task_id,
+            )
+            # 立刻给前端可见反馈，避免长时间停在「正在生成…」像卡死
+            yield StreamChunk(
+                type="content",
+                content="正在根据已完成产物生成收尾报告…\n\n",
+                agent_name=agent_name,
+                a2a_task_id=a2a_task_id,
+            )
+            wrap_user, wrap_system_extra = _wrapup_user_prompt(clean_message, campaign)
+            agent = self._get_agent(agent_name)
+            system_override = (
+                f"{agent.system_prompt}\n\n{wrap_system_extra}\n\n"
+                "输出要求：用简洁中文给出定理/反例/实验/开放问题与最终结论；"
+                "不要调用工具；不要输出冗长思维链小节。"
+            )
+            # 轻量收尾：关 thinking/工具/RAG/L4 注入，不带历史，避免慢与 400
+            wrap_kwargs = {
+                **run_kwargs,
+                "enable_thinking": False,
+                "enable_tools": False,
+                "enable_rag": False,
+                "augment_structured_memory": False,
+                "max_history_messages": -1,
+                "cot_mode": "off",
+                "system_prompt_override": system_override,
+            }
+            async for chunk in agent.run(
+                wrap_user,
+                session_id,
+                a2a_task_id=a2a_task_id,
+                **wrap_kwargs,
+            ):
+                yield chunk
+            return
+
         start_idx = _stage_index(str(campaign.get("current_stage", "S0_campaign")))
+        if str(campaign.get("current_stage") or "") == "complete":
+            start_idx = len(CAMPAIGN_STAGES)
         if start_idx > 0 and campaign.get("status") == "active":
             logger.info("从阶段 %s 续跑 Campaign %s", campaign.get("current_stage"), campaign_id)
 
@@ -574,17 +814,20 @@ class ResearchSupervisorPipeline:
                 continue
 
             if stage == "S8_archive":
-                camp_store.update_campaign(campaign_id, status="done", current_stage="complete")
-                proj_store.append_audit(
-                    resolved_pid,
-                    "campaign_complete",
-                    payload={"campaign_id": campaign_id},
-                )
                 artifact = {
                     "summary": "Campaign 已归档",
                     "gates": (camp_store.get_campaign(campaign_id) or {}).get("gates", {}),
                 }
                 camp_store.save_stage_artifact(campaign_id, stage, artifact)
+                # save_stage_artifact 会把 current_stage 写成 S8；归档后再标为 complete
+                camp_store.update_campaign(
+                    campaign_id, status="done", current_stage="complete",
+                )
+                proj_store.append_audit(
+                    resolved_pid,
+                    "campaign_complete",
+                    payload={"campaign_id": campaign_id},
+                )
                 campaign = camp_store.get_campaign(campaign_id) or campaign
                 yield await self._emit_campaign_update(campaign, a2a_task_id, detail="S8 归档完成")
                 continue

@@ -238,6 +238,7 @@ class SessionSummary(BaseModel):
     created_at: str | None = None
     updated_at: str | None = None
     message_count: int = 0
+    project_id: str = "default"
 
 
 class SessionListResponse(BaseModel):
@@ -299,9 +300,10 @@ class MCPStatusResponse(BaseModel):
 # ── RAG 文档 ─────────────────────────────────────────────────
 
 class DocumentUploadRequest(BaseModel):
-    """POST /v1/documents 请求体：上传文档到指定会话的 RAG 向量库。"""
+    """POST /v1/documents 请求体：上传文档到课题共享 RAG（会话用于溯源）。"""
 
-    session_id: str = Field(..., min_length=1, description="目标会话 ID（RAG 按会话隔离）")
+    session_id: str = Field(..., min_length=1, description="上传操作所属会话 ID")
+    project_id: str | None = Field(default=None, description="课题 ID；缺省由会话反查")
     content: str = Field(..., min_length=1, description="文档正文（markdown 或纯文本）")
     title: str | None = Field(default=None, description="文档标题")
     source: str = Field(default="", description="来源路径或 URL")
@@ -312,6 +314,7 @@ class DocumentInfo(BaseModel):
     """已索引文档的元数据。"""
     doc_id: str
     session_id: str
+    project_id: str = "default"
     title: str
     source: str = ""
     chunk_count: int = 0
@@ -519,6 +522,11 @@ class ProjectCreateRequest(BaseModel):
     created_by: str = ""
 
 
+class ProjectUpdateRequest(BaseModel):
+    name: str | None = Field(default=None, min_length=1)
+    description: str | None = None
+
+
 class ProjectMemberInfo(BaseModel):
     id: int
     project_id: str
@@ -597,6 +605,7 @@ class VerificationClaimRequest(BaseModel):
     session_id: str | None = None
     project_id: str = "default"
     entry_id: int | None = None
+    persist: bool = True
 
 
 class ExperimentRunRequest(BaseModel):

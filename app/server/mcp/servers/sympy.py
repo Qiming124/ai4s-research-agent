@@ -1,4 +1,22 @@
+# =============================================================================
 # MCP Server：SymPy 符号计算（简化、求导、求解）。
+#
+# 职责：
+#     1. simplify_expression、differentiate、solve_equation 等工具
+#     2. 异步包装 SymPy 计算，避免阻塞 event loop
+#     3. 返回 JSON 含 simplified / derivative / solution 字段
+#
+# 架构位置：
+#     - 被调用：MCP Client stdio 子进程、graph/theory_pipeline.py
+#     - 调用：sympy（可选）
+#
+# 阅读提示：
+#     - 新人先看 simplify_expression 与 differentiate
+#
+# Debug：
+#     - SymPy 未安装 → pip install sympy
+#     - 求解为空 → 表达式无解析解或语法错误
+# =============================================================================
 
 from __future__ import annotations
 

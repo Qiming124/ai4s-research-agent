@@ -1,4 +1,22 @@
+# =============================================================================
 # 研究流水线：literature → theory → experiment → review 多跳编排。
+#
+# 职责：
+#     1. 提供 should_use_research_pipeline() 关键词与 /research 检测
+#     2. ResearchPipeline 顺序委派 literature / theory / experiment / review Agent
+#     3. 在 theory 输出需数值验证时自动 handoff 到 experiment
+#
+# 架构位置：
+#     - 被调用：server/agents/orchestrator.py、research_supervisor.py
+#     - 调用：server/agents/subagent.py、graph/theory_pipeline.py、server/mcp/client.py
+#
+# 阅读提示：
+#     - 新人先看 should_use_research_pipeline 与 ResearchPipeline.execute()
+#
+# Debug：
+#     - 未触发流水线 → RESEARCH_PIPELINE_MODE != auto 或无关键词
+#     - 中途中断 → 某 SubAgent 工具失败，查 a2a_task_id 日志
+# =============================================================================
 
 from __future__ import annotations
 
@@ -21,11 +39,16 @@ _RESEARCH_KEYWORDS = (
     "hessian", "验证", "综述", "文献",
 )
 
+_WRAPUP_KEYWORDS = ("收尾", "总结研究", "研究总结", "归档", "结题", "最终结论")
+
 
 def should_use_research_pipeline(message: str, mode: str, settings: Settings) -> bool:
     if settings.research_pipeline_mode != "auto":
         return False
     if message.strip().startswith("/research"):
+        return True
+    if any(kw in message for kw in _WRAPUP_KEYWORDS):
+        # 收尾类请求走 Supervisor，以便注入已完成 Campaign 上下文
         return True
     if mode == "math":
         return True
@@ -97,6 +120,18 @@ class ResearchPipeline:
         mode: str = "chat",
         **run_kwargs,
     ) -> AsyncIterator[StreamChunk]:
+        """
+        顺序执行文献→理论→实验→审稿四阶段研究流水线。
+
+        参数:
+            message: 用户研究问题（自动去除 /research 前缀）
+            session_id: 会话 ID
+            mode: 对话模式
+            run_kwargs: 透传给各 SubAgent.run
+
+        返回:
+            StreamChunk 异步迭代器
+        """
         a2a_task_id = str(uuid.uuid4())
         clean_message = message.removeprefix("/research").strip() or message
 

@@ -1,4 +1,22 @@
+# =============================================================================
 # 实验运行器：读取 yaml 配置、调用验证执行器、写标准化日志。
+#
+# 职责：
+#     1. run_config_async() FastAPI 主路径：加载 yaml → verification → 写日志
+#     2. run_config() 同步包装（仅 CLI / 无事件循环）
+#     3. _load_yaml 支持 PyYAML 或简易行解析回退
+#
+# 架构位置：
+#     - 被调用：server/api/experiments.py、campaign_experiments.py
+#     - 调用：experiments/verification_executor.py、async_utils.py
+#
+# 阅读提示：
+#     - 新人先看 run_config_async 与 _resolve_config_path
+#
+# Debug：
+#     - 配置找不到 → experiments_path 与 config_path 拼接
+#     - 异步里调 run_config → 嵌套 loop，应 await run_config_async
+# =============================================================================
 
 from __future__ import annotations
 

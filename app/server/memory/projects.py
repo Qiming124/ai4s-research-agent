@@ -1,4 +1,22 @@
+# =============================================================================
 # 课题（Project）存储：实验室小组研究单元。
+#
+# 职责：
+#     1. SQLite 持久化课题元数据、成员、任务与会话绑定
+#     2. 管理工作区路径、RAG namespace 与默认假设
+#     3. delete_project() 删除课题行（级联由 API 层处理磁盘与会话）
+#
+# 架构位置：
+#     - 被调用：server/api/projects.py、sync.py、theory.py、research_supervisor.py
+#     - 调用：server/config.py、shared/paths.DATA_ROOT
+#
+# 阅读提示：
+#     - 新人先看 ProjectStore.create_project / resolve_project_id / delete_project
+#
+# Debug：
+#     - default 不可删 → delete_project 显式拒绝
+#     - 会话未绑定课题 → link_session 或 get_project_for_session
+# =============================================================================
 
 from __future__ import annotations
 
@@ -196,6 +214,103 @@ class ProjectStore:
             ).fetchone()
         return self._project_row(row)
 
+    def delete_project(self, project_id: str) -> dict[str, Any] | None:
+        """
+        删除课题行及其成员/任务/会话绑定/审计记录。
+
+        不删会话消息、Campaign、磁盘目录——由 API 层级联处理。
+        默认课题 default 不可删。
+
+        参数:
+            project_id: 课题 ID 或别名
+
+        返回:
+            {"project_id", "session_ids", "workspace_root"}；不存在或 default 则 None
+        """
+        if project_id == "default":
+            raise ValueError("默认课题不可删除")
+        project = self.get_project(project_id)
+        if not project:
+            return None
+        session_ids = [s["session_id"] for s in self.list_sessions(project_id)]
+        workspace_root = str(DATA_ROOT / "projects" / project_id)
+        with self._lock:
+            self._conn.execute(
+                "DELETE FROM project_members WHERE project_id = ?", (project_id,)
+            )
+            self._conn.execute(
+                "DELETE FROM project_tasks WHERE project_id = ?", (project_id,)
+            )
+            self._conn.execute(
+                "DELETE FROM project_sessions WHERE project_id = ?", (project_id,)
+            )
+            self._conn.execute(
+                "DELETE FROM sync_audit_log WHERE project_id = ?", (project_id,)
+            )
+            self._conn.execute("DELETE FROM projects WHERE id = ?", (project_id,))
+            self._conn.commit()
+        return {
+            "project_id": project_id,
+            "session_ids": session_ids,
+            "workspace_root": workspace_root,
+            "name": project.get("name", ""),
+        }
+
+    def update_project(
+        self,
+        project_id: str,
+        *,
+        name: str | None = None,
+        description: str | None = None,
+    ) -> dict[str, Any] | None:
+        updates: dict[str, Any] = {}
+        if name is not None and name.strip():
+            updates["name"] = name.strip()
+        if description is not None:
+            updates["description"] = description
+        if not updates:
+            return self.get_project(project_id)
+        updates["updated_at"] = _now_iso()
+        cols = ", ".join(f"{k} = ?" for k in updates)
+        values = list(updates.values()) + [project_id]
+        with self._lock:
+            self._conn.execute(
+                f"UPDATE projects SET {cols} WHERE id = ?",
+                values,
+            )
+            self._conn.commit()
+        return self.get_project(project_id)
+
+    def ensure_workspace(self, project_id: str) -> Path:
+        """确保课题理论工作区目录存在，并返回路径。"""
+        project = self.get_project(project_id)
+        if not project:
+            raise ValueError(f"课题不存在: {project_id}")
+        root = Path(project["workspace_path"] or (DATA_ROOT / "projects" / project_id / "theory"))
+        root.mkdir(parents=True, exist_ok=True)
+        (root / "lemmas").mkdir(parents=True, exist_ok=True)
+        (root / "proofs").mkdir(parents=True, exist_ok=True)
+        return root
+
+    def seed_theory_workspace(self, project_id: str) -> Path:
+        """从全局种子目录复制缺失的理论模板到课题工作区（不覆盖已有文件）。"""
+        from shared.paths import THEORY_DIR
+
+        root = self.ensure_workspace(project_id)
+        seed_names = (
+            "symbols.md",
+            "assumptions.md",
+            "review-checklist.md",
+            "assumption-matrix.md",
+        )
+        if THEORY_DIR.is_dir():
+            for name in seed_names:
+                src = THEORY_DIR / name
+                dst = root / name
+                if src.is_file() and not dst.exists():
+                    dst.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
+        return root
+
     def list_members(self, project_id: str) -> list[dict[str, Any]]:
         with self._lock:
             rows = self._conn.execute(
@@ -259,9 +374,14 @@ class ProjectStore:
         return dict(row) if row else None
 
     def link_session(self, project_id: str, session_id: str) -> None:
+        """将会话独家绑定到课题（先解除其它课题关联，避免串题）。"""
         with self._lock:
             self._conn.execute(
-                "INSERT OR IGNORE INTO project_sessions (project_id, session_id) VALUES (?, ?)",
+                "DELETE FROM project_sessions WHERE session_id = ?",
+                (session_id,),
+            )
+            self._conn.execute(
+                "INSERT INTO project_sessions (project_id, session_id) VALUES (?, ?)",
                 (project_id, session_id),
             )
             self._conn.commit()

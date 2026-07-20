@@ -1,4 +1,22 @@
-# 实验运行与日志 API。
+# =============================================================================
+# 实验运行与日志 HTTP API。
+#
+# 职责：
+#     1. 接收 ExperimentRunRequest 并异步执行 yaml 配置实验
+#     2. 列出 data/experiments/ 下的历史运行日志
+#     3. 返回标准化 run_id、状态与 metrics 摘要
+#
+# 架构位置：
+#     - 被调用：server/main.py include_router
+#     - 调用：server/experiments/runner.py（run_config_async）
+#
+# 阅读提示：
+#     - 新人先看 run_experiment 与 list_experiment_runs
+#
+# Debug：
+#     - 运行失败 → experiments_path 下 yaml 不存在或 verification_executor 报错
+#     - MCP 超时 → 勿在 FastAPI 循环内用 run_config 同步包装
+# =============================================================================
 
 from __future__ import annotations
 

@@ -1,4 +1,22 @@
+# =============================================================================
 # 轻量 Markdown → HTML 渲染（无 pandoc 时回退）。
+#
+# 职责：
+#     1. render_markdown_to_html() 支持 # 标题、列表、代码块、粗体/斜体
+#     2. 不依赖外部二进制，供 html_pdf_renderer 与本地 PDF 路径使用
+#     3. 内联公式以原样或简化 HTML 保留
+#
+# 架构位置：
+#     - 被调用：server/export/html_pdf_renderer.py
+#     - 调用：无（纯 Python 字符串处理）
+#
+# 阅读提示：
+#     - 新人先看 render_markdown_to_html 主循环
+#
+# Debug：
+#     - 列表嵌套错乱 → 缩进检测逻辑
+#     - XSS 风险 → 用户内容经 escape 处理，检查 _inline()
+# =============================================================================
 
 from __future__ import annotations
 

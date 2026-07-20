@@ -1,4 +1,22 @@
-# 可观测性与质量面板 API。
+# =============================================================================
+# 可观测性与质量面板 HTTP API。
+#
+# 职责：
+#     1. 聚合验证通过率、按 Agent 分桶统计
+#     2. 暴露 observability_summary 与 agent_quality 端点
+#     3. 为前端质量仪表盘提供数据源
+#
+# 架构位置：
+#     - 被调用：server/main.py include_router
+#     - 调用：server/memory/verification.py（验证账本）
+#
+# 阅读提示：
+#     - 新人先看 observability_summary
+#
+# Debug：
+#     - 通过率恒为 0 → project_id 过滤与记录 project 字段不匹配
+#     - 数据偏少 → list_records limit 默认 500
+# =============================================================================
 
 from __future__ import annotations
 

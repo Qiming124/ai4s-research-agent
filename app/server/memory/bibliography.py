@@ -1,4 +1,22 @@
+# =============================================================================
 # 参考文献库：BibTeX 存储与去重。
+#
+# 职责：
+#     1. 按 project_id 存储 bib_key、元数据与 raw_bibtex
+#     2. 去重插入与列表查询
+#     3. 供导出 builder 与 theory API 引用
+#
+# 架构位置：
+#     - 被调用：server/api/theory.py、export/builder.py
+#     - 调用：server/config.py（SQLite 路径）
+#
+# 阅读提示：
+#     - 新人先看 BibliographyStore.upsert_entry / list_entries
+#
+# Debug：
+#     - 重复 key → UNIQUE(project_id, bib_key) 冲突
+#     - 导出无文献 → project_id 过滤不匹配
+# =============================================================================
 
 from __future__ import annotations
 

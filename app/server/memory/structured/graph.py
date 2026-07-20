@@ -1,4 +1,22 @@
+# =============================================================================
 # L4 知识图谱：依赖边、矛盾检测、工作区同步。
+#
+# 职责：
+#     1. 从正文 **依据** / **假设** 行解析 depends_on 边
+#     2. detect_contradictions() 启发式矛盾检测
+#     3. sync_assumptions_to_workspace() 回写 assumptions.md
+#
+# 架构位置：
+#     - 被调用：memory/structured/extract.py、api/theory.py（间接）
+#     - 调用：memory/structured/store.py、theory_workspace.py
+#
+# 阅读提示：
+#     - 新人先看 link_depends_on_from_metadata、detect_contradictions
+#
+# Debug：
+#     - 边未创建 → 正文缺少 **依据**： 格式
+#     - 假矛盾 → 正则误匹配引理编号
+# =============================================================================
 
 from __future__ import annotations
 
@@ -18,10 +36,26 @@ _DEPENDS_PATTERN = re.compile(
     re.MULTILINE,
 )
 _ASSUMPTIONS_PATTERN = re.compile(
-    r"\*\*假设\*\*[：:]\s*(.+)$",
+    r"\*\*(?:依赖)?假设\*\*[：:]\s*(.+)$",
     re.MULTILINE,
 )
 _LEMMA_REF_PATTERN = re.compile(r"引理\s*(\d+)|定理\s*(\d+)")
+_ASSUMPTION_ID_RE = re.compile(r"\bA(\d+)\b", re.IGNORECASE)
+
+
+def normalize_assumption_list(parts: list[str]) -> list[str]:
+    """从「A1（…）」等片段中抽出规范假设编号，去重保序。"""
+    seen: set[str] = set()
+    out: list[str] = []
+    for part in parts:
+        match = _ASSUMPTION_ID_RE.search(str(part))
+        if not match:
+            continue
+        aid = f"A{match.group(1)}"
+        if aid not in seen:
+            seen.add(aid)
+            out.append(aid)
+    return out
 
 
 def extract_metadata_from_body(body: str) -> dict[str, Any]:
@@ -30,7 +64,11 @@ def extract_metadata_from_body(body: str) -> dict[str, Any]:
     m = _ASSUMPTIONS_PATTERN.search(body)
     if m:
         parts = [p.strip() for p in re.split(r"[,，、]", m.group(1)) if p.strip()]
-        meta["assumptions"] = parts
+        assumptions = normalize_assumption_list(parts)
+        if assumptions:
+            meta["assumptions"] = assumptions
+        elif parts:
+            meta["assumptions"] = parts
     dep_match = _DEPENDS_PATTERN.search(body)
     if dep_match:
         refs = _LEMMA_REF_PATTERN.findall(dep_match.group(1))
@@ -65,10 +103,13 @@ def detect_contradictions(
     return warnings
 
 
-def sync_workspace_to_l4(settings: Settings | None = None) -> int:
-    """扫描 data/theory/lemmas/*.md 同步到 L4（session_id=NULL 全局条目）。"""
+def sync_workspace_to_l4(
+    settings: Settings | None = None,
+    project_id: str | None = None,
+) -> int:
+    """扫描课题工作区 lemmas/*.md 同步到 L4（session_id=NULL 全局条目）。"""
     cfg = settings or get_settings()
-    root = get_theory_workspace_path(cfg) / "lemmas"
+    root = get_theory_workspace_path(cfg, project_id=project_id or "default") / "lemmas"
     if not root.is_dir():
         return 0
     store = get_structured_memory_store()
@@ -106,17 +147,29 @@ def link_depends_on_from_metadata(
     refs = meta.get("depends_on_refs") or []
     if not refs or entry.get("id") is None:
         return
+    from_id = int(entry["id"])
+    existing = {
+        (e["from_id"], e["to_id"], e["relation"])
+        for e in store.list_edges(session_id=session_id)
+    }
     candidates = store.list_entries(session_id=session_id, kind="theorem", limit=100)
-    candidates.extend(store.list_entries(session_id=None, kind="theorem", limit=100))
+    candidates.extend(store.list_entries(global_only=True, kind="theorem", limit=100))
     for ref in refs:
         for cand in candidates:
+            if cand.get("id") == from_id:
+                continue
             title = cand.get("title", "")
             if ref in title or title.endswith(ref):
+                to_id = int(cand["id"])
+                key = (from_id, to_id, "depends_on")
+                if key in existing:
+                    continue
                 try:
                     store.create_edge(
-                        from_id=int(entry["id"]),
-                        to_id=int(cand["id"]),
+                        from_id=from_id,
+                        to_id=to_id,
                         relation="depends_on",
                     )
+                    existing.add(key)
                 except Exception:
                     pass

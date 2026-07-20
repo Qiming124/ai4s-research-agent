@@ -1,7 +1,24 @@
 # =============================================================================
 # Agent 抽象基类与 GeneralAgent 实现。
 #
-# Phase 2B：GeneralAgent 支持 MCP 工具调用循环。
+# 职责：
+#     1. 定义 BaseAgent 抽象接口（run / run_sync）
+#     2. GeneralAgent：会话记忆 + RAG + MCP ReAct 工具循环 + CoT 工作流 SSE
+#     3. 提供 get_general_agent() 单例工厂
+#
+# 架构位置：
+#     - 被调用：server/api/chat.py（单 Agent 模式）、server/agents/subagent.py（基类逻辑复用）
+#     - 调用：server/graph/react.py、server/memory/manager.py、server/llm/client.py、
+#             server/mcp/client.py、server/memory/rag/retrieval.py
+#
+# 阅读提示：
+#     - 新人先看 BaseAgent 接口，再看 GeneralAgent.run() 主流程
+#     - MCP 工具循环在 _run_with_tools() 与 build_react_graph 相关段落
+#
+# Debug：
+#     - 无工具调用 → ENABLE_TOOLS 或 MCP 未 connect
+#     - RAG 未注入 → ENABLE_RAG 或 session 无索引文档
+#     - 历史被截断 → max_history_messages / working memory 配置
 # =============================================================================
 
 from __future__ import annotations
@@ -21,7 +38,13 @@ from server.llm.client import DeepSeekClient, get_deepseek_client
 from server.llm.cot_prompt import apply_cot_prompt
 from server.llm.prompts import DEFAULT_SYSTEM_PROMPT, MATH_MODE_SYSTEM_PROMPT
 from server.llm.reasoning_options import ResolvedReasoningOptions, resolve_reasoning_options
-from server.graph.workflow import cot_step_chunks, workflow_step_chunk, workflow_step_record
+from server.graph.workflow import (
+    cot_step_chunks,
+    finalize_workflow_records,
+    upsert_workflow_record,
+    workflow_step_chunk,
+    workflow_step_record,
+)
 from server.memory.base import BaseSessionStore
 from server.memory.manager import MemoryManager, get_memory_manager
 from server.memory.session import SessionStore, get_session_store
@@ -127,7 +150,11 @@ class GeneralAgent(BaseAgent):
         messages: list[dict[str, Any]] = [{"role": "system", "content": prompt}]
 
         for msg in history:
-            messages.append({"role": msg.role, "content": msg.content})
+            entry: dict[str, Any] = {"role": msg.role, "content": msg.content}
+            # DeepSeek thinking：历史 assistant 若曾带推理，回传时必须带上 reasoning_content
+            if msg.role == "assistant" and msg.reasoning_content:
+                entry["reasoning_content"] = msg.reasoning_content
+            messages.append(entry)
 
         messages.append({"role": "user", "content": user_message})
         return messages
@@ -179,7 +206,8 @@ class GeneralAgent(BaseAgent):
                 agent_name=self.name,
             ),
         )
-        workflow_records.append(
+        upsert_workflow_record(
+            workflow_records,
             workflow_step_record(
                 "plan",
                 status="running",
@@ -200,6 +228,24 @@ class GeneralAgent(BaseAgent):
 
             # 第二步：LLM 未请求工具 → 以当前累积回复结束
             if not result.tool_calls:
+                yield self._with_agent(
+                    workflow_step_chunk(
+                        "plan",
+                        status="done",
+                        title="分析问题并规划工具调用",
+                        detail="无需调用工具",
+                        agent_name=self.name,
+                    ),
+                )
+                upsert_workflow_record(
+                    workflow_records,
+                    workflow_step_record(
+                        "plan",
+                        status="done",
+                        title="分析问题并规划工具调用",
+                        detail="无需调用工具",
+                    ),
+                )
                 if result.content:
                     yield self._with_agent(StreamChunk(type="content", content=result.content))
                     usage = result.usage or usage
@@ -278,8 +324,23 @@ class GeneralAgent(BaseAgent):
                 self._settings.mcp_max_tool_rounds,
             )
 
-        workflow_records.append(
-            workflow_step_record("plan", status="done", title="工具规划完成"),
+        yield self._with_agent(
+            workflow_step_chunk(
+                "plan",
+                status="done",
+                title="分析问题并规划工具调用",
+                detail="工具规划完成",
+                agent_name=self.name,
+            ),
+        )
+        upsert_workflow_record(
+            workflow_records,
+            workflow_step_record(
+                "plan",
+                status="done",
+                title="分析问题并规划工具调用",
+                detail="工具规划完成",
+            ),
         )
 
         yield self._with_agent(
@@ -290,7 +351,8 @@ class GeneralAgent(BaseAgent):
                 agent_name=self.name,
             ),
         )
-        workflow_records.append(
+        upsert_workflow_record(
+            workflow_records,
             workflow_step_record(
                 "synthesize",
                 status="running",
@@ -319,12 +381,45 @@ class GeneralAgent(BaseAgent):
                 if chunk.usage:
                     usage = chunk.usage
                 yield self._with_agent(
+                    workflow_step_chunk(
+                        "synthesize",
+                        status="done",
+                        title="综合信息并生成回答",
+                        detail="回答生成完成",
+                        agent_name=self.name,
+                    ),
+                )
+                upsert_workflow_record(
+                    workflow_records,
+                    workflow_step_record(
+                        "synthesize",
+                        status="done",
+                        title="综合信息并生成回答",
+                        detail="回答生成完成",
+                    ),
+                )
+                yield self._with_agent(
                     StreamChunk(type="done", content="", usage=usage)
                 )
                 return
 
-        workflow_records.append(
-            workflow_step_record("synthesize", status="done", title="回答生成完成"),
+        yield self._with_agent(
+            workflow_step_chunk(
+                "synthesize",
+                status="done",
+                title="综合信息并生成回答",
+                detail="回答生成完成",
+                agent_name=self.name,
+            ),
+        )
+        upsert_workflow_record(
+            workflow_records,
+            workflow_step_record(
+                "synthesize",
+                status="done",
+                title="综合信息并生成回答",
+                detail="回答生成完成",
+            ),
         )
         yield self._with_agent(StreamChunk(type="done", content="", usage=usage))
 
@@ -355,7 +450,8 @@ class GeneralAgent(BaseAgent):
                 agent_name=self.name,
             ),
         )
-        workflow_records.append(
+        upsert_workflow_record(
+            workflow_records,
             workflow_step_record(
                 "plan",
                 status="running",
@@ -575,7 +671,7 @@ class GeneralAgent(BaseAgent):
                             content=full_content,
                             reasoning_content=full_reasoning or None,
                             tool_calls=persisted_tool_calls or None,
-                            workflow_steps=workflow_records or None,
+                            workflow_steps=finalize_workflow_records(workflow_records),
                         ),
                     )
                     usage = chunk.usage or {}
@@ -618,7 +714,7 @@ class GeneralAgent(BaseAgent):
                         role="assistant",
                         content=full_content,
                         reasoning_content=full_reasoning or None,
-                        workflow_steps=workflow_records or None,
+                        workflow_steps=finalize_workflow_records(workflow_records),
                     ),
                 )
                 usage = chunk.usage or {}

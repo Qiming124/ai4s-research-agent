@@ -1,4 +1,23 @@
-# L4 结构化科研记忆 API。
+# =============================================================================
+# L4 结构化科研记忆 HTTP API。
+#
+# 职责：
+#     1. CRUD 定理/引理/假设/结论等结构化条目
+#     2. 管理记忆图谱边（depends_on / contradicts）
+#     3. 按 session_id / kind 过滤列表
+#
+# 架构位置：
+#     - 被调用：server/main.py include_router
+#     - 调用：server/memory/structured/store.py
+#
+# 阅读提示：
+#     - 新人先看 list_structured_memory 与 create_structured_memory
+#     - 图谱见 get_memory_graph / create_memory_edge
+#
+# Debug：
+#     - 条目未出现在 prompt → injection.py 未启用或 session 过滤
+#     - 边创建失败 → 源/目标 entry_id 不存在
+# =============================================================================
 
 from __future__ import annotations
 

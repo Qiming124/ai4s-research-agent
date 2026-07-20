@@ -1,4 +1,22 @@
+# =============================================================================
 # MCP Server：arXiv 论文搜索与摘要。
+#
+# 职责：
+#     1. search_papers 按关键词查询 arXiv API
+#     2. get_paper_abstract 按 arxiv_id 拉取摘要
+#     3. 返回 JSON 字符串供 Agent 工具调用
+#
+# 架构位置：
+#     - 被调用：MCP Client stdio 子进程（mcp_servers.json 配置）
+#     - 调用：httpx → export.arxiv.org API
+#
+# 阅读提示：
+#     - 新人先看 search_papers 与 _fetch_arxiv
+#
+# Debug：
+#     - 429 / 超时 → arXiv 限流，降低并发或加 User-Agent
+#     - 空结果 → 查询词过窄或 API XML 解析失败
+# =============================================================================
 
 from __future__ import annotations
 

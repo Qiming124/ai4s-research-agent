@@ -1,4 +1,22 @@
+# =============================================================================
 # MCP Server：受限目录内的文件读写。
+#
+# 职责：
+#     1. read_file / write_file / list_directory 工具
+#     2. _resolve_safe() 限制在 MCP_ALLOWED_DIRS 白名单根目录内
+#     3. 默认根目录 data/mcp_files/
+#
+# 架构位置：
+#     - 被调用：MCP Client stdio 子进程
+#     - 调用：shared/paths.DATA_ROOT
+#
+# 阅读提示：
+#     - 新人先看 _allowed_roots 与 _resolve_safe
+#
+# Debug：
+#     - Permission denied → 路径越出白名单
+#     - 文件不存在 → 相对路径相对 cwd 解析错误
+# =============================================================================
 
 from __future__ import annotations
 

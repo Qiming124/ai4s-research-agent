@@ -30,7 +30,13 @@ from server.graph.streaming import stream_react_graph
 from server.graph.theory_pipeline import stream_theory_verification
 from server.langchain.llm import get_chat_model
 from server.langchain.tools import mcp_tools_to_langchain
-from server.graph.workflow import cot_step_chunks, workflow_step_chunk, workflow_step_record
+from server.graph.workflow import (
+    cot_step_chunks,
+    finalize_workflow_records,
+    upsert_workflow_record,
+    workflow_step_chunk,
+    workflow_step_record,
+)
 from server.llm.client import DeepSeekClient, get_deepseek_client
 from server.llm.cot_prompt import apply_cot_prompt
 from server.llm.reasoning_options import ResolvedReasoningOptions, resolve_reasoning_options
@@ -103,7 +109,11 @@ class SubAgent:
         messages: list[dict[str, Any]] = [{"role": "system", "content": prompt}]
 
         for msg in history:
-            messages.append({"role": msg.role, "content": msg.content})
+            entry: dict[str, Any] = {"role": msg.role, "content": msg.content}
+            # DeepSeek thinking：历史 assistant 若曾带推理，回传时必须带上 reasoning_content
+            if msg.role == "assistant" and msg.reasoning_content:
+                entry["reasoning_content"] = msg.reasoning_content
+            messages.append(entry)
 
         messages.append({"role": "user", "content": user_message})
         return messages
@@ -145,7 +155,8 @@ class SubAgent:
             ),
             a2a_task_id=a2a_task_id,
         )
-        workflow_records.append(
+        upsert_workflow_record(
+            workflow_records,
             workflow_step_record(
                 "plan",
                 status="running",
@@ -211,7 +222,8 @@ class SubAgent:
             ),
             a2a_task_id=a2a_task_id,
         )
-        workflow_records.append(
+        upsert_workflow_record(
+            workflow_records,
             workflow_step_record(
                 "plan",
                 status="running",
@@ -229,6 +241,26 @@ class SubAgent:
                 usage = result.usage
 
             if not result.tool_calls:
+                yield self._with_agent(
+                    workflow_step_chunk(
+                        "plan",
+                        status="done",
+                        title="分析问题并规划工具调用",
+                        detail="无需调用工具",
+                        agent_name=self.name,
+                        a2a_task_id=a2a_task_id,
+                    ),
+                    a2a_task_id=a2a_task_id,
+                )
+                upsert_workflow_record(
+                    workflow_records,
+                    workflow_step_record(
+                        "plan",
+                        status="done",
+                        title="分析问题并规划工具调用",
+                        detail="无需调用工具",
+                    ),
+                )
                 if result.content:
                     yield self._with_agent(
                         StreamChunk(type="content", content=result.content),
@@ -315,8 +347,25 @@ class SubAgent:
                 self._settings.mcp_max_tool_rounds,
             )
 
-        workflow_records.append(
-            workflow_step_record("plan", status="done", title="工具规划完成"),
+        yield self._with_agent(
+            workflow_step_chunk(
+                "plan",
+                status="done",
+                title="分析问题并规划工具调用",
+                detail="工具规划完成",
+                agent_name=self.name,
+                a2a_task_id=a2a_task_id,
+            ),
+            a2a_task_id=a2a_task_id,
+        )
+        upsert_workflow_record(
+            workflow_records,
+            workflow_step_record(
+                "plan",
+                status="done",
+                title="分析问题并规划工具调用",
+                detail="工具规划完成",
+            ),
         )
         yield self._with_agent(
             workflow_step_chunk(
@@ -328,7 +377,8 @@ class SubAgent:
             ),
             a2a_task_id=a2a_task_id,
         )
-        workflow_records.append(
+        upsert_workflow_record(
+            workflow_records,
             workflow_step_record(
                 "synthesize",
                 status="running",
@@ -356,13 +406,50 @@ class SubAgent:
                 if chunk.usage:
                     usage = chunk.usage
                 yield self._with_agent(
+                    workflow_step_chunk(
+                        "synthesize",
+                        status="done",
+                        title="综合信息并生成回答",
+                        detail="回答生成完成",
+                        agent_name=self.name,
+                        a2a_task_id=a2a_task_id,
+                    ),
+                    a2a_task_id=a2a_task_id,
+                )
+                upsert_workflow_record(
+                    workflow_records,
+                    workflow_step_record(
+                        "synthesize",
+                        status="done",
+                        title="综合信息并生成回答",
+                        detail="回答生成完成",
+                    ),
+                )
+                yield self._with_agent(
                     StreamChunk(type="done", content="", usage=usage),
                     a2a_task_id=a2a_task_id,
                 )
                 return
 
-        workflow_records.append(
-            workflow_step_record("synthesize", status="done", title="回答生成完成"),
+        yield self._with_agent(
+            workflow_step_chunk(
+                "synthesize",
+                status="done",
+                title="综合信息并生成回答",
+                detail="回答生成完成",
+                agent_name=self.name,
+                a2a_task_id=a2a_task_id,
+            ),
+            a2a_task_id=a2a_task_id,
+        )
+        upsert_workflow_record(
+            workflow_records,
+            workflow_step_record(
+                "synthesize",
+                status="done",
+                title="综合信息并生成回答",
+                detail="回答生成完成",
+            ),
         )
         yield self._with_agent(
             StreamChunk(type="done", content="", usage=usage),
@@ -441,6 +528,8 @@ class SubAgent:
         cot_mode: str = "standard",
         a2a_task_id: str | None = None,
         persist_session: bool = True,
+        enable_rag: bool | None = None,
+        augment_structured_memory: bool = True,
     ) -> AsyncIterator[StreamChunk]:
         """
         SubAgent 主入口：处理用户消息并流式产出回复。
@@ -459,6 +548,8 @@ class SubAgent:
             enable_tools: 是否启用 MCP
             a2a_task_id: A2A 子任务 ID（由 orchestrator 分配）
             persist_session: 是否写入 L2 消息（默认 True）
+            enable_rag: 是否注入 RAG（None=跟随全局配置）
+            augment_structured_memory: 是否注入 L4 结构化记忆（收尾可关）
 
         产出:
             StreamChunk 流
@@ -480,6 +571,8 @@ class SubAgent:
                 cot_mode=cot_mode,
                 a2a_task_id=a2a_task_id,
                 persist_session=persist_session,
+                enable_rag=enable_rag,
+                augment_structured_memory=augment_structured_memory,
             ):
                 yield chunk
         finally:
@@ -499,6 +592,8 @@ class SubAgent:
         cot_mode: str = "standard",
         a2a_task_id: str | None = None,
         persist_session: bool = True,
+        enable_rag: bool | None = None,
+        augment_structured_memory: bool = True,
     ) -> AsyncIterator[StreamChunk]:
         reasoning = resolve_reasoning_options(
             self._settings,
@@ -508,10 +603,10 @@ class SubAgent:
         system_prompt = system_prompt_override or self.system_prompt
         system_prompt = apply_cot_prompt(system_prompt, cot_mode, self.name)  # type: ignore[arg-type]
 
-        if (
-            self._settings.enable_rag
-            and self.name in self._settings.rag_agent_names()
-        ):
+        rag_on = (
+            self._settings.enable_rag if enable_rag is None else enable_rag
+        )
+        if rag_on and self.name in self._settings.rag_agent_names():
             system_prompt = build_rag_augmented_prompt(
                 system_prompt,
                 message,
@@ -519,12 +614,13 @@ class SubAgent:
                 self._settings,
             )
 
-        system_prompt = build_structured_augmented_prompt(
-            system_prompt,
-            sid,
-            self.name,
-            self._settings,
-        )
+        if augment_structured_memory:
+            system_prompt = build_structured_augmented_prompt(
+                system_prompt,
+                sid,
+                self.name,
+                self._settings,
+            )
 
         full_history = self._sessions.get_messages(sid)
         history = await self._memory.get_llm_context(
@@ -617,7 +713,7 @@ class SubAgent:
                                 content=full_content,
                                 reasoning_content=full_reasoning or None,
                                 tool_calls=persisted_tool_calls or None,
-                                workflow_steps=workflow_records or None,
+                                workflow_steps=finalize_workflow_records(workflow_records),
                             ),
                         )
                     usage = chunk.usage or {}
@@ -669,7 +765,7 @@ class SubAgent:
                             role="assistant",
                             content=full_content,
                             reasoning_content=full_reasoning or None,
-                            workflow_steps=workflow_records or None,
+                            workflow_steps=finalize_workflow_records(workflow_records),
                         ),
                     )
                 usage = chunk.usage or {}

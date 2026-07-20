@@ -1,4 +1,22 @@
+# =============================================================================
 # Skills 桥接：调用外部 Cursor skill 或本地脚本。
+#
+# 职责：
+#     1. SkillsBridge 映射 SKILL_SLUGS 到本地脚本或外部命令
+#     2. 将 Campaign 阶段与 loss-landscape-research 等 skill 衔接
+#     3. subprocess 执行并捕获 JSON 输出
+#
+# 架构位置：
+#     - 被调用：server/graph/research_supervisor.py（可选 skill 阶段）
+#     - 调用：shared/paths.PROJECT_ROOT、subprocess
+#
+# 阅读提示：
+#     - 新人先看 SkillsBridge.run_skill 与 SKILL_SLUGS
+#
+# Debug：
+#     - skill 未找到 → slug 不在 SKILL_SLUGS 或脚本路径缺失
+#     - 非零 exit code → 检查脚本 stderr 日志
+# =============================================================================
 
 from __future__ import annotations
 

@@ -1,4 +1,24 @@
-# LaTeX / Markdown / DOCX / PDF 导出 API。
+# =============================================================================
+# 论文导出 HTTP API（LaTeX / Markdown / DOCX / PDF）。
+#
+# 职责：
+#     1. 预览与导出结构化记忆、参考文献、工作区内容
+#     2. 调用 builder 聚合条目，再经 docx_exporter / pdf_exporter 生成二进制
+#     3. 可选 AI 润色导出 Markdown
+#
+# 架构位置：
+#     - 被调用：server/main.py include_router
+#     - 调用：server/export/builder.py、docx_exporter.py、pdf_exporter.py、ai_polish.py
+#
+# 阅读提示：
+#     - 新人先看 export_preview 与 export_latex / export_docx / export_pdf
+#     - 数据来源见 builder.collect_export_entries()
+#
+# Debug：
+#     - PDF 乱码 → pdf_fonts 中文字体未就绪
+#     - DOCX 公式空白 → math_docx_prep 预处理或 pandoc 未安装
+#     - 导出为空 → session_id 无 L4 结构化记忆条目
+# =============================================================================
 
 from __future__ import annotations
 

@@ -1,4 +1,22 @@
-# MCP Server：数值验证（梯度、Hessian 谱、loss landscape、SGD 轨迹）。
+# =============================================================================
+# MCP Server：数值验证（梯度、Hessian 谱、loss landscape、SGD）。
+#
+# 职责：
+#     1. eval_polynomial、hessian_spectrum、loss_landscape_slice 等工具
+#     2. 基于 NumPy 本地计算，解析 point 字符串为坐标
+#     3. 返回 JSON metrics 供 Theory / Experiment Agent 验证 Claim
+#
+# 架构位置：
+#     - 被调用：MCP Client stdio 子进程、verification_executor.py
+#     - 调用：numpy（可选）
+#
+# 阅读提示：
+#     - 新人先看 eval_polynomial 与 hessian_min_eigenvalue
+#
+# Debug：
+#     - NumPy 未安装 → pip install numpy
+#     - 表达式 parse 失败 → 仅支持受限多项式/初等函数语法
+# =============================================================================
 
 from __future__ import annotations
 

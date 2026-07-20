@@ -1,4 +1,26 @@
-# 多 Agent 编排：意图路由 + 子 Agent 委派 + handoff SSE。
+# =============================================================================
+# 多 Agent 编排器（Supervisor）。
+#
+# 职责：
+#     1. 解析用户意图并路由到 theory / experiment / literature 等子 Agent
+#     2. 检测 /research 关键词并委派 ResearchSupervisorPipeline（8 阶段 Campaign）
+#     3. 发出 agent_handoff SSE 事件，再流式转发 SubAgent 输出
+#     4. 提供 run / run_sync 两种入口（流式与非流式聚合）
+#
+# 架构位置：
+#     - 被调用：server/api/chat.py → get_multi_agent_orchestrator().run(...)
+#     - 调用：server/agents/subagent.py、server/graph/research_supervisor.py、
+#             server/graph/router_llm.py、server/graph/research_pipeline.py
+#
+# 阅读提示：
+#     - 新人先看 resolve_target_agent() 与 run() 的分支逻辑
+#     - 再看 _get_agent() 如何按 AgentName 实例化 SubAgent
+#
+# Debug：
+#     - 路由总走 general → 检查 ROUTER_USE_LLM 与 classify_intent_smart 日志
+#     - 未进入 Campaign → should_use_research_pipeline 条件或 RESEARCH_PIPELINE_MODE
+#     - handoff 后无输出 → 检查 SubAgent.run 与 MCP 连接状态
+# =============================================================================
 
 from __future__ import annotations
 
@@ -74,6 +96,20 @@ class MultiAgentOrchestrator:
         project_id: str | None = None,
         campaign_id: str | None = None,
     ) -> AsyncIterator[StreamChunk]:
+        """
+        流式执行多 Agent 对话：路由 → handoff SSE → SubAgent 或 Campaign 流水线。
+
+        参数:
+            message: 用户输入
+            session_id: 会话 ID（可选）
+            agent: 强制指定 Agent 名称时跳过自动路由
+            auto_route: 是否启用意图分类
+            mode: chat / research 等模式
+            project_id / campaign_id: Campaign 流水线上下文
+
+        返回:
+            StreamChunk 异步迭代器（SSE 事件源）
+        """
         if (
             agent is None
             and auto_route

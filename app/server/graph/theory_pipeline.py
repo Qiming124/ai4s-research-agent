@@ -1,4 +1,25 @@
-# Theory Agent 推导闭环：derive → verify (SymPy + numerical) → persist。
+# =============================================================================
+# Theory Agent 推导闭环：derive → verify → persist。
+#
+# 职责：
+#     1. 从推导文本抽取 loss 表达式与可验证 Claim
+#     2. 调用 SymPy / numerical MCP 做符号与数值验证
+#     3. 写入验证账本并发出 workflow SSE 步骤
+#     4. 判断是否需要 experiment Agent handoff
+#
+# 架构位置：
+#     - 被调用：server/graph/research_pipeline.py、research_supervisor.py、
+#               experiments/campaign_experiments.py、verification_executor.py
+#     - 调用：server/mcp/client.py、memory/verification.py、graph/workflow.py
+#
+# 阅读提示：
+#     - 新人先看 extract_loss_expression、run_sympy_verification、
+#       run_numerical_verification
+#
+# Debug：
+#     - SymPy 跳过 → 无 sympy__ 成功 tool call 或表达式无法 parse
+#     - 数值验证失败 → to_numerical_expression 转换或 MCP numerical 未连接
+# =============================================================================
 
 from __future__ import annotations
 
@@ -11,7 +32,7 @@ from typing import Any
 from server.memory.claim_parser import claim_from_content_or_expression, parse_verifiable_claim
 from server.memory.verification import get_verification_ledger
 from server.mcp.client import MCPClient
-from server.graph.workflow import workflow_step_chunk, workflow_step_record
+from server.graph.workflow import upsert_workflow_record, workflow_step_chunk, workflow_step_record
 from shared.schemas import PersistedToolCall, StreamChunk
 
 logger = logging.getLogger(__name__)
@@ -281,7 +302,8 @@ async def stream_theory_verification(
         agent_name=agent_name,
         a2a_task_id=a2a_task_id,
     )
-    wf_records.append(
+    upsert_workflow_record(
+        wf_records,
         workflow_step_record("verify", status="running", title="SymPy 符号验证"),
     )
 
@@ -289,7 +311,8 @@ async def stream_theory_verification(
     status_map = {"pass": "pass", "fail": "fail", "skipped": "skipped", "partial": "done"}
     verify_status = status_map.get(str(sympy_result.get("status", "")), "done")
 
-    wf_records.append(
+    upsert_workflow_record(
+        wf_records,
         workflow_step_record(
             "verify",
             status=verify_status,  # type: ignore[arg-type]
@@ -329,12 +352,14 @@ async def stream_theory_verification(
     num_result = await run_numerical_verification(mcp, content, tool_records, sympy_result)
     if num_result.get("status") != "skipped":
         num_status = status_map.get(str(num_result.get("status", "")), "done")
-        wf_records.append(
+        upsert_workflow_record(
+            wf_records,
             workflow_step_record(
                 "verify",
                 status=num_status,  # type: ignore[arg-type]
                 title="数值验证",
                 detail=str(num_result.get("reason", "")),
+                tool_call_id="wf-verify-numerical",
             ),
         )
         yield workflow_step_chunk(
@@ -344,6 +369,7 @@ async def stream_theory_verification(
             detail=str(num_result.get("reason", "")),
             agent_name=agent_name,
             a2a_task_id=a2a_task_id,
+            tool_call_id="wf-verify-numerical",
         )
         _record_verification_ledger(
             session_id=session_id,

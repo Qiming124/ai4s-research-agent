@@ -1,4 +1,22 @@
+# =============================================================================
 # Campaign 实验调度：从理论推导动态选择验证配置。
+#
+# 职责：
+#     1. run_campaign_experiments() 解析 theory 文本并执行二次验证
+#     2. build_symbolic_config / build_width_scaling_config 生成 yaml 配置
+#     3. 检测过参数化关键词触发 MLP width scaling 实验
+#
+# 架构位置：
+#     - 被调用：server/graph/research_supervisor.py（S5 阶段）
+#     - 调用：experiments/runner.py、verification_executor.py、theory_pipeline.py
+#
+# 阅读提示：
+#     - 新人先看 run_campaign_experiments 与 build_symbolic_config
+#
+# Debug：
+#     - 实验 skipped → 无 loss 表达式或未 mentions_overparameterization
+#     - MCP 失败 → 必须在 FastAPI 循环 await，禁止嵌套 run_coro_sync
+# =============================================================================
 
 from __future__ import annotations
 

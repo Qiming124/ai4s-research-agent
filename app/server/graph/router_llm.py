@@ -1,4 +1,22 @@
-# LLM 意图路由：ROUTER_USE_LLM=true 时调用轻量模型分类，失败回退规则路由。
+# =============================================================================
+# LLM 意图路由：轻量模型分类 + 规则回退。
+#
+# 职责：
+#     1. ROUTER_USE_LLM=true 时调用 Chat 模型输出 JSON 分类结果
+#     2. 解析失败或异常时回退 server/graph/router.py 规则路由
+#     3. 提供 classify_intent_smart() 统一入口
+#
+# 架构位置：
+#     - 被调用：server/agents/orchestrator.py（resolve_target_agent）
+#     - 调用：server/graph/router.py、server/langchain/llm.py、agents/config.py
+#
+# 阅读提示：
+#     - 新人先看 classify_intent_smart 与 _ROUTER_PROMPT
+#
+# Debug：
+#     - 总路由 general → LLM JSON 解析失败，查 logger warning
+#     - 路由慢 → 轻量模型未配置或每次新建 client
+# =============================================================================
 
 from __future__ import annotations
 

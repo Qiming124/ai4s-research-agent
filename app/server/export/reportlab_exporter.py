@@ -1,4 +1,22 @@
-# Reportlab PDF 导出（内置 CID 中文字体，无需额外字体文件）。
+# =============================================================================
+# Reportlab PDF 导出（内置 CID 中文字体）。
+#
+# 职责：
+#     1. build_reportlab_pdf_bytes() 从结构化 entries 直接排版 PDF
+#     2. 使用 STSong-Light CID 字体，无需额外字体文件
+#     3. 作为 pandoc 不可用时的最终回退路径
+#
+# 架构位置：
+#     - 被调用：server/export/pdf_exporter.py（回退分支）
+#     - 调用：reportlab 库
+#
+# 阅读提示：
+#     - 新人先看 build_reportlab_pdf_bytes
+#
+# Debug：
+#     - ImportError → pip install reportlab
+#     - 英文正常中文缺字 → CID 字体字集限制，优先 pandoc 路径
+# =============================================================================
 
 from __future__ import annotations
 

@@ -1,4 +1,21 @@
-# Agent 元数据 API：列出角色、RAG 与白名单摘要。
+# =============================================================================
+# Agent 元数据 HTTP API。
+#
+# 职责：
+#     1. 列出可用 Agent 角色、描述与默认工具白名单摘要
+#     2. 暴露 RAG / MCP 启用状态供前端展示
+#     3. 只读元数据，不执行对话
+#
+# 架构位置：
+#     - 被调用：server/main.py include_router
+#     - 调用：server/agents/config.py、server/config.py
+#
+# 阅读提示：
+#     - 新人先看 list_agents 与 _AGENT_DESCRIPTIONS
+#
+# Debug：
+#     - 角色缺失 → AGENT_NAMES 与前端枚举不一致
+# =============================================================================
 
 from __future__ import annotations
 

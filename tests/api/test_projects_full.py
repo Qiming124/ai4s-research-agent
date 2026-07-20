@@ -51,6 +51,46 @@ def test_link_and_list_sessions(client, session_id):
     assert session_id in ids
 
 
+def test_delete_project_cascade(client):
+    r = client.post(
+        "/v1/projects",
+        json={"name": "To Delete", "description": "cascade test"},
+    )
+    assert r.status_code == 200
+    pid = r.json()["id"]
+    assert pid != "default"
+
+    sid = "del-proj-sess-test"
+    # 确保会话存在于 session store
+    from server.memory.session import get_session_store
+
+    get_session_store().get_or_create(sid)
+    r = client.post(f"/v1/projects/{pid}/sessions/{sid}")
+    assert r.status_code == 200
+
+    r = client.delete(f"/v1/projects/{pid}")
+    assert r.status_code == 400
+
+    r = client.delete(f"/v1/projects/{pid}?purge=true")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["status"] == "deleted"
+    assert body["project_id"] == pid
+    assert sid in body.get("deleted_sessions", [])
+
+    r = client.get(f"/v1/projects/{pid}")
+    assert r.status_code == 404
+
+    # 会话已 purge
+    r = client.delete(f"/v1/sessions/{sid}?purge=true")
+    assert r.status_code == 404
+
+
+def test_cannot_delete_default_project(client):
+    r = client.delete("/v1/projects/default?purge=true")
+    assert r.status_code == 400
+
+
 def test_invalid_project_tasks_404(client):
     r = client.get("/v1/projects/nonexistent-xyz/tasks")
     # resolve falls back to default if default exists
