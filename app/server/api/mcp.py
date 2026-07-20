@@ -11,7 +11,7 @@ from shared.schemas import MCPStatusResponse
 router = APIRouter(tags=["mcp"])
 
 
-@router.get("/v1/mcp/status", response_model=MCPStatusResponse)
+@router.get("/v1/mcp/status", response_model=MCPStatusResponse, summary="MCP 连接状态")
 async def mcp_status() -> MCPStatusResponse:
     """
     查询 MCP 启用状态、Client 连接与各 Server 工具列表。
@@ -22,7 +22,7 @@ async def mcp_status() -> MCPStatusResponse:
     return await build_mcp_status()
 
 
-@router.post("/v1/mcp/reload", response_model=MCPStatusResponse)
+@router.post("/v1/mcp/reload", response_model=MCPStatusResponse, summary="热重载 MCP 配置")
 async def mcp_reload() -> MCPStatusResponse:
     """重新加载 mcp_servers.json 并重建 MCP 连接（无需重启 uvicorn）。"""
     settings = get_settings()

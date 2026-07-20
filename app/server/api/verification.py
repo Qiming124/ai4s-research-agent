@@ -20,7 +20,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 
 from server.experiments.verification_executor import execute_claim_verification
 from server.memory.verification import get_verification_ledger
@@ -34,13 +34,36 @@ from shared.schemas import (
 router = APIRouter(tags=["verification"])
 
 
-@router.get("/v1/verification/records", response_model=VerificationRecordsResponse)
+@router.get(
+    "/v1/verification/records",
+    response_model=VerificationRecordsResponse,
+    summary="验证账本记录",
+)
 async def list_verification_records(
-    project_id: str | None = None,
-    session_id: str | None = None,
-    entry_id: int | None = None,
-    limit: int = 100,
+    project_id: str | None = Query(
+        default=None,
+        description="按课题过滤",
+        examples=["default"],
+    ),
+    session_id: str | None = Query(
+        default=None,
+        description="按会话过滤",
+        examples=["sess_demo"],
+    ),
+    entry_id: int | None = Query(
+        default=None,
+        description="按结构化记忆条目过滤",
+        examples=[1],
+    ),
+    limit: int = Query(
+        default=100,
+        ge=1,
+        le=500,
+        description="返回条数上限",
+        examples=[100],
+    ),
 ) -> VerificationRecordsResponse:
+    """列出验证账本记录（symbolic / numerical / experiment）。"""
     ledger = get_verification_ledger()
     records = ledger.list_records(
         project_id=project_id,
@@ -54,11 +77,24 @@ async def list_verification_records(
     )
 
 
-@router.get("/v1/verification/dashboard", response_model=VerificationDashboardResponse)
+@router.get(
+    "/v1/verification/dashboard",
+    response_model=VerificationDashboardResponse,
+    summary="验证仪表盘",
+)
 async def verification_dashboard(
-    project_id: str = "default",
-    session_id: str | None = None,
+    project_id: str = Query(
+        default="default",
+        description="课题 ID",
+        examples=["default"],
+    ),
+    session_id: str | None = Query(
+        default=None,
+        description="可选：再按会话收窄",
+        examples=["sess_demo"],
+    ),
 ) -> VerificationDashboardResponse:
+    """汇总通过/失败数、按层级统计与最近记录。"""
     ledger = get_verification_ledger()
     records = ledger.list_records(project_id=project_id, session_id=session_id, limit=200)
     by_tier: dict[str, int] = {"symbolic": 0, "numerical": 0, "experiment": 0}
@@ -80,8 +116,13 @@ async def verification_dashboard(
     )
 
 
-@router.post("/v1/verification/run")
+@router.post("/v1/verification/run", summary="手动执行验证")
 async def run_verification(request: VerificationClaimRequest) -> dict:
+    """
+    对 claim 执行 symbolic/numerical/experiment 验证。
+
+    有 session_id 时以会话所属课题为准写入账本。
+    """
     project_id = request.project_id or "default"
     # 有会话时以会话所属课题为准，避免写入 default 导致仪表盘按课题查询为空
     if request.session_id:

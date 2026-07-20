@@ -662,6 +662,9 @@ export function ChatPage() {
           retryingBackend={retryingBackend}
         />
         <div className="header-actions">
+          <a className="btn-secondary" href="#/api-lab" title="自研 API 测试实验室">
+            API 测试
+          </a>
           <button type="button" className="btn-secondary" onClick={() => setSettingsOpen(true)}>
             设置
           </button>

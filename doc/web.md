@@ -21,9 +21,11 @@ Vite 将 `/v1`、`/health` 代理到 8000；SSE 已设 `X-Accel-Buffering: no`�
 | 左栏 | `ProjectSessionTree` / `TaskBoard` | 课题文件夹树（含会话）+ 完整版任务看板 |
 | 中栏 | `ChatPage` + `MessageBubble` + 时间线 | SSE 对话、CoT、工具、验证、Loss Landscape |
 | 右栏 | `ResearchWorkbench` | Tabs：文献 / 理论 / 验证 / 图谱 / 实验 / 导出 |
-| 顶栏 | `TopStatusBar` / `HelpPanel` / `ObservabilityPanel` | Agent、MCP、Token、帮助、质量 |
+| 顶栏 | `TopStatusBar` / `HelpPanel` / `ObservabilityPanel` | Agent、MCP、Token、帮助、质量；「API 测试」进 `#/api-lab` |
 
 流水线 SSE `pipeline_stage` 可自动切换工作台 Tab（`workbenchTabs` 相关逻辑）；切换时会按当前**界面版本**钳制到可见 Tab（例如科研版不会切到「验证」）。
+
+自研接口测试页见 [`API-LAB.md`](API-LAB.md)（`#/api-lab`，从 OpenAPI 拉全量路由；非 Swagger 嵌入）。
 
 ## 界面版本
 

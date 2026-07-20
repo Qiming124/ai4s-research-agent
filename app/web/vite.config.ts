@@ -30,6 +30,9 @@ export default defineConfig({
     proxy: {
       "/v1": apiProxy(),
       "/health": apiProxy(),
+      "/openapi.json": apiProxy(),
+      "/docs": apiProxy(),
+      "/redoc": apiProxy(),
     },
   },
   build: {

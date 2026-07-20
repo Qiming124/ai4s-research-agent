@@ -134,9 +134,30 @@ def create_app() -> FastAPI:
     """
     app = FastAPI(
         title="AI4S Research Agent",
-        description="深度学习损失函数极小值理论 — 科研辅助多智能体系统（v2.2）",
+        description=(
+            "深度学习损失函数极小值理论 — 科研辅助多智能体系统（v2.2）。\n\n"
+            "Swagger `/docs` 与 `/openapi.json` 已提供中文接口说明、字段注解与样例值；"
+            "亦可用前端 API 测试实验室（`#/api-lab`）试调。"
+        ),
         version="2.2.0",
         lifespan=lifespan,
+        openapi_tags=[
+            {"name": "chat", "description": "对话与会话：健康检查、非流式/SSE 对话、会话 CRUD"},
+            {"name": "agents", "description": "Agent 角色列表与编排后端信息"},
+            {"name": "mcp", "description": "MCP 工具连接状态与配置热重载"},
+            {"name": "documents", "description": "RAG 文档入库、上传、arXiv 导入与删除"},
+            {"name": "memory", "description": "L4 结构化科研记忆、版本与知识图谱边"},
+            {"name": "theory", "description": "理论工作区、假设 DAG、符号表与书目 BibTeX"},
+            {"name": "projects", "description": "课题、成员、任务看板与会话关联"},
+            {"name": "campaigns", "description": "科研 Campaign（S0–S8）创建、查询与阶段更新"},
+            {"name": "verification", "description": "验证账本、仪表盘与手动验证执行"},
+            {"name": "experiments", "description": "实验运行列表、详情与触发"},
+            {"name": "export", "description": "导出预览、AI 润色与 Markdown/LaTeX/DOCX/PDF"},
+            {"name": "stats", "description": "Token 用量统计"},
+            {"name": "observability", "description": "可观测摘要与 Agent 质量面板"},
+            {"name": "sync", "description": "云端元数据同步与审计（需 ENABLE_CLOUD_SYNC）"},
+            {"name": "jupyter", "description": "Jupyter 笔记本模板与结果回传"},
+        ],
     )
 
     # CORS：Phase 1 不做精细鉴权，允许所有来源跨域访问 API

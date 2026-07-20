@@ -70,7 +70,7 @@ def _to_info(record) -> DocumentInfo:
     )
 
 
-@router.post("/v1/documents", response_model=DocumentUploadResponse)
+@router.post("/v1/documents", response_model=DocumentUploadResponse, summary="文本入库 RAG")
 async def upload_document(request: DocumentUploadRequest) -> DocumentUploadResponse:
     """
     上传文档正文并写入指定会话的 Chroma 向量库。
@@ -103,15 +103,15 @@ async def upload_document(request: DocumentUploadRequest) -> DocumentUploadRespo
     return DocumentUploadResponse(document=_to_info(record))
 
 
-@router.post("/v1/documents/upload", response_model=DocumentUploadResponse)
+@router.post("/v1/documents/upload", response_model=DocumentUploadResponse, summary="上传 PDF/DOCX/MD 文件入库")
 async def upload_document_file(
-    session_id: str = Form(...),
-    file: UploadFile = File(...),
-    title: str | None = Form(default=None),
-    arxiv_id: str | None = Form(default=None),
-    project_id: str | None = Form(default=None),
+    session_id: str = Form(..., description="上传所属会话 ID", examples=["sess_demo"]),
+    file: UploadFile = File(..., description="PDF / DOCX / MD / TXT 文件"),
+    title: str | None = Form(default=None, description="文档标题；省略则用文件名", examples=["Loss Landscape Notes"]),
+    arxiv_id: str | None = Form(default=None, description="可选 arXiv ID，写入文献元数据", examples=["1412.0233"]),
+    project_id: str | None = Form(default=None, description="课题 ID；缺省由会话反查", examples=["default"]),
 ) -> DocumentUploadResponse:
-    """上传 PDF 文件并解析入库。"""
+    """上传 PDF/DOCX/MD/TXT 文件并解析入库到课题共享 RAG。"""
     settings = get_settings()
     if not settings.enable_rag:
         raise HTTPException(status_code=400, detail="RAG 未启用（ENABLE_RAG=false）")
@@ -163,14 +163,14 @@ async def upload_document_file(
     return DocumentUploadResponse(document=_to_info(record))
 
 
-@router.post("/v1/documents/from-arxiv", response_model=DocumentUploadResponse)
+@router.post("/v1/documents/from-arxiv", response_model=DocumentUploadResponse, summary="从 arXiv 导入 PDF")
 async def ingest_from_arxiv(
-    session_id: str = Query(..., min_length=1),
-    arxiv_id: str = Query(..., min_length=1, description="如 2301.00001"),
-    title: str | None = Query(default=None),
-    project_id: str | None = Query(default=None),
+    session_id: str = Query(..., min_length=1, description="会话 ID", examples=["sess_demo"]),
+    arxiv_id: str = Query(..., min_length=1, description="arXiv ID，如 1412.0233", examples=["1412.0233"]),
+    title: str | None = Query(default=None, description="可选标题覆盖", examples=["The Loss Surfaces of Multilayer Networks"]),
+    project_id: str | None = Query(default=None, description="课题 ID", examples=["default"]),
 ) -> DocumentUploadResponse:
-    """从 arXiv 下载 PDF 并入库。"""
+    """从 arXiv 下载 PDF 并解析入库。"""
     settings = get_settings()
     if not settings.enable_rag:
         raise HTTPException(status_code=400, detail="RAG 未启用")
@@ -202,10 +202,10 @@ async def ingest_from_arxiv(
     return DocumentUploadResponse(document=_to_info(record))
 
 
-@router.get("/v1/documents", response_model=DocumentListResponse)
+@router.get("/v1/documents", response_model=DocumentListResponse, summary="列出 RAG 文档")
 async def list_documents(
-    session_id: str | None = Query(None, description="会话 ID（用于反查课题）"),
-    project_id: str | None = Query(None, description="课题 ID"),
+    session_id: str | None = Query(None, description="会话 ID（用于反查课题）", examples=["sess_demo"]),
+    project_id: str | None = Query(None, description="课题 ID", examples=["default"]),
 ) -> DocumentListResponse:
     """
     列出指定课题已索引的 RAG 文档（ENABLE_RAG=false 时返回空列表）。
@@ -221,11 +221,12 @@ async def list_documents(
     return DocumentListResponse(documents=docs, total=len(docs))
 
 
-@router.delete("/v1/documents")
+@router.delete("/v1/documents", summary="清空全部 RAG 文档")
 async def purge_all_documents(
     purge: bool = Query(
         False,
         description="purge=true 时清空全部 RAG 文档与向量",
+        examples=[True],
     ),
 ) -> dict[str, str | int]:
     """清空全部 RAG 文档（需 purge=true，跨会话）。"""
@@ -244,7 +245,7 @@ async def purge_all_documents(
     return {"status": "cleared", "deleted": deleted}
 
 
-@router.delete("/v1/documents/session/{session_id}")
+@router.delete("/v1/documents/session/{session_id}", summary="清空会话 RAG 文档")
 async def clear_session_documents(session_id: str) -> dict[str, str | int]:
     """清空指定会话的全部 RAG 文档。"""
     settings = get_settings()
@@ -259,10 +260,10 @@ async def clear_session_documents(session_id: str) -> dict[str, str | int]:
     return {"status": "cleared", "session_id": session_id, "deleted": deleted}
 
 
-@router.delete("/v1/documents/{doc_id}")
+@router.delete("/v1/documents/{doc_id}", summary="删除单条 RAG 文档")
 async def delete_document(
     doc_id: str,
-    session_id: str = Query(..., min_length=1, description="会话 ID"),
+    session_id: str = Query(..., min_length=1, description="会话 ID", examples=["sess_demo"]),
 ) -> dict[str, str]:
     """删除指定会话内的文档及其向量 chunk。"""
     settings = get_settings()
@@ -275,7 +276,7 @@ async def delete_document(
     return {"status": "deleted", "doc_id": doc_id, "session_id": session_id}
 
 
-@router.get("/v1/sessions/{session_id}/rag-refs", response_model=SessionRagRefsResponse)
+@router.get("/v1/sessions/{session_id}/rag-refs", response_model=SessionRagRefsResponse, summary="会话 RAG 引用")
 async def get_session_rag_refs(session_id: str) -> SessionRagRefsResponse:
     """查询某会话检索过的 RAG 文档引用（doc_id + 片段预览）。"""
     settings = get_settings()

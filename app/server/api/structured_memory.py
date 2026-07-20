@@ -21,7 +21,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Path, Query
 
 from server.memory.structured.store import get_structured_memory_store
 from shared.schemas import (
@@ -36,12 +36,31 @@ from shared.schemas import (
 router = APIRouter(tags=["memory"])
 
 
-@router.get("/v1/memory/structured", response_model=StructuredMemoryListResponse)
+@router.get(
+    "/v1/memory/structured",
+    response_model=StructuredMemoryListResponse,
+    summary="结构化记忆列表",
+)
 async def list_structured_memory(
-    session_id: str | None = Query(default=None, description="按会话过滤"),
-    kind: str | None = Query(default=None, description="按类型过滤"),
-    limit: int = Query(default=50, ge=1, le=200),
+    session_id: str | None = Query(
+        default=None,
+        description="按会话过滤",
+        examples=["sess_demo"],
+    ),
+    kind: str | None = Query(
+        default=None,
+        description="按类型过滤：theorem/hypothesis/conclusion/citation/note",
+        examples=["theorem"],
+    ),
+    limit: int = Query(
+        default=50,
+        ge=1,
+        le=200,
+        description="返回条数上限",
+        examples=[50],
+    ),
 ) -> StructuredMemoryListResponse:
+    """按会话/类型列出 L4 结构化记忆条目。"""
     store = get_structured_memory_store()
     entries = store.list_entries(session_id=session_id, kind=kind, limit=limit)
     return StructuredMemoryListResponse(
@@ -50,11 +69,26 @@ async def list_structured_memory(
     )
 
 
-@router.get("/v1/memory/structured/global", response_model=StructuredMemoryListResponse)
+@router.get(
+    "/v1/memory/structured/global",
+    response_model=StructuredMemoryListResponse,
+    summary="全局结构化记忆",
+)
 async def list_global_structured_memory(
-    kind: str | None = Query(default=None),
-    limit: int = Query(default=50, ge=1, le=200),
+    kind: str | None = Query(
+        default=None,
+        description="按类型过滤",
+        examples=["theorem"],
+    ),
+    limit: int = Query(
+        default=50,
+        ge=1,
+        le=200,
+        description="返回条数上限",
+        examples=[50],
+    ),
 ) -> StructuredMemoryListResponse:
+    """仅列出全局（非会话绑定）结构化记忆。"""
     store = get_structured_memory_store()
     entries = store.list_entries(global_only=True, kind=kind, limit=limit)
     return StructuredMemoryListResponse(
@@ -63,8 +97,14 @@ async def list_global_structured_memory(
     )
 
 
-@router.get("/v1/memory/structured/{entry_id}/versions")
-async def list_entry_versions(entry_id: int) -> dict:
+@router.get(
+    "/v1/memory/structured/{entry_id}/versions",
+    summary="记忆条目版本列表",
+)
+async def list_entry_versions(
+    entry_id: int = Path(..., description="记忆条目 ID", examples=[1]),
+) -> dict:
+    """列出某条目的 L4 历史版本。"""
     from server.memory.projects import get_project_store
 
     store = get_project_store()
@@ -72,8 +112,14 @@ async def list_entry_versions(entry_id: int) -> dict:
     return {"entry_id": entry_id, "versions": versions, "total": len(versions)}
 
 
-@router.post("/v1/memory/structured/{entry_id}/versions")
-async def create_entry_version(entry_id: int) -> dict:
+@router.post(
+    "/v1/memory/structured/{entry_id}/versions",
+    summary="新建记忆条目版本",
+)
+async def create_entry_version(
+    entry_id: int = Path(..., description="记忆条目 ID", examples=[1]),
+) -> dict:
+    """基于当前条目内容快照新建一个版本。"""
     from server.memory.projects import get_project_store
 
     memory = get_structured_memory_store()
@@ -92,10 +138,19 @@ async def create_entry_version(entry_id: int) -> dict:
     return version
 
 
-@router.get("/v1/memory/structured/graph", response_model=MemoryGraphResponse)
+@router.get(
+    "/v1/memory/structured/graph",
+    response_model=MemoryGraphResponse,
+    summary="知识图谱",
+)
 async def get_memory_graph(
-    session_id: str | None = Query(default=None),
+    session_id: str | None = Query(
+        default=None,
+        description="按会话过滤节点/边",
+        examples=["sess_demo"],
+    ),
 ) -> MemoryGraphResponse:
+    """返回结构化记忆节点与关系边。"""
     store = get_structured_memory_store()
     graph = store.get_graph(session_id=session_id)
     return MemoryGraphResponse(
@@ -104,10 +159,15 @@ async def get_memory_graph(
     )
 
 
-@router.post("/v1/memory/structured", response_model=StructuredMemoryEntry)
+@router.post(
+    "/v1/memory/structured",
+    response_model=StructuredMemoryEntry,
+    summary="写入结构化记忆",
+)
 async def create_structured_memory(
     request: StructuredMemoryCreateRequest,
 ) -> StructuredMemoryEntry:
+    """新建一条定理/假设/结论等结构化记忆。"""
     store = get_structured_memory_store()
     entry = store.create_entry(
         session_id=request.session_id,
@@ -119,11 +179,16 @@ async def create_structured_memory(
     return StructuredMemoryEntry.model_validate(entry)
 
 
-@router.post("/v1/memory/structured/{entry_id}/edges", response_model=MemoryEdge)
+@router.post(
+    "/v1/memory/structured/{entry_id}/edges",
+    response_model=MemoryEdge,
+    summary="创建知识图谱边",
+)
 async def create_memory_edge(
-    entry_id: int,
     request: MemoryEdgeCreateRequest,
+    entry_id: int = Path(..., description="起点条目 ID", examples=[1]),
 ) -> MemoryEdge:
+    """从 entry_id 指向 to_id，创建 depends_on/contradicts/supports/cites 边。"""
     store = get_structured_memory_store()
     try:
         edge = store.create_edge(

@@ -20,7 +20,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 
 from server.memory.verification import get_verification_ledger
 from shared.schemas import AgentQualityResponse, ObservabilitySummary
@@ -28,8 +28,19 @@ from shared.schemas import AgentQualityResponse, ObservabilitySummary
 router = APIRouter(tags=["observability"])
 
 
-@router.get("/v1/observability/summary", response_model=ObservabilitySummary)
-async def observability_summary(project_id: str = "default") -> ObservabilitySummary:
+@router.get(
+    "/v1/observability/summary",
+    response_model=ObservabilitySummary,
+    summary="可观测摘要",
+)
+async def observability_summary(
+    project_id: str = Query(
+        default="default",
+        description="课题 ID",
+        examples=["default"],
+    ),
+) -> ObservabilitySummary:
+    """聚合课题验证通过率与按 Agent 分桶统计。"""
     ledger = get_verification_ledger()
     records = ledger.list_records(project_id=project_id, limit=500)
     total = len(records)
@@ -51,8 +62,19 @@ async def observability_summary(project_id: str = "default") -> ObservabilitySum
     )
 
 
-@router.get("/v1/observability/agent-quality", response_model=AgentQualityResponse)
-async def agent_quality(project_id: str = "default") -> AgentQualityResponse:
+@router.get(
+    "/v1/observability/agent-quality",
+    response_model=AgentQualityResponse,
+    summary="Agent 质量面板",
+)
+async def agent_quality(
+    project_id: str = Query(
+        default="default",
+        description="课题 ID",
+        examples=["default"],
+    ),
+) -> AgentQualityResponse:
+    """按 Agent 返回 runs / passed / pass_rate。"""
     ledger = get_verification_ledger()
     records = ledger.list_records(project_id=project_id, limit=500)
     agents: dict[str, dict[str, float | int]] = {}

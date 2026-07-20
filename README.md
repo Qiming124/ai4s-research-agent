@@ -3,7 +3,7 @@
 面向「深度学习损失函数极小值理论」研究的 AI4S 智能体：对话、MCP 工具、多 Agent 路由、RAG 记忆、课题 / Campaign、验证账本、Docker 部署。
 
 **当前版本**：**v2.2**（分支 `v2.2`）  
-**文档索引**：[`doc/README.md`](doc/README.md) · **源码阅读顺序** [`doc/CODE_READING_ORDER.md`](doc/CODE_READING_ORDER.md) · API 清单 [`doc/API-COVERAGE.md`](doc/API-COVERAGE.md)（**67** 端点）· 全路径 [`doc/API-ROUTES.md`](doc/API-ROUTES.md) · 量化 [`doc/API-QUANT-TEST-RESULTS.md`](doc/API-QUANT-TEST-RESULTS.md) · 数据约定 [`doc/DATA.md`](doc/DATA.md) · 已知问题 [`doc/KNOWN_ISSUES.md`](doc/KNOWN_ISSUES.md)
+**文档索引**：[`doc/README.md`](doc/README.md) · **源码阅读顺序** [`doc/CODE_READING_ORDER.md`](doc/CODE_READING_ORDER.md) · **API 测试实验室** [`doc/API-LAB.md`](doc/API-LAB.md) · API 清单 [`doc/API-COVERAGE.md`](doc/API-COVERAGE.md)（**67** 端点）· 全路径 [`doc/API-ROUTES.md`](doc/API-ROUTES.md) · 量化 [`doc/API-QUANT-TEST-RESULTS.md`](doc/API-QUANT-TEST-RESULTS.md) · 数据约定 [`doc/DATA.md`](doc/DATA.md) · 已知问题 [`doc/KNOWN_ISSUES.md`](doc/KNOWN_ISSUES.md)
 
 ### 当前能力（v2.2）
 
@@ -192,7 +192,7 @@ cd app/web && npm install && npm run dev   # http://localhost:5173
 
 ## API 参考
 
-[`doc/API-COVERAGE.md`](doc/API-COVERAGE.md)（67 端点）· [`doc/API-ROUTES.md`](doc/API-ROUTES.md)（全路径链路）· [`doc/API.md`](doc/API.md) · `GET /docs`
+[`doc/API-COVERAGE.md`](doc/API-COVERAGE.md)（67 端点）· [`doc/API-ROUTES.md`](doc/API-ROUTES.md)（全路径链路）· [`doc/API.md`](doc/API.md) · `GET /docs`（Swagger：中文接口说明、字段注解与样例值）· 前端 `#/api-lab` 同步读取 `/openapi.json`
 
 ```bash
 curl http://127.0.0.1:8000/health

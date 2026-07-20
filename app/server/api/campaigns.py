@@ -21,7 +21,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Path
 
 from server.memory.campaigns import get_campaign_store
 from server.memory.projects import get_project_store
@@ -46,8 +46,17 @@ def _require_project(project_id: str) -> str:
 @router.get(
     "/v1/projects/{project_id}/campaign",
     response_model=ResearchCampaignInfo,
+    summary="当前活跃 Campaign",
 )
-async def get_active_campaign(project_id: str) -> ResearchCampaignInfo:
+async def get_active_campaign(
+    project_id: str = Path(..., description="课题 ID", examples=["default"]),
+) -> ResearchCampaignInfo:
+    """
+    返回课题下用于展示的 Campaign（优先最近更新，含已完成）。
+
+    异常:
+        404: 课题不存在，或尚无 Campaign
+    """
     pid = _require_project(project_id)
     # 展示用：优先最近更新（含已完成），避免被更旧的未结束演示 Campaign 盖住进度
     camp = get_campaign_store().get_active_campaign(pid, prefer_open=False)
@@ -59,8 +68,12 @@ async def get_active_campaign(project_id: str) -> ResearchCampaignInfo:
 @router.get(
     "/v1/projects/{project_id}/campaigns",
     response_model=ResearchCampaignListResponse,
+    summary="Campaign 列表",
 )
-async def list_campaigns(project_id: str) -> ResearchCampaignListResponse:
+async def list_campaigns(
+    project_id: str = Path(..., description="课题 ID", examples=["default"]),
+) -> ResearchCampaignListResponse:
+    """列出课题下全部 Research Campaign。"""
     pid = _require_project(project_id)
     campaigns = [
         ResearchCampaignInfo(**c) for c in get_campaign_store().list_campaigns(pid)
@@ -71,11 +84,15 @@ async def list_campaigns(project_id: str) -> ResearchCampaignListResponse:
 @router.post(
     "/v1/projects/{project_id}/campaign",
     response_model=ResearchCampaignInfo,
+    summary="创建并启动 Campaign",
 )
 async def create_campaign(
-    project_id: str,
     request: ResearchCampaignCreateRequest,
+    project_id: str = Path(..., description="课题 ID", examples=["default"]),
 ) -> ResearchCampaignInfo:
+    """
+    创建科研 Campaign（默认阶段 S0_campaign，状态 active），并写入课题审计日志。
+    """
     pid = _require_project(project_id)
     camp = get_campaign_store().create_campaign(
         pid,
@@ -99,8 +116,13 @@ async def create_campaign(
 @router.get(
     "/v1/projects/{project_id}/campaigns/{campaign_id}",
     response_model=ResearchCampaignInfo,
+    summary="Campaign 详情",
 )
-async def get_campaign(project_id: str, campaign_id: str) -> ResearchCampaignInfo:
+async def get_campaign(
+    project_id: str = Path(..., description="课题 ID", examples=["default"]),
+    campaign_id: str = Path(..., description="Campaign ID", examples=["camp_demo"]),
+) -> ResearchCampaignInfo:
+    """按 ID 查询 Campaign；须属于指定课题。"""
     pid = _require_project(project_id)
     camp = get_campaign_store().get_campaign(campaign_id)
     if not camp or camp["project_id"] != pid:
@@ -111,12 +133,16 @@ async def get_campaign(project_id: str, campaign_id: str) -> ResearchCampaignInf
 @router.patch(
     "/v1/projects/{project_id}/campaigns/{campaign_id}",
     response_model=ResearchCampaignInfo,
+    summary="更新 Campaign 阶段/状态",
 )
 async def update_campaign(
-    project_id: str,
-    campaign_id: str,
     request: ResearchCampaignUpdateRequest,
+    project_id: str = Path(..., description="课题 ID", examples=["default"]),
+    campaign_id: str = Path(..., description="Campaign ID", examples=["camp_demo"]),
 ) -> ResearchCampaignInfo:
+    """
+    更新 current_stage、status、stage_artifacts、gates（仅传入的字段生效）。
+    """
     pid = _require_project(project_id)
     camp = get_campaign_store().get_campaign(campaign_id)
     if not camp or camp["project_id"] != pid:

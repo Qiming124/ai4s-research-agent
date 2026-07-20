@@ -26,7 +26,7 @@ import logging
 import shutil
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Path, Query
 
 from server.config import get_settings
 from server.memory.campaigns import get_campaign_store
@@ -50,15 +50,19 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["projects"])
 
 
-@router.get("/v1/projects", response_model=ProjectListResponse)
+@router.get("/v1/projects", response_model=ProjectListResponse, summary="课题列表")
 async def list_projects() -> ProjectListResponse:
+    """列出全部课题。"""
     store = get_project_store()
     projects = [ProjectInfo(**p) for p in store.list_projects()]
     return ProjectListResponse(projects=projects, total=len(projects))
 
 
-@router.get("/v1/projects/{project_id}", response_model=ProjectInfo)
-async def get_project(project_id: str) -> ProjectInfo:
+@router.get("/v1/projects/{project_id}", response_model=ProjectInfo, summary="课题详情")
+async def get_project(
+    project_id: str = Path(..., description="课题 ID", examples=["default"]),
+) -> ProjectInfo:
+    """按 ID 查询课题元数据。"""
     store = get_project_store()
     project = store.get_project(project_id)
     if not project:
@@ -66,8 +70,9 @@ async def get_project(project_id: str) -> ProjectInfo:
     return ProjectInfo(**project)
 
 
-@router.post("/v1/projects", response_model=ProjectInfo)
+@router.post("/v1/projects", response_model=ProjectInfo, summary="新建课题")
 async def create_project(request: ProjectCreateRequest) -> ProjectInfo:
+    """创建课题并初始化理论工作区。"""
     store = get_project_store()
     project = store.create_project(
         name=request.name,
@@ -79,8 +84,12 @@ async def create_project(request: ProjectCreateRequest) -> ProjectInfo:
     return ProjectInfo(**project)
 
 
-@router.patch("/v1/projects/{project_id}", response_model=ProjectInfo)
-async def update_project(project_id: str, request: ProjectUpdateRequest) -> ProjectInfo:
+@router.patch("/v1/projects/{project_id}", response_model=ProjectInfo, summary="更新课题")
+async def update_project(
+    request: ProjectUpdateRequest,
+    project_id: str = Path(..., description="课题 ID", examples=["default"]),
+) -> ProjectInfo:
+    """部分更新课题名称/简介。"""
     store = get_project_store()
     if not store.get_project(project_id):
         raise HTTPException(status_code=404, detail="课题不存在")
@@ -94,12 +103,13 @@ async def update_project(project_id: str, request: ProjectUpdateRequest) -> Proj
     return ProjectInfo(**project)
 
 
-@router.delete("/v1/projects/{project_id}")
+@router.delete("/v1/projects/{project_id}", summary="整包删除课题")
 async def delete_project(
-    project_id: str,
+    project_id: str = Path(..., description="课题 ID（default 不可删）", examples=["proj_demo"]),
     purge: bool = Query(
         default=False,
         description="必须为 true：整包删除课题、关联会话、Campaign 与工作区文件",
+        examples=[True],
     ),
 ) -> dict:
     """
@@ -176,16 +186,22 @@ async def delete_project(
     }
 
 
-@router.get("/v1/projects/{project_id}/members")
-async def list_project_members(project_id: str) -> list[ProjectMemberInfo]:
+@router.get("/v1/projects/{project_id}/members", summary="课题成员列表")
+async def list_project_members(
+    project_id: str = Path(..., description="课题 ID", examples=["default"]),
+) -> list[ProjectMemberInfo]:
+    """列出课题成员与角色。"""
     store = get_project_store()
     if not store.get_project(project_id):
         raise HTTPException(status_code=404, detail="课题不存在")
     return [ProjectMemberInfo(**m) for m in store.list_members(project_id)]
 
 
-@router.get("/v1/projects/{project_id}/tasks", response_model=ProjectTasksResponse)
-async def list_project_tasks(project_id: str) -> ProjectTasksResponse:
+@router.get("/v1/projects/{project_id}/tasks", response_model=ProjectTasksResponse, summary="任务看板")
+async def list_project_tasks(
+    project_id: str = Path(..., description="课题 ID", examples=["default"]),
+) -> ProjectTasksResponse:
+    """列出课题任务。"""
     store = get_project_store()
     resolved = store.resolve_project_id(project_id)
     if not resolved:
@@ -194,11 +210,12 @@ async def list_project_tasks(project_id: str) -> ProjectTasksResponse:
     return ProjectTasksResponse(tasks=tasks, total=len(tasks))
 
 
-@router.post("/v1/projects/{project_id}/tasks", response_model=ProjectTaskInfo)
+@router.post("/v1/projects/{project_id}/tasks", response_model=ProjectTaskInfo, summary="新建任务")
 async def create_project_task(
-    project_id: str,
     request: ProjectTaskCreateRequest,
+    project_id: str = Path(..., description="课题 ID", examples=["default"]),
 ) -> ProjectTaskInfo:
+    """在课题下创建任务看板项。"""
     store = get_project_store()
     if not store.get_project(project_id):
         raise HTTPException(status_code=404, detail="课题不存在")
@@ -212,12 +229,13 @@ async def create_project_task(
     return ProjectTaskInfo(**task)
 
 
-@router.patch("/v1/projects/{project_id}/tasks/{task_id}", response_model=ProjectTaskInfo)
+@router.patch("/v1/projects/{project_id}/tasks/{task_id}", response_model=ProjectTaskInfo, summary="更新任务状态")
 async def update_project_task(
-    project_id: str,
-    task_id: int,
-    status: str = Query(..., description="todo|in_progress|blocked|done"),
+    project_id: str = Path(..., description="课题 ID", examples=["default"]),
+    task_id: int = Path(..., description="任务 ID", examples=[1]),
+    status: str = Query(..., description="todo|in_progress|blocked|done", examples=["in_progress"]),
 ) -> ProjectTaskInfo:
+    """更新任务状态。"""
     store = get_project_store()
     resolved = store.resolve_project_id(project_id)
     if not resolved:
@@ -228,8 +246,11 @@ async def update_project_task(
     return ProjectTaskInfo(**task)
 
 
-@router.get("/v1/projects/{project_id}/sessions", response_model=ProjectSessionsResponse)
-async def list_project_sessions(project_id: str) -> ProjectSessionsResponse:
+@router.get("/v1/projects/{project_id}/sessions", response_model=ProjectSessionsResponse, summary="课题关联会话")
+async def list_project_sessions(
+    project_id: str = Path(..., description="课题 ID", examples=["default"]),
+) -> ProjectSessionsResponse:
+    """列出已关联到课题的会话。"""
     store = get_project_store()
     resolved = store.resolve_project_id(project_id)
     if not resolved:
@@ -238,8 +259,12 @@ async def list_project_sessions(project_id: str) -> ProjectSessionsResponse:
     return ProjectSessionsResponse(sessions=sessions, total=len(sessions))
 
 
-@router.post("/v1/projects/{project_id}/sessions/{session_id}")
-async def link_session_to_project(project_id: str, session_id: str) -> dict:
+@router.post("/v1/projects/{project_id}/sessions/{session_id}", summary="关联会话到课题")
+async def link_session_to_project(
+    project_id: str = Path(..., description="课题 ID", examples=["default"]),
+    session_id: str = Path(..., description="会话 ID", examples=["sess_demo"]),
+) -> dict:
+    """将会话绑定到课题并写审计日志。"""
     store = get_project_store()
     if not store.get_project(project_id):
         raise HTTPException(status_code=404, detail="课题不存在")

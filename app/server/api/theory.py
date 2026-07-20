@@ -24,7 +24,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Path as PathParam, Query
 from fastapi.responses import PlainTextResponse
 
 from server.memory.bibliography import get_bibliography_store
@@ -57,11 +57,20 @@ def _resolve_pid(project_id: str | None, session_id: str | None) -> str:
     return "default"
 
 
-@router.get("/v1/theory/workspace", response_model=WorkspaceListResponse)
+@router.get(
+    "/v1/theory/workspace",
+    response_model=WorkspaceListResponse,
+    summary="理论工作区文件列表",
+)
 async def list_theory_workspace(
-    project_id: str = Query("default"),
-    session_id: str | None = None,
+    project_id: str = Query("default", description="课题 ID", examples=["default"]),
+    session_id: str | None = Query(
+        default=None,
+        description="可选：由会话反查课题",
+        examples=["sess_demo"],
+    ),
 ) -> WorkspaceListResponse:
+    """列出课题理论工作区文件；若目录未初始化会先 seed。"""
     pid = _resolve_pid(project_id, session_id)
     get_project_store().seed_theory_workspace(pid)
     files = list_workspace_files(project_id=pid)
@@ -70,11 +79,20 @@ async def list_theory_workspace(
     )
 
 
-@router.get("/v1/theory/assumption-matrix", response_class=PlainTextResponse)
+@router.get(
+    "/v1/theory/assumption-matrix",
+    response_class=PlainTextResponse,
+    summary="假设矩阵 Markdown",
+)
 async def get_assumption_matrix(
-    project_id: str = Query("default"),
-    session_id: str | None = None,
+    project_id: str = Query("default", description="课题 ID", examples=["default"]),
+    session_id: str | None = Query(
+        default=None,
+        description="可选：由会话反查课题",
+        examples=["sess_demo"],
+    ),
 ) -> str:
+    """读取 assumption_matrix.md（或 assumption-matrix.md）纯文本。"""
     pid = _resolve_pid(project_id, session_id)
     root = get_theory_workspace_path(project_id=pid)
     for name in ("assumption_matrix.md", "assumption-matrix.md"):
@@ -84,30 +102,53 @@ async def get_assumption_matrix(
     raise HTTPException(status_code=404, detail="assumption_matrix.md 不存在")
 
 
-@router.get("/v1/theory/symbols", response_class=PlainTextResponse)
+@router.get(
+    "/v1/theory/symbols",
+    response_class=PlainTextResponse,
+    summary="符号表 Markdown",
+)
 async def get_symbols(
-    project_id: str = Query("default"),
-    session_id: str | None = None,
+    project_id: str = Query("default", description="课题 ID", examples=["default"]),
+    session_id: str | None = Query(
+        default=None,
+        description="可选：由会话反查课题",
+        examples=["sess_demo"],
+    ),
 ) -> str:
+    """读取 symbols.md 内容；不存在则返回空字符串。"""
     pid = _resolve_pid(project_id, session_id)
     return load_symbols(project_id=pid) or ""
 
 
-@router.get("/v1/theory/assumptions", response_class=PlainTextResponse)
+@router.get(
+    "/v1/theory/assumptions",
+    response_class=PlainTextResponse,
+    summary="假设列表 Markdown",
+)
 async def get_assumptions(
-    project_id: str = Query("default"),
-    session_id: str | None = None,
+    project_id: str = Query("default", description="课题 ID", examples=["default"]),
+    session_id: str | None = Query(
+        default=None,
+        description="可选：由会话反查课题",
+        examples=["sess_demo"],
+    ),
 ) -> str:
+    """读取 assumptions.md 内容；不存在则返回空字符串。"""
     pid = _resolve_pid(project_id, session_id)
     return load_assumptions(project_id=pid) or ""
 
 
-@router.put("/v1/theory/workspace/{file_path:path}", response_class=PlainTextResponse)
+@router.put(
+    "/v1/theory/workspace/{file_path:path}",
+    response_class=PlainTextResponse,
+    summary="写入工作区文件",
+)
 async def write_workspace_file(
-    file_path: str,
     request: WorkspaceWriteRequest,
-    project_id: str = Query("default"),
+    file_path: str = PathParam(..., description="相对工作区路径", examples=["assumptions.md"]),
+    project_id: str = Query("default", description="课题 ID", examples=["default"]),
 ) -> str:
+    """覆盖写入理论工作区文件；禁止路径越界。成功返回 ok。"""
     pid = resolve_project_id(project_id)
     root = get_theory_workspace_path(project_id=pid)
     target = (root / file_path).resolve()
@@ -118,15 +159,41 @@ async def write_workspace_file(
     return "ok"
 
 
-@router.get("/v1/theory/assumption-dag", response_model=AssumptionDagResponse)
-async def get_assumption_dag(session_id: str | None = None) -> AssumptionDagResponse:
+@router.get(
+    "/v1/theory/assumption-dag",
+    response_model=AssumptionDagResponse,
+    summary="假设依赖 DAG",
+)
+async def get_assumption_dag(
+    session_id: str | None = Query(
+        default=None,
+        description="按会话过滤结构化记忆；省略则全局",
+        examples=["sess_demo"],
+    ),
+) -> AssumptionDagResponse:
+    """由结构化记忆构建假设依赖图（nodes + edges）。"""
     store = get_structured_memory_store()
     dag = build_assumption_dag(store, session_id=session_id)
     return AssumptionDagResponse(nodes=dag["nodes"], edges=dag["edges"])
 
 
-@router.get("/v1/theory/assumption-dag/impact/{assumption_id}")
-async def assumption_impact(assumption_id: str, session_id: str | None = None) -> dict:
+@router.get(
+    "/v1/theory/assumption-dag/impact/{assumption_id}",
+    summary="假设失效影响传播",
+)
+async def assumption_impact(
+    assumption_id: str = PathParam(
+        ...,
+        description="假设节点 ID",
+        examples=["A1"],
+    ),
+    session_id: str | None = Query(
+        default=None,
+        description="按会话过滤",
+        examples=["sess_demo"],
+    ),
+) -> dict:
+    """模拟某假设失效后，沿 DAG 传播受影响的节点列表。"""
     from server.memory.structured.dag import normalize_assumption_id
 
     store = get_structured_memory_store()
@@ -136,23 +203,42 @@ async def assumption_impact(assumption_id: str, session_id: str | None = None) -
     return {"assumption": normalized, "affected": affected}
 
 
-@router.get("/v1/bibliography", response_model=BibliographyListResponse)
-async def list_bibliography(project_id: str = "default") -> BibliographyListResponse:
+@router.get(
+    "/v1/bibliography",
+    response_model=BibliographyListResponse,
+    summary="书目列表",
+)
+async def list_bibliography(
+    project_id: str = Query("default", description="课题 ID", examples=["default"]),
+) -> BibliographyListResponse:
+    """列出课题书目条目。"""
     bib = get_bibliography_store()
     entries = bib.list_entries(project_id=project_id)
     return BibliographyListResponse(entries=entries, total=len(entries))
 
 
-@router.get("/v1/bibliography/export.bib", response_class=PlainTextResponse)
-async def export_bibliography(project_id: str = "default") -> str:
+@router.get(
+    "/v1/bibliography/export.bib",
+    response_class=PlainTextResponse,
+    summary="导出 BibTeX",
+)
+async def export_bibliography(
+    project_id: str = Query("default", description="课题 ID", examples=["default"]),
+) -> str:
+    """导出课题全部书目为 .bib 纯文本。"""
     return get_bibliography_store().export_bibtex(project_id=project_id)
 
 
-@router.get("/v1/theory/workspace/{file_path:path}", response_class=PlainTextResponse)
+@router.get(
+    "/v1/theory/workspace/{file_path:path}",
+    response_class=PlainTextResponse,
+    summary="读取工作区文件",
+)
 async def read_workspace_file(
-    file_path: str,
-    project_id: str = Query("default"),
+    file_path: str = PathParam(..., description="相对工作区路径", examples=["assumptions.md"]),
+    project_id: str = Query("default", description="课题 ID", examples=["default"]),
 ) -> str:
+    """读取理论工作区文件全文；禁止路径越界。"""
     pid = resolve_project_id(project_id)
     root = get_theory_workspace_path(project_id=pid)
     target = (root / file_path).resolve()

@@ -31,7 +31,7 @@ import json
 import logging
 from collections.abc import AsyncIterator
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Path, Query
 from fastapi.responses import StreamingResponse
 
 from server.agents.base import get_general_agent
@@ -54,7 +54,7 @@ def _effective_cot_mode(request: ChatRequest) -> str:
 
 # ── 健康检查 ─────────────────────────────────────────────────
 
-@router.get("/health", response_model=HealthResponse)
+@router.get("/health", response_model=HealthResponse, summary="健康检查")
 async def health_check() -> HealthResponse:
     """
     健康检查：确认服务已启动且配置已加载（不调用 LLM）。
@@ -76,7 +76,7 @@ def _use_multi_agent_orchestrator() -> bool:
     return get_settings().orchestration_backend == "langgraph"
 
 
-@router.post("/v1/chat", response_model=ChatResponse)
+@router.post("/v1/chat", response_model=ChatResponse, summary="非流式对话")
 async def chat(request: ChatRequest) -> ChatResponse:
     """
     非流式对话：等待模型完整响应后一次返回 JSON。
@@ -222,7 +222,7 @@ async def _stream_generator(request: ChatRequest) -> AsyncIterator[str]:
 
 # ── 流式对话（SSE） ──────────────────────────────────────────
 
-@router.post("/v1/chat/stream")
+@router.post("/v1/chat/stream", summary="SSE 流式对话")
 async def chat_stream(request: ChatRequest) -> StreamingResponse:
     """
     SSE 流式对话，事件类型见 StreamChunk.type。
@@ -246,7 +246,7 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
 
 # ── 会话管理 ─────────────────────────────────────────────────
 
-@router.get("/v1/sessions", response_model=SessionListResponse)
+@router.get("/v1/sessions", response_model=SessionListResponse, summary="会话列表")
 async def list_sessions() -> SessionListResponse:
     """列出服务端已持久化的会话（SQLite 后端含 updated_at 与消息条数）。"""
     store = get_session_store()
@@ -279,8 +279,14 @@ async def list_sessions() -> SessionListResponse:
     return SessionListResponse(sessions=sessions, total=len(sessions))
 
 
-@router.get("/v1/sessions/{session_id}", response_model=SessionResponse)
-async def get_session(session_id: str) -> SessionResponse:
+@router.get(
+    "/v1/sessions/{session_id}",
+    response_model=SessionResponse,
+    summary="查询会话历史",
+)
+async def get_session(
+    session_id: str = Path(..., description="会话 ID", examples=["sess_demo"]),
+) -> SessionResponse:
     """
     查询会话历史消息（含 reasoning、tool_calls）。
 
@@ -299,12 +305,13 @@ async def get_session(session_id: str) -> SessionResponse:
     return SessionResponse(session_id=session_id, messages=store.get_messages(session_id))
 
 
-@router.delete("/v1/sessions/{session_id}")
+@router.delete("/v1/sessions/{session_id}", summary="清空或删除会话")
 async def delete_session(
-    session_id: str,
+    session_id: str = Path(..., description="会话 ID", examples=["sess_demo"]),
     purge: bool = Query(
         default=False,
         description="true=从存储中删除会话记录；false=仅清空消息（默认，供「清空会话」使用）",
+        examples=[False],
     ),
 ) -> dict[str, str]:
     """

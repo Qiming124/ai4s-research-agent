@@ -22,7 +22,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import Response
 
 from server.export.ai_polish import polish_export_markdown
@@ -61,12 +61,29 @@ async def _resolve_export_payload(request: LatexExportRequest) -> tuple[list, st
     return entries, markdown, ai_applied
 
 
-@router.get("/v1/export/preview", response_model=ExportPreviewResponse)
+@router.get(
+    "/v1/export/preview",
+    response_model=ExportPreviewResponse,
+    summary="导出预览统计",
+)
 async def export_preview(
-    session_id: str | None = None,
-    include_global: bool = True,
-    include_chat: bool = True,
+    session_id: str | None = Query(
+        default=None,
+        description="会话 ID；省略则仅统计全局等来源",
+        examples=["sess_demo"],
+    ),
+    include_global: bool = Query(
+        default=True,
+        description="是否计入全局结构化记忆",
+        examples=[True],
+    ),
+    include_chat: bool = Query(
+        default=True,
+        description="是否计入会话对话",
+        examples=[True],
+    ),
 ) -> ExportPreviewResponse:
+    """返回可导出条目数量与来源提示（不生成文件）。"""
     info = describe_export_sources(
         session_id=session_id,
         include_global=include_global,
@@ -75,9 +92,13 @@ async def export_preview(
     return ExportPreviewResponse(**info)
 
 
-@router.post("/v1/export/polish", response_model=ExportPolishResponse)
+@router.post(
+    "/v1/export/polish",
+    response_model=ExportPolishResponse,
+    summary="AI 润色导出草稿",
+)
 async def export_polish_preview(request: LatexExportRequest) -> ExportPolishResponse:
-    """预览 AI 润色后的 Markdown（不下载文件）。"""
+    """预览 AI 润色后的 Markdown（不下载文件）。须填写 ai_instructions。"""
     if not (request.ai_instructions or "").strip():
         raise HTTPException(status_code=400, detail="请填写 AI 润色要求")
     _, markdown, ai_applied = await _resolve_export_payload(
@@ -90,8 +111,13 @@ async def export_polish_preview(request: LatexExportRequest) -> ExportPolishResp
     )
 
 
-@router.post("/v1/export/latex", response_model=LatexExportResponse)
+@router.post(
+    "/v1/export/latex",
+    response_model=LatexExportResponse,
+    summary="导出 LaTeX",
+)
 async def export_latex(request: LatexExportRequest) -> LatexExportResponse:
+    """聚合记忆与对话，生成 LaTeX 源码（可落盘并附 .bib）。"""
     entries = collect_export_entries(
         session_id=request.session_id,
         include_global=request.include_global,
@@ -105,8 +131,9 @@ async def export_latex(request: LatexExportRequest) -> LatexExportResponse:
     return LatexExportResponse(latex=latex, path=str(export_file), bib_path=bib_path)
 
 
-@router.post("/v1/export/md")
+@router.post("/v1/export/md", summary="导出 Markdown 文件")
 async def export_markdown(request: LatexExportRequest) -> Response:
+    """下载 Markdown 附件（可选 AI 润色）。"""
     _, markdown, _ = await _resolve_export_payload(request)
     filename = _safe_filename(request.title, "md")
     return Response(
@@ -116,8 +143,9 @@ async def export_markdown(request: LatexExportRequest) -> Response:
     )
 
 
-@router.post("/v1/export/docx")
+@router.post("/v1/export/docx", summary="导出 Word DOCX")
 async def export_docx(request: LatexExportRequest) -> Response:
+    """下载 DOCX 附件；需 pandoc 等依赖，否则 503。"""
     _, markdown, _ = await _resolve_export_payload(request)
     try:
         data = build_docx_bytes(markdown=markdown)
@@ -131,8 +159,9 @@ async def export_docx(request: LatexExportRequest) -> Response:
     )
 
 
-@router.post("/v1/export/pdf")
+@router.post("/v1/export/pdf", summary="导出 PDF")
 async def export_pdf(request: LatexExportRequest) -> Response:
+    """下载 PDF 附件；中文字体缺失时可能失败。"""
     entries, markdown, _ = await _resolve_export_payload(request)
     try:
         data = build_pdf_bytes(markdown=markdown, entries=entries)

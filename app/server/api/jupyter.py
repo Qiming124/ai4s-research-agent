@@ -25,7 +25,7 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
 from server.config import get_settings
 from shared.schemas import NotebookResultUploadRequest, NotebookResultUploadResponse
@@ -33,10 +33,15 @@ from shared.schemas import NotebookResultUploadRequest, NotebookResultUploadResp
 router = APIRouter(tags=["jupyter"])
 
 
-@router.post("/v1/jupyter/upload-result", response_model=NotebookResultUploadResponse)
+@router.post(
+    "/v1/jupyter/upload-result",
+    response_model=NotebookResultUploadResponse,
+    summary="回传 Notebook 实验结果",
+)
 async def upload_notebook_result(
     request: NotebookResultUploadRequest,
 ) -> NotebookResultUploadResponse:
+    """将 Notebook 结果 JSON 写入 experiments 目录，并生成 run_id。"""
     settings = get_settings()
     root = Path(settings.experiments_path) / "notebooks" / "results"
     root.mkdir(parents=True, exist_ok=True)
@@ -66,8 +71,15 @@ async def upload_notebook_result(
     )
 
 
-@router.get("/v1/jupyter/template")
-async def get_notebook_template(name: str = "loss_landscape") -> dict:
+@router.get("/v1/jupyter/template", summary="获取 Notebook 模板")
+async def get_notebook_template(
+    name: str = Query(
+        default="loss_landscape",
+        description="模板名，当前支持 loss_landscape",
+        examples=["loss_landscape"],
+    ),
+) -> dict:
+    """返回可导入 Jupyter 的 notebook 单元格模板 JSON。"""
     templates = {
         "loss_landscape": {
             "cells": [

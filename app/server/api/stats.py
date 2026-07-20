@@ -28,11 +28,11 @@ from shared.schemas import TokenUsageStatsResponse
 router = APIRouter(tags=["stats"])
 
 
-@router.get("/v1/stats/tokens", response_model=TokenUsageStatsResponse)
+@router.get("/v1/stats/tokens", response_model=TokenUsageStatsResponse, summary="Token 用量统计")
 async def get_token_stats(
-    session_id: str | None = Query(default=None, description="按会话 ID 过滤"),
-    agent_name: str | None = Query(default=None, description="按 Agent 名称过滤"),
-    day: str | None = Query(default=None, description="按日期过滤 (YYYY-MM-DD)"),
+    session_id: str | None = Query(default=None, description="按会话 ID 过滤", examples=["sess_demo"]),
+    agent_name: str | None = Query(default=None, description="按 Agent 名称过滤", examples=["theory"]),
+    day: str | None = Query(default=None, description="按日期过滤 (YYYY-MM-DD)", examples=["2026-07-20"]),
 ) -> TokenUsageStatsResponse:
     """
     聚合查询 SQLite 中的 LLM token 用量。

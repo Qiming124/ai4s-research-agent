@@ -21,6 +21,7 @@
 | [Cursor IDE 清单](cursor-ide-tooling-checklist.md) | 编辑器侧 MCP / Skills / Rules |
 | [代码注释规范](CODE_STYLE.md) | Python/TS 中文 docstring |
 | [后端代码阅读顺序](CODE_READING_ORDER.md) | **源码通读路线图**（先主路径再分域；暂不含前端） |
+| [API 测试实验室](API-LAB.md) | 自研接口测试页（`#/api-lab`，非 Swagger） |
 
 其他：根目录 [`../README.md`](../README.md) 总览与快速启动。
 
@@ -28,7 +29,8 @@
 
 1. 新用户：根 `README.md` → `ENV.md` → 启动后端与 Web  
 2. **通读后端源码**：[`CODE_READING_ORDER.md`](CODE_READING_ORDER.md)（推荐按日历推进）  
-3. 对接 API：`API-COVERAGE.md` → `API-ROUTES.md`（全链路）→ `API.md` → `app/shared/schemas.py` / `GET /docs`  
+3. **测接口**：主站 `#/api-lab` 或 [`API-LAB.md`](API-LAB.md)；契约对照仍可用 `GET /docs`  
+4. 对接 API：`API-COVERAGE.md` → `API-ROUTES.md`（全链路）→ `API.md` → `app/shared/schemas.py` / `GET /docs`  
    - 量化排障：`API-QUANT-TEST-PLAN.md` → 探针 `scripts/api_quant_probe.py` → `API-QUANT-TEST-RESULTS.md`（B1–B4 已闭环）  
-4. 部署：`DEPLOY.md` → `docker.md`；注意 `DATA.md` 与 `KNOWN_ISSUES.md`  
-5. 扩展工具：`mcp-config.md` · 前端：`web.md`
+5. 部署：`DEPLOY.md` → `docker.md`；注意 `DATA.md` 与 `KNOWN_ISSUES.md`  
+6. 扩展工具：`mcp-config.md` · 前端：`web.md`

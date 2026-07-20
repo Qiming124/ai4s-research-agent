@@ -36,7 +36,7 @@ _AGENT_DESCRIPTIONS: dict[str, str] = {
 }
 
 
-@router.get("/v1/agents", response_model=AgentListResponse)
+@router.get("/v1/agents", response_model=AgentListResponse, summary="列出可用 Agent")
 async def list_agents() -> AgentListResponse:
     """列出可用 Agent 角色及 RAG / 默认工具白名单。"""
     settings = get_settings()

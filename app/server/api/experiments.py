@@ -21,10 +21,9 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Path as PathParam
 
 from server.config import get_settings
 from server.experiments.runner import run_config_async
@@ -66,8 +65,9 @@ def _list_runs() -> list[ExperimentRunInfo]:
     return runs
 
 
-@router.post("/v1/experiments/runs")
+@router.post("/v1/experiments/runs", summary="触发实验运行")
 async def create_experiment_run(request: ExperimentRunRequest) -> dict:
+    """按 config_path 异步执行实验，返回 run 结果摘要。"""
     try:
         # 在主事件循环 await，复用已连接的 MCP，避免嵌套 loop 报错/死锁
         return await run_config_async(request.config_path, session_id=request.session_id)
@@ -77,14 +77,22 @@ async def create_experiment_run(request: ExperimentRunRequest) -> dict:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
-@router.get("/v1/experiments/runs", response_model=ExperimentRunsResponse)
+@router.get(
+    "/v1/experiments/runs",
+    response_model=ExperimentRunsResponse,
+    summary="实验运行列表",
+)
 async def list_experiment_runs() -> ExperimentRunsResponse:
+    """列出 experiments/logs 下历史运行记录。"""
     runs = _list_runs()
     return ExperimentRunsResponse(runs=runs, total=len(runs))
 
 
-@router.get("/v1/experiments/runs/{run_id}")
-async def get_experiment_run(run_id: str) -> dict:
+@router.get("/v1/experiments/runs/{run_id}", summary="实验运行详情")
+async def get_experiment_run(
+    run_id: str = PathParam(..., description="运行 ID", examples=["run_20260720_001"]),
+) -> dict:
+    """读取单次实验运行的完整 JSON 日志。"""
     logs_dir = _experiments_root() / "logs"
     path = logs_dir / f"{run_id}.json"
     if not path.is_file():
