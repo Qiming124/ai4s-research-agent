@@ -7,6 +7,7 @@ export interface SessionMeta {
   id: string;
   title: string;
   updatedAt: number;
+  projectId?: string;
 }
 
 export function getSessionId(): string {
@@ -44,13 +45,14 @@ function writeSessionList(list: SessionMeta[]): void {
   localStorage.setItem(SESSION_LIST_KEY, JSON.stringify(list));
 }
 
-function ensureSessionInList(id: string): void {
+function ensureSessionInList(id: string, projectId?: string): void {
   const list = readSessionList();
   if (list.some((s) => s.id === id)) return;
   list.unshift({
     id,
     title: `会话 ${shortSessionId(id)}`,
     updatedAt: Date.now(),
+    projectId: projectId || "default",
   });
   writeSessionList(list);
 }
@@ -65,7 +67,10 @@ export function getSessionList(): SessionMeta[] {
   return list.sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
-export function updateSessionMeta(id: string, patch: Partial<Pick<SessionMeta, "title" | "updatedAt">>): void {
+export function updateSessionMeta(
+  id: string,
+  patch: Partial<Pick<SessionMeta, "title" | "updatedAt" | "projectId">>,
+): void {
   const list = readSessionList();
   const idx = list.findIndex((s) => s.id === id);
   if (idx === -1) {
@@ -73,6 +78,7 @@ export function updateSessionMeta(id: string, patch: Partial<Pick<SessionMeta, "
       id,
       title: patch.title ?? `会话 ${shortSessionId(id)}`,
       updatedAt: patch.updatedAt ?? Date.now(),
+      projectId: patch.projectId ?? "default",
     });
   } else {
     list[idx] = { ...list[idx], ...patch, updatedAt: patch.updatedAt ?? Date.now() };
@@ -89,11 +95,14 @@ export async function fetchServerSessions(): Promise<SessionMeta[]> {
   if (!res.ok) return [];
   const data = await res.json();
   const sessions = Array.isArray(data.sessions) ? data.sessions : [];
-  return sessions.map((item: { session_id: string; updated_at?: string }) => ({
-    id: item.session_id,
-    title: `会话 ${shortSessionId(item.session_id)}`,
-    updatedAt: item.updated_at ? Date.parse(item.updated_at) : Date.now(),
-  }));
+  return sessions.map(
+    (item: { session_id: string; updated_at?: string; project_id?: string }) => ({
+      id: item.session_id,
+      title: `会话 ${shortSessionId(item.session_id)}`,
+      updatedAt: item.updated_at ? Date.parse(item.updated_at) : Date.now(),
+      projectId: item.project_id || "default",
+    }),
+  );
 }
 
 export function mergeSessionLists(local: SessionMeta[], server: SessionMeta[]): SessionMeta[] {
@@ -104,10 +113,21 @@ export function mergeSessionLists(local: SessionMeta[], server: SessionMeta[]): 
       map.set(item.id, item);
       continue;
     }
+    const preferTitle =
+      existing.title.startsWith("会话") || existing.title.startsWith("新会话")
+        ? item.title
+        : existing.title;
     const newer =
       item.updatedAt >= existing.updatedAt
-        ? { ...item, title: existing.title.startsWith("会话") ? item.title : existing.title }
-        : existing;
+        ? {
+            ...item,
+            title: preferTitle,
+            projectId: item.projectId || existing.projectId || "default",
+          }
+        : {
+            ...existing,
+            projectId: existing.projectId || item.projectId || "default",
+          };
     map.set(item.id, newer);
   }
   return Array.from(map.values()).sort((a, b) => b.updatedAt - a.updatedAt);
@@ -125,12 +145,13 @@ export function syncSessionListWithServer(
   return pruned;
 }
 
-export function createNewSession(): string {
+export function createNewSession(projectId = "default"): string {
   const id = randomUUID();
   const meta: SessionMeta = {
     id,
     title: `新会话 ${shortSessionId(id)}`,
     updatedAt: Date.now(),
+    projectId,
   };
   const list = readSessionList();
   list.unshift(meta);

@@ -76,9 +76,11 @@ export function MarkdownContent({
 
   const processed = useMemo(() => {
     if (!content) return "";
+    // 流式阶段不做 LaTeX 预处理，避免逐 token 重算卡住界面
+    if (isStreaming) return content;
     if (content.length > MAX_MARKDOWN_CHARS) return content;
     return safePreprocess(content);
-  }, [content]);
+  }, [content, isStreaming]);
 
   if (!content) return null;
 

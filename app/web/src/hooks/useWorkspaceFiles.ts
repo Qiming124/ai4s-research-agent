@@ -6,7 +6,7 @@ export interface WorkspaceFile {
   kind: string;
 }
 
-export function useWorkspaceFiles(enabled: boolean) {
+export function useWorkspaceFiles(enabled: boolean, projectId = "default") {
   const [files, setFiles] = useState<WorkspaceFile[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -17,7 +17,8 @@ export function useWorkspaceFiles(enabled: boolean) {
     setError(null);
     try {
       await waitForBackend();
-      const res = await fetch("/v1/theory/workspace");
+      const params = new URLSearchParams({ project_id: projectId || "default" });
+      const res = await fetch(`/v1/theory/workspace?${params}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setFiles(data.files ?? []);
@@ -26,7 +27,7 @@ export function useWorkspaceFiles(enabled: boolean) {
     } finally {
       setLoading(false);
     }
-  }, [enabled]);
+  }, [enabled, projectId]);
 
   useEffect(() => {
     refresh();

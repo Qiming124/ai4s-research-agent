@@ -1,11 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useChatStream } from "../hooks/useChatStream";
 import { useDocuments } from "../hooks/useDocuments";
 import { useMcpStatus } from "../hooks/useMcpStatus";
 import { useTokenStats } from "../hooks/useTokenStats";
 import { useAgents } from "../hooks/useAgents";
 import { useAssumptionDag } from "../hooks/useAssumptionDag";
-import { useBibliography } from "../hooks/useBibliography";
 import { useObservability } from "../hooks/useObservability";
 import { useProjectSessions } from "../hooks/useProjectSessions";
 import { useTheoryAssets } from "../hooks/useTheoryAssets";
@@ -37,10 +36,15 @@ import {
   setUseServerHistoryDefault,
   setUseServerMcpDefault,
   setUseServerReasoningDefault,
+  getUiEdition,
+  setUiEdition,
+  getEditionFeatures,
+  clampWorkbenchTab,
   type ChatMode,
   type AgentChoice,
   type CotMode,
   type ReasoningEffort,
+  type UiEdition,
 } from "../utils/preferences";
 import { useRagRefs } from "../hooks/useRagRefs";
 import { useExperimentLogs } from "../hooks/useExperimentLogs";
@@ -59,11 +63,13 @@ import {
   readSessionList,
   syncSessionListWithServer,
   removeSessionFromList,
+  updateSessionMeta,
   type SessionMeta,
 } from "../utils/session";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { HelpPanel } from "./HelpPanel";
 import { MessageBubble } from "./MessageBubble";
+import { ChatComposer } from "./ChatComposer";
 import { OnboardingWizard, shouldShowOnboarding } from "./OnboardingWizard";
 import { LeftSidebar } from "./LeftSidebar";
 import { ResearchWorkbench } from "./ResearchWorkbench";
@@ -88,7 +94,12 @@ export function ChatPage() {
   const [useServerMcp, setUseServerMcpState] = useState(getUseServerMcpDefault);
   const [enableMcp, setEnableMcpState] = useState(getEnableMcp);
   const [sessions, setSessions] = useState<SessionMeta[]>(getSessionList);
-  const [workbenchTab, setWorkbenchTab] = useState<WorkbenchTab>("literature");
+  const [uiEdition, setUiEditionState] = useState<UiEdition>(getUiEdition);
+  const editionFeatures = getEditionFeatures(uiEdition);
+  const [workbenchTab, setWorkbenchTab] = useState<WorkbenchTab>(() => {
+    const clamped = clampWorkbenchTab(getUiEdition(), "literature");
+    return clamped ?? "literature";
+  });
   const [linkStatus, setLinkStatus] = useState<string | null>(null);
   const [projectMembers, setProjectMembers] = useState<{ user_id: string; role: string }[]>([]);
 
@@ -98,6 +109,8 @@ export function ChatPage() {
     currentProjectId,
     selectProject,
     createProject,
+    updateProject,
+    deleteProject,
     error: projectsError,
     refresh: refreshProjects,
   } = useProjects(true);
@@ -113,7 +126,9 @@ export function ChatPage() {
     () => ({
       onPipelineStage: (stage: string) => {
         const tab = pipelineStageToTab(stage);
-        if (tab) setWorkbenchTab(tab);
+        if (!tab) return;
+        const clamped = clampWorkbenchTab(uiEdition, tab);
+        if (clamped) setWorkbenchTab(clamped);
       },
       onCampaignUpdate: (payload: string) => {
         applyCampaignUpdate(payload);
@@ -122,7 +137,7 @@ export function ChatPage() {
         refreshCampaign();
       },
     }),
-    [applyCampaignUpdate, refreshCampaign],
+    [applyCampaignUpdate, refreshCampaign, uiEdition],
   );
 
   const historyPref = {
@@ -175,6 +190,7 @@ export function ChatPage() {
     cotMode,
     pipelineCallbacks,
     currentProjectId,
+    campaign?.id,
   );
 
   const sessionIdRef = useRef(sessionId);
@@ -202,7 +218,7 @@ export function ChatPage() {
     ingestArxiv,
     deleteDocument,
     clearAllDocuments,
-  } = useDocuments(sessionId, !backendOffline);
+  } = useDocuments(sessionId, !backendOffline, currentProjectId);
 
   const {
     entries: structuredEntries,
@@ -231,9 +247,9 @@ export function ChatPage() {
     loading: workspaceLoading,
     error: workspaceError,
     refresh: refreshWorkspace,
-  } = useWorkspaceFiles(!backendOffline);
+  } = useWorkspaceFiles(!backendOffline, currentProjectId);
 
-  const { sessions: projectSessions, linkSession, refresh: refreshProjectSessions } =
+  const { sessions: _projectSessions, linkSession, refresh: refreshProjectSessions } =
     useProjectSessions(currentProjectId, !backendOffline);
 
   const {
@@ -243,7 +259,7 @@ export function ChatPage() {
     loading: theoryAssetsLoading,
     error: theoryAssetsError,
     refresh: refreshTheoryAssets,
-  } = useTheoryAssets(!backendOffline);
+  } = useTheoryAssets(!backendOffline, currentProjectId);
 
   const {
     nodes: dagNodes,
@@ -252,15 +268,7 @@ export function ChatPage() {
     error: dagError,
     refresh: refreshDag,
     fetchImpact: fetchDagImpact,
-  } = useAssumptionDag(!backendOffline);
-
-  const {
-    entries: bibEntries,
-    loading: bibLoading,
-    error: bibError,
-    refresh: refreshBib,
-    exportBib,
-  } = useBibliography(currentProjectId, !backendOffline);
+  } = useAssumptionDag(sessionId, !backendOffline);
 
   const {
     records: verificationRecords,
@@ -279,11 +287,7 @@ export function ChatPage() {
 
   const { agents: serverAgents } = useAgents(!backendOffline);
 
-  const filteredSessions = useMemo(() => {
-    const linked = new Set(projectSessions.map((s) => s.session_id));
-    if (linked.size === 0) return sessions;
-    return sessions.filter((s) => linked.has(s.id) || s.id === sessionId);
-  }, [sessions, projectSessions, sessionId]);
+  const filteredSessions = useMemo(() => sessions, [sessions]);
 
   const {
     dashboard: verificationDashboard,
@@ -301,7 +305,6 @@ export function ChatPage() {
     createTask,
   } = useProjectTasks(currentProjectId, !backendOffline);
 
-  const [input, setInput] = useState("");
   const [helpOpen, setHelpOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(shouldShowOnboarding);
@@ -329,6 +332,26 @@ export function ChatPage() {
     }
   }, []);
 
+  const handleMoveSession = useCallback(
+    async (sid: string, projectId: string) => {
+      const res = await fetch(
+        `/v1/projects/${encodeURIComponent(projectId)}/sessions/${encodeURIComponent(sid)}`,
+        { method: "POST" },
+      );
+      if (!res.ok) throw new Error(`关联失败 HTTP ${res.status}`);
+      updateSessionMeta(sid, { projectId });
+      selectProject(projectId);
+      await refreshProjectSessions();
+      await refreshSessions();
+    },
+    [refreshProjectSessions, refreshSessions, selectProject],
+  );
+
+  const handleUpdateSessionTitle = useCallback((sid: string, title: string) => {
+    updateSessionMeta(sid, { title });
+    setSessions(getSessionList());
+  }, []);
+
   // 仅随 session 变化刷新列表，不依赖 messages（避免 SSE 流式时连锁重渲染）
   useEffect(() => {
     refreshSessions(sessionId);
@@ -343,6 +366,7 @@ export function ChatPage() {
       refreshWorkspace();
       refreshVerification();
       refreshTasks();
+      refreshDag();
     }
   }, [
     isStreaming,
@@ -353,6 +377,7 @@ export function ChatPage() {
     refreshWorkspace,
     refreshVerification,
     refreshTasks,
+    refreshDag,
   ]);
 
   useEffect(() => {
@@ -371,9 +396,8 @@ export function ChatPage() {
       .catch(() => setProjectMembers([]));
     refreshTasks();
     refreshVerification();
-    refreshBib();
     refreshObservability();
-  }, [currentProjectId, backendOffline, refreshTasks, refreshVerification, refreshBib, refreshObservability]);
+  }, [currentProjectId, backendOffline, refreshTasks, refreshVerification, refreshObservability]);
 
   useEffect(() => {
     refreshMcp();
@@ -401,21 +425,13 @@ export function ChatPage() {
     el.scrollTop = el.scrollHeight;
   }, [messages]);
 
-  const handleSend = async () => {
-    if (!input.trim()) return;
-    const text = input;
-    setInput("");
-    await sendMessage(text);
+  const handleSend = useCallback(async (text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    await sendMessage(trimmed);
     refreshTokens();
     await refreshSessions();
-  };
-
-  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
-  };
+  }, [sendMessage, refreshTokens, refreshSessions]);
 
   const handleModeChange = (mode: ChatMode) => {
     setChatModeState(mode);
@@ -425,6 +441,22 @@ export function ChatPage() {
   const handleAgentChoiceChange = (value: AgentChoice) => {
     setAgentChoiceState(value);
     setAgentChoice(value);
+  };
+
+  const handleUiEditionChange = (edition: UiEdition) => {
+    setUiEdition(edition);
+    setUiEditionState(edition);
+    const clamped = clampWorkbenchTab(edition, workbenchTab);
+    if (clamped) setWorkbenchTab(clamped);
+    if (edition === "chat") {
+      setAgentChoiceState("auto");
+      setAgentChoice("auto");
+    }
+  };
+
+  const handleWorkbenchTabChange = (tab: WorkbenchTab) => {
+    const clamped = clampWorkbenchTab(uiEdition, tab);
+    if (clamped) setWorkbenchTab(clamped);
   };
 
   const handleShowReasoningChange = (checked: boolean) => {
@@ -497,11 +529,31 @@ export function ChatPage() {
     }
   };
 
-  const handleNewSession = async () => {
-    const newId = createNewSession();
+  const handleNewSession = async (projectId?: string) => {
+    const pid = projectId || currentProjectId || "default";
+    const newId = createNewSession(pid);
+    updateSessionMeta(newId, { projectId: pid });
     await createSession(newId);
-    await linkSession(newId);
+    selectProject(pid);
+    const res = await fetch(
+      `/v1/projects/${encodeURIComponent(pid)}/sessions/${encodeURIComponent(newId)}`,
+      { method: "POST" },
+    );
+    if (res.ok) {
+      setLinkStatus(`会话已关联课题「${currentProject.name || pid}」`);
+      await refreshProjectSessions();
+    }
     await refreshSessions(newId);
+  };
+
+  const handleSelectSession = async (id: string, projectId?: string) => {
+    if (projectId) {
+      selectProject(projectId);
+      updateSessionMeta(id, { projectId });
+    }
+    await switchSession(id);
+    await refreshSessions(id);
+    refreshTokens();
   };
 
   const handleRunExperiment = async () => {
@@ -535,24 +587,37 @@ export function ChatPage() {
     await refreshExperiments();
   };
 
-  const handleSelectSession = async (id: string) => {
-    await switchSession(id);
-    await refreshSessions(id);
-    refreshTokens();
-  };
-
   const handleClearSession = async () => {
     await clearSession();
     await refreshSessions();
   };
 
-  const handleRunResearch = async () => {
-    const text = input.trim() ? `/research ${input.trim()}` : "/research 请对损失函数局部极小值进行完整研究";
-    setInput("");
-    setSettingsOpen(false);
-    await sendMessage(text);
-    refreshTokens();
-    await refreshSessions();
+  const handleDeleteProject = async (projectId: string) => {
+    const data = await deleteProject(projectId);
+    const deleted = new Set(data.deleted_sessions ?? []);
+    for (const sid of deleted) {
+      removeSessionFromList(sid);
+    }
+    // 当前会话属于被删课题 → 切到默认课题并新建会话
+    if (deleted.has(sessionId) || deleted.size > 0) {
+      const remaining = readSessionList().filter((s) => !deleted.has(s.id));
+      if (deleted.has(sessionId) || remaining.length === 0) {
+        const newId = createNewSession("default");
+        updateSessionMeta(newId, { projectId: "default" });
+        await createSession(newId);
+        await fetch(
+          `/v1/projects/default/sessions/${encodeURIComponent(newId)}`,
+          { method: "POST" },
+        );
+        await refreshSessions(newId);
+      } else {
+        await refreshSessions();
+      }
+    } else {
+      await refreshSessions();
+    }
+    await refreshCampaign();
+    setLinkStatus(`已删除课题「${data.name || projectId}」`);
   };
 
   const handleRemoveSession = async (id: string) => {
@@ -623,6 +688,8 @@ export function ChatPage() {
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
         disabled={isStreaming}
+        uiEdition={uiEdition}
+        onUiEditionChange={handleUiEditionChange}
         chatMode={chatMode}
         onChatModeChange={handleModeChange}
         agentChoice={agentChoice}
@@ -657,7 +724,6 @@ export function ChatPage() {
           await refreshMcp();
         }}
         serverAgents={serverAgents}
-        onRunResearch={handleRunResearch}
       />
       <TheoremDetailDrawer
         entry={selectedTheorem}
@@ -680,7 +746,14 @@ export function ChatPage() {
         <div className="history-error">历史加载失败：{historyError}</div>
       )}
 
-      <div className="chat-layout" style={layoutStyle}>
+      <div
+        className={
+          editionFeatures.showWorkbench
+            ? "chat-layout"
+            : "chat-layout chat-layout--no-workbench"
+        }
+        style={layoutStyle}
+      >
         <ErrorBoundary>
           <LeftSidebar
             projects={projects.length ? projects : [currentProject]}
@@ -691,6 +764,10 @@ export function ChatPage() {
               await createProject(name, description);
               await refreshProjects();
             }}
+            onUpdateProject={async (projectId, patch) => {
+              await updateProject(projectId, patch);
+            }}
+            onDeleteProject={handleDeleteProject}
             projectsError={projectsError}
             linkStatus={linkStatus}
             projectMembers={projectMembers}
@@ -706,11 +783,14 @@ export function ChatPage() {
             onSelectSession={handleSelectSession}
             onNewSession={handleNewSession}
             onRemoveSession={handleRemoveSession}
+            onMoveSession={handleMoveSession}
+            onUpdateSessionTitle={handleUpdateSessionTitle}
             campaignTitle={campaign?.title ?? null}
             campaignStage={campaign?.current_stage ?? null}
             campaignStatus={campaign?.status ?? null}
             campaignProgress={campaignProgress}
             campaignGates={campaign?.gates ?? {}}
+            allowedTabs={editionFeatures.leftTabs}
           />
         </ErrorBoundary>
 
@@ -739,53 +819,21 @@ export function ChatPage() {
             ))}
           </main>
 
-          <footer className="chat-footer">
-            <div className="mode-toggle footer-mode-toggle" role="group">
-              <button
-                type="button"
-                className={chatMode === "chat" ? "mode-btn active" : "mode-btn"}
-                onClick={() => handleModeChange("chat")}
-                disabled={isStreaming}
-              >
-                Chat
-              </button>
-              <button
-                type="button"
-                className={chatMode === "math" ? "mode-btn active" : "mode-btn"}
-                onClick={() => handleModeChange("math")}
-                disabled={isStreaming}
-              >
-                Math
-              </button>
-            </div>
-            <button
-              type="button"
-              className="btn-secondary btn-research"
-              onClick={handleRunResearch}
-              disabled={isStreaming || backendOffline}
-              title="运行 literature→theory→experiment→review 流水线"
-            >
-              完整研究
-            </button>
-            <textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="输入问题… Enter 发送，Shift+Enter 换行"
-              rows={2}
-              disabled={isStreaming || backendOffline}
-            />
-            <button
-              type="button"
-              className="btn-primary"
-              onClick={handleSend}
-              disabled={isStreaming || backendOffline || !input.trim()}
-            >
-              {isStreaming ? "生成中…" : "发送"}
-            </button>
-          </footer>
+          <ChatComposer
+            chatMode={chatMode}
+            onChatModeChange={handleModeChange}
+            showAiPolishPrompts={editionFeatures.showAiPolishPrompts}
+            disabled={backendOffline}
+            sendDisabled={isStreaming}
+            onSend={handleSend}
+            onPolishPresetSelected={() => {
+              if (editionFeatures.showWorkbench) setWorkbenchTab("output");
+            }}
+          />
         </div>
 
+        {editionFeatures.showWorkbench && (
+          <>
         <ResizeHandle
           direction="horizontal"
           onResize={resizeRight}
@@ -800,7 +848,8 @@ export function ChatPage() {
               projectId={currentProjectId}
               disabled={isStreaming}
               activeTab={workbenchTab}
-              onTabChange={setWorkbenchTab}
+              onTabChange={handleWorkbenchTabChange}
+              allowedTabs={editionFeatures.workbenchTabs}
               structuredEntries={structuredEntries}
               structuredLoading={structuredLoading}
               structuredError={structuredError}
@@ -834,11 +883,6 @@ export function ChatPage() {
               dagError={dagError}
               onRefreshDag={refreshDag}
               onDagImpact={fetchDagImpact}
-              bibEntries={bibEntries}
-              bibLoading={bibLoading}
-              bibError={bibError}
-              onRefreshBib={refreshBib}
-              onExportBib={exportBib}
               documents={documents}
               documentsLoading={documentsLoading}
               documentsUploading={documentsUploading}
@@ -869,6 +913,8 @@ export function ChatPage() {
             />
           </div>
         </ErrorBoundary>
+          </>
+        )}
       </div>
     </div>
   );

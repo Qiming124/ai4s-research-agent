@@ -1,5 +1,18 @@
 import { useCallback, useEffect, useState } from "react";
 import { MarkdownContent } from "./MarkdownContent";
+import {
+  EXPORT_PRESET_EVENT,
+  POLISH_PRESETS,
+  PRESET_ARXIV_THEORY,
+} from "../utils/exportPresets";
+
+export {
+  PRESET_ARXIV_THEORY,
+  PRESET_THEOREM_CATALOG,
+  PRESET_ABSTRACT_BRIEF,
+  PRESET_EXPERIMENT_REPORT,
+  PAPER_FORMAT_PRESET,
+} from "../utils/exportPresets";
 
 interface ExportPreview {
   entry_count: number;
@@ -38,9 +51,17 @@ export function ExportPanel({ sessionId, projectId }: ExportPanelProps) {
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<ExportPreview | null>(null);
   const [title, setTitle] = useState("研究报告");
-  const [useAi, setUseAi] = useState(false);
-  const [aiInstructions, setAiInstructions] = useState("");
+  const [useAi, setUseAi] = useState(true);
+  const [aiInstructions, setAiInstructions] = useState(PRESET_ARXIV_THEORY);
+  const [activePreset, setActivePreset] = useState<string>("arxiv_theory");
   const [polishPreview, setPolishPreview] = useState<string | null>(null);
+
+  const applyPreset = (id: string, text: string) => {
+    setActivePreset(id);
+    setAiInstructions(text);
+    setUseAi(true);
+    setPolishPreview(null);
+  };
 
   const refreshPreview = useCallback(async () => {
     if (!sessionId) return;
@@ -61,6 +82,17 @@ export function ExportPanel({ sessionId, projectId }: ExportPanelProps) {
     void refreshPreview();
   }, [refreshPreview]);
 
+  useEffect(() => {
+    const onPreset = (ev: Event) => {
+      const id = (ev as CustomEvent<{ id?: string }>).detail?.id;
+      if (!id) return;
+      const preset = POLISH_PRESETS.find((p) => p.id === id);
+      if (preset) applyPreset(preset.id, preset.text);
+    };
+    window.addEventListener(EXPORT_PRESET_EVENT, onPreset);
+    return () => window.removeEventListener(EXPORT_PRESET_EVENT, onPreset);
+  }, []);
+
   const buildPayload = () => ({
     session_id: sessionId,
     title: title.trim() || "研究报告",
@@ -77,7 +109,7 @@ export function ExportPanel({ sessionId, projectId }: ExportPanelProps) {
       return;
     }
     if (!aiInstructions.trim()) {
-      setError("请先填写 AI 润色要求");
+      setError("请先选择润色预设或填写要求");
       return;
     }
     if (preview && preview.entry_count === 0) {
@@ -168,6 +200,8 @@ export function ExportPanel({ sessionId, projectId }: ExportPanelProps) {
     }
   };
 
+  const activeHint = POLISH_PRESETS.find((p) => p.id === activePreset)?.hint;
+
   return (
     <div className="export-panel">
       <div className="panel-header">
@@ -192,16 +226,38 @@ export function ExportPanel({ sessionId, projectId }: ExportPanelProps) {
             checked={useAi}
             onChange={(e) => setUseAi(e.target.checked)}
           />
-          导出前使用 AI 按以下要求润色
+          导出前 AI 润色（字号已按 arXiv 短文近似：标题 16pt / 正文 10.5pt）
         </label>
+        <div className="export-preset-row" role="group" aria-label="润色预设">
+          {POLISH_PRESETS.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              className={
+                activePreset === p.id && useAi
+                  ? "btn-small export-preset-btn active"
+                  : "btn-small export-preset-btn"
+              }
+              title={p.hint}
+              onClick={() => applyPreset(p.id, p.text)}
+              disabled={loading !== null}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+        {activeHint && useAi && <p className="panel-muted export-preset-hint">{activeHint}</p>}
         <label className="settings-label">
           AI 润色要求
           <textarea
             className="settings-input export-ai-input"
-            rows={3}
+            rows={7}
             value={aiInstructions}
-            onChange={(e) => setAiInstructions(e.target.value)}
-            placeholder="例如：整理成论文摘要+引言+定理+结论；语言更学术；补充过渡句；保留所有公式"
+            onChange={(e) => {
+              setAiInstructions(e.target.value);
+              setActivePreset("");
+            }}
+            placeholder="选择上方预设，或自行修改"
             disabled={!useAi}
           />
         </label>
@@ -286,13 +342,14 @@ export function ExportPanel({ sessionId, projectId }: ExportPanelProps) {
         <summary>如何使用导出？</summary>
         <ol className="export-help-list">
           <li>
-            <strong>推荐流程</strong>：勾选 AI 润色并填写要求 → 预览 → 导出 Word/PDF。
+            <strong>推荐</strong>：选「arXiv 理论短文」→ 预览 → 导出 Word/PDF（版式按 arXiv 短文近似字号）。
           </li>
           <li>
-            <strong>内容来源</strong>：优先导出定理库（L4）；无定理库时回退本会话 AI 回答。
+            <strong>内容来源</strong>：优先定理库；无则回退本会话 AI 回答。
           </li>
           <li>
-            <strong>AI 润色</strong>：导出前额外调用一次大模型，按你的要求改写 Markdown，再转 Word/PDF。
+            <strong>参考论文</strong>：本地已缓存{" "}
+            <code>data/arxiv_refs/1608.04636.pdf</code>（Karimi PL）等作为结构参考。
           </li>
         </ol>
       </details>

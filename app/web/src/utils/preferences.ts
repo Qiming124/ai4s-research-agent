@@ -250,3 +250,17 @@ export function buildMcpRequestFields(
   }
   return { enable_tools: pref.enableMcp };
 }
+
+// 界面版本（展示层）：见 uiEdition.ts
+export {
+  getUiEdition,
+  setUiEdition,
+  getEditionFeatures,
+  clampLeftTab,
+  clampWorkbenchTab,
+  UI_EDITION_OPTIONS,
+  EDITION_FEATURES,
+  type UiEdition,
+  type LeftSidebarTab,
+  type EditionFeatures,
+} from "./uiEdition";

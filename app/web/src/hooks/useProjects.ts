@@ -80,6 +80,48 @@ export function useProjects(enabled: boolean) {
     return project;
   };
 
+  const updateProject = async (
+    projectId: string,
+    patch: { name?: string; description?: string },
+  ) => {
+    const res = await fetch(`/v1/projects/${encodeURIComponent(projectId)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    });
+    if (!res.ok) {
+      const detail = await res.text();
+      throw new Error(detail || `HTTP ${res.status}`);
+    }
+    await refresh();
+    return (await res.json()) as ProjectInfo;
+  };
+
+  const deleteProject = async (projectId: string) => {
+    if (projectId === "default") {
+      throw new Error("默认课题不可删除");
+    }
+    const res = await fetch(
+      `/v1/projects/${encodeURIComponent(projectId)}?purge=true`,
+      { method: "DELETE" },
+    );
+    if (!res.ok) {
+      const detail = await res.text();
+      throw new Error(detail || `HTTP ${res.status}`);
+    }
+    const data = (await res.json()) as {
+      status: string;
+      project_id: string;
+      name?: string;
+      deleted_sessions?: string[];
+    };
+    if (currentProjectId === projectId) {
+      selectProject("default");
+    }
+    await refresh();
+    return data;
+  };
+
   const currentProject = projects.find((p) => p.id === currentProjectId) ?? {
     id: currentProjectId || "default",
     name: "默认课题",
@@ -98,5 +140,7 @@ export function useProjects(enabled: boolean) {
     refresh,
     selectProject,
     createProject,
+    updateProject,
+    deleteProject,
   };
 }

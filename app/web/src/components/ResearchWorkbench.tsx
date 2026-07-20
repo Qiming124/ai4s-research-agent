@@ -1,4 +1,3 @@
-import type { BibEntry } from "../hooks/useBibliography";
 import type { DagEdge, DagNode } from "../hooks/useAssumptionDag";
 import type { DocumentInfo } from "../hooks/useDocuments";
 import type { ExperimentRun } from "../hooks/useExperimentLogs";
@@ -11,7 +10,6 @@ import type { RagRef } from "../hooks/useRagRefs";
 import type { WorkspaceFile } from "../hooks/useWorkspaceFiles";
 import type { WorkbenchTab } from "../utils/workbenchTabs";
 import { AssumptionDagPanel } from "./AssumptionDagPanel";
-import { BibliographyPanel } from "./BibliographyPanel";
 import { DocumentPanel } from "./DocumentPanel";
 import { ExperimentLogPanel } from "./ExperimentLogPanel";
 import { ExportPanel } from "./ExportPanel";
@@ -30,6 +28,8 @@ interface ResearchWorkbenchProps {
   disabled?: boolean;
   activeTab: WorkbenchTab;
   onTabChange: (tab: WorkbenchTab) => void;
+  /** 界面版本允许的工作台 Tab；默认全开 */
+  allowedTabs?: WorkbenchTab[];
   structuredEntries: StructuredMemoryEntry[];
   structuredLoading: boolean;
   structuredError: string | null;
@@ -63,11 +63,6 @@ interface ResearchWorkbenchProps {
   dagError: string | null;
   onRefreshDag: () => void;
   onDagImpact: (id: string) => Promise<unknown>;
-  bibEntries: BibEntry[];
-  bibLoading: boolean;
-  bibError: string | null;
-  onRefreshBib: () => void;
-  onExportBib: () => Promise<void>;
   documents: DocumentInfo[];
   documentsLoading: boolean;
   documentsUploading: boolean;
@@ -97,15 +92,19 @@ interface ResearchWorkbenchProps {
   onRefreshObservability: () => void;
 }
 
-const TABS: { id: WorkbenchTab; label: string; hint: string }[] = [
+const ALL_TABS: { id: WorkbenchTab; label: string; hint: string }[] = [
   { id: "literature", label: "文献", hint: "上传与检索" },
   { id: "theory", label: "理论", hint: "定理与推导" },
   { id: "verify", label: "验证", hint: "检验与质量" },
   { id: "output", label: "产出", hint: "实验与导出" },
 ];
 
+const DEFAULT_ALLOWED: WorkbenchTab[] = ["literature", "theory", "verify", "output"];
+
 export function ResearchWorkbench(props: ResearchWorkbenchProps) {
   const { sessionId, projectId, disabled, activeTab, onTabChange } = props;
+  const allowed = props.allowedTabs?.length ? props.allowedTabs : DEFAULT_ALLOWED;
+  const tabs = ALL_TABS.filter((t) => allowed.includes(t.id));
 
   return (
     <aside className="research-workbench" aria-label="科研工作台">
@@ -113,12 +112,12 @@ export function ResearchWorkbench(props: ResearchWorkbenchProps) {
         <div>
           <h2>科研工作台</h2>
           <p className="workbench-subtitle">
-            {TABS.find((t) => t.id === activeTab)?.hint ?? "按研究阶段查看"}
+            {tabs.find((t) => t.id === activeTab)?.hint ?? "按研究阶段查看"}
           </p>
         </div>
       </header>
       <nav className="workbench-tabs" role="tablist">
-        {TABS.map((t) => (
+        {tabs.map((t) => (
           <button
             key={t.id}
             type="button"
@@ -132,7 +131,7 @@ export function ResearchWorkbench(props: ResearchWorkbenchProps) {
         ))}
       </nav>
       <div className="workbench-body">
-        {activeTab === "literature" && (
+        {activeTab === "literature" && allowed.includes("literature") && (
           <>
             <WorkbenchSection title="文献库" defaultOpen badge={props.documents.length || undefined}>
               <DocumentPanel
@@ -149,15 +148,6 @@ export function ResearchWorkbench(props: ResearchWorkbenchProps) {
                 onClearAll={props.onClearAllDocuments}
               />
             </WorkbenchSection>
-            <WorkbenchSection title="书目" badge={props.bibEntries.length || undefined}>
-              <BibliographyPanel
-                entries={props.bibEntries}
-                loading={props.bibLoading}
-                error={props.bibError}
-                onRefresh={props.onRefreshBib}
-                onExportBib={props.onExportBib}
-              />
-            </WorkbenchSection>
             <WorkbenchSection title="检索引用">
               <RagRefsPanel
                 refs={props.ragRefs}
@@ -169,7 +159,7 @@ export function ResearchWorkbench(props: ResearchWorkbenchProps) {
             </WorkbenchSection>
           </>
         )}
-        {activeTab === "theory" && (
+        {activeTab === "theory" && allowed.includes("theory") && (
           <>
             <WorkbenchSection
               title="定理库"
@@ -224,7 +214,7 @@ export function ResearchWorkbench(props: ResearchWorkbenchProps) {
             </WorkbenchSection>
           </>
         )}
-        {activeTab === "verify" && (
+        {activeTab === "verify" && allowed.includes("verify") && (
           <>
             <WorkbenchSection title="验证看板" defaultOpen>
               <VerificationDashboardPanel
@@ -234,6 +224,7 @@ export function ResearchWorkbench(props: ResearchWorkbenchProps) {
                 recordsLoading={props.verificationRecordsLoading}
                 error={props.verificationError}
                 sessionId={sessionId}
+                projectId={projectId}
                 onRefresh={props.onRefreshVerification}
                 onRefreshRecords={props.onRefreshVerificationRecords}
                 onRunVerification={props.onRunVerification}
@@ -250,7 +241,7 @@ export function ResearchWorkbench(props: ResearchWorkbenchProps) {
             </WorkbenchSection>
           </>
         )}
-        {activeTab === "output" && (
+        {activeTab === "output" && allowed.includes("output") && (
           <>
             <WorkbenchSection
               title="数值实验"

@@ -132,19 +132,27 @@ function mapWorkflowSteps(
   raw: ServerWorkflowStep[] | null | undefined,
 ): TimelineEntry[] {
   if (!raw?.length) return [];
-  return raw.map((step, idx) => {
+  const byKey = new Map<string, TimelineEntry>();
+  raw.forEach((step, idx) => {
+    const stepKind = step.step_kind as WorkflowStepEvent["stepKind"];
+    const stableId =
+      step.tool_call_id ||
+      (stepKind === "plan" || stepKind === "synthesize"
+        ? `wf-${stepKind}`
+        : `${stepKind}-${step.title ?? idx}`);
     const event: WorkflowStepEvent = {
-      id: step.tool_call_id ?? `${step.step_kind}-${idx}`,
-      stepKind: step.step_kind as WorkflowStepEvent["stepKind"],
-      status: step.status as WorkflowStepEvent["status"],
+      id: stableId,
+      stepKind,
+      status: (step.status ?? "done") as WorkflowStepEvent["status"],
       title: step.title,
       detail: step.detail,
       toolName: step.tool_name,
       toolCallId: step.tool_call_id,
     };
-    const kind = step.step_kind === "verify" ? ("verify" as const) : ("workflow" as const);
-    return { kind, event };
+    const kind = stepKind === "verify" ? ("verify" as const) : ("workflow" as const);
+    byKey.set(stableId, { kind, event });
   });
+  return Array.from(byKey.values());
 }
 
 function mergeTimelineFromWorkflow(
@@ -152,17 +160,52 @@ function mergeTimelineFromWorkflow(
   step: WorkflowStepEvent,
   kind: "workflow" | "verify",
 ): TimelineEntry[] {
-  const idx = timeline.findIndex(
-    (e) =>
-      (e.kind === "workflow" || e.kind === "verify") &&
-      e.event.id === step.id,
-  );
+  const idx = timeline.findIndex((e) => {
+    if (e.kind !== "workflow" && e.kind !== "verify") return false;
+    if (e.event.id === step.id) return true;
+    // plan / synthesize 用稳定 id；兼容旧事件仅按 stepKind 合并
+    if (step.stepKind !== "plan" && step.stepKind !== "synthesize") return false;
+    return e.event.stepKind === step.stepKind;
+  });
   if (idx === -1) {
     return [...timeline, { kind, event: step }];
   }
   const next = [...timeline];
-  next[idx] = { kind, event: step };
+  const prev = next[idx];
+  if (prev.kind !== "workflow" && prev.kind !== "verify") {
+    return [...timeline, { kind, event: step }];
+  }
+  next[idx] = {
+    kind,
+    event: {
+      ...prev.event,
+      ...step,
+      id: step.id || prev.event.id,
+      title: step.title || prev.event.title,
+    },
+  };
   return next;
+}
+
+/** 流结束时兜底：把仍为 running 的工作流/工具步骤标为 done，避免 UI 永久「进行中」 */
+function finalizeRunningTimeline(timeline: TimelineEntry[] | undefined): TimelineEntry[] | undefined {
+  if (!timeline?.length) return timeline;
+  let changed = false;
+  const next = timeline.map((entry) => {
+    if (
+      (entry.kind === "workflow" || entry.kind === "verify") &&
+      entry.event.status === "running"
+    ) {
+      changed = true;
+      return { ...entry, event: { ...entry.event, status: "done" as const } };
+    }
+    if (entry.kind === "tool" && entry.event.status === "running") {
+      changed = true;
+      return { ...entry, event: { ...entry.event, status: "done" as const } };
+    }
+    return entry;
+  });
+  return changed ? next : timeline;
 }
 
 function mapPersistedToolCalls(raw: ServerToolCall[] | null | undefined): ToolCallEvent[] | undefined {
@@ -184,14 +227,15 @@ function mapServerMessages(raw: ServerMessage[]): ChatMessage[] {
       const workflowTimeline = mapWorkflowSteps(m.workflow_steps);
       const toolTimeline: TimelineEntry[] =
         toolCalls?.map((event) => ({ kind: "tool" as const, event })) ?? [];
-      const timeline = [...workflowTimeline, ...toolTimeline];
+      // 历史消息里可能残留 running（旧 bug）；加载时一律收尾，避免永久「进行中」
+      const timeline = finalizeRunningTimeline([...workflowTimeline, ...toolTimeline]);
       return {
         id: randomUUID(),
         role: m.role as "user" | "assistant",
         content: m.content,
         reasoning: m.reasoning_content ?? undefined,
         toolCalls,
-        timeline: timeline.length ? timeline : undefined,
+        timeline: timeline?.length ? timeline : undefined,
         cotSteps: parseCotSections(m.content),
       };
     });
@@ -261,11 +305,16 @@ function applyStreamEvent(
     if (ev.to_agent) {
       ctx.setActiveAgentName(ev.to_agent);
     }
+    const isWrapup =
+      ev.content === "campaign_complete_fallback" ||
+      ev.route_reason === "campaign_complete_fallback";
     const handoff: AgentHandoffEvent = {
       id: handoffId,
       fromAgent: ev.from_agent ?? "?",
       toAgent: ev.to_agent ?? "?",
-      reason: ev.route_reason ?? ev.content,
+      reason: isWrapup
+        ? "课题已完成 → 收尾总结（不重跑流水线）"
+        : (ev.route_reason ?? ev.content),
     };
     return (prev) =>
       prev.map((m) =>
@@ -274,7 +323,24 @@ function applyStreamEvent(
               ...m,
               agentName: ev.to_agent ?? m.agentName,
               handoffs: [...(m.handoffs ?? []), handoff],
-              timeline: [...(m.timeline ?? []), { kind: "handoff", event: handoff }],
+              timeline: [
+                ...(m.timeline ?? []),
+                { kind: "handoff", event: handoff },
+                ...(isWrapup
+                  ? [
+                      {
+                        kind: "workflow" as const,
+                        event: {
+                          id: "wrapup-running",
+                          stepKind: "synthesize" as const,
+                          status: "running" as const,
+                          title: "正在生成收尾报告",
+                          detail: "基于已完成产物综合，不会重跑 S0–S7",
+                        },
+                      },
+                    ]
+                  : []),
+              ],
             }
           : m,
       );
@@ -356,8 +422,13 @@ function applyStreamEvent(
 
   if (ev.type === "workflow_step") {
     const stepKind = (ev.step_kind ?? "plan") as WorkflowStepEvent["stepKind"];
+    const stableId =
+      ev.tool_call_id ||
+      (stepKind === "plan" || stepKind === "synthesize"
+        ? `wf-${stepKind}`
+        : `${stepKind}-${ev.title ?? stepKind}`);
     const step: WorkflowStepEvent = {
-      id: ev.tool_call_id ?? `${stepKind}-${ev.title ?? stepKind}`,
+      id: stableId,
       stepKind,
       status: (ev.status ?? "running") as WorkflowStepEvent["status"],
       title: ev.title ?? stepKind,
@@ -519,7 +590,12 @@ function applyStreamEvent(
     return (prev) =>
       prev.map((m) =>
         m.id === assistantId
-          ? { ...m, error: ev.content ?? "未知错误", streaming: false }
+          ? {
+              ...m,
+              error: ev.content ?? "未知错误",
+              streaming: false,
+              timeline: finalizeRunningTimeline(m.timeline),
+            }
           : m,
       );
   }
@@ -528,7 +604,15 @@ function applyStreamEvent(
     return (prev) =>
       prev.map((m) =>
         m.id === assistantId
-          ? { ...m, streaming: false, usage: ev.usage ?? undefined }
+          ? {
+              ...m,
+              streaming: false,
+              usage: ev.usage ?? undefined,
+              timeline: finalizeRunningTimeline(m.timeline),
+              toolCalls: m.toolCalls?.map((tc) =>
+                tc.status === "running" ? { ...tc, status: "done" as const } : tc,
+              ),
+            }
           : m,
       );
   }
@@ -603,6 +687,7 @@ export function useChatStream(
     onPipelineGate?: (payload: string) => void;
   },
   projectId?: string,
+  campaignId?: string | null,
 ) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [sessionId, setSessionIdState] = useState(getSessionId);
@@ -626,7 +711,18 @@ export function useChatStream(
   const finishStreaming = useCallback(() => {
     setIsStreaming(false);
     setMessages((prev) =>
-      prev.map((m) => (m.streaming ? { ...m, streaming: false } : m)),
+      prev.map((m) =>
+        m.streaming
+          ? {
+              ...m,
+              streaming: false,
+              timeline: finalizeRunningTimeline(m.timeline),
+              toolCalls: m.toolCalls?.map((tc) =>
+                tc.status === "running" ? { ...tc, status: "done" as const } : tc,
+              ),
+            }
+          : m,
+      ),
     );
   }, []);
 
@@ -747,6 +843,15 @@ export function useChatStream(
 
     const controller = new AbortController();
     abortRef.current = controller;
+    // 防止收尾等长请求把界面永久锁在 isStreaming（按钮一直灰）
+    const streamTimeoutMs = 180_000;
+    let abortedByTimeout = false;
+    const timeoutId = window.setTimeout(() => {
+      if (!controller.signal.aborted) {
+        abortedByTimeout = true;
+        controller.abort();
+      }
+    }, streamTimeoutMs);
 
     const streamCtx = {
       setSessionIdState,
@@ -771,6 +876,7 @@ export function useChatStream(
           ...buildReasoningRequestFields(reasoningPref),
           ...buildCotModeRequestField(cotMode, chatMode),
           project_id: projectId ?? undefined,
+          campaign_id: campaignId ?? undefined,
         }),
         signal: controller.signal,
       });
@@ -807,22 +913,56 @@ export function useChatStream(
 
       setMessages((prev) =>
         prev.map((m) =>
-          m.id === assistantId && m.streaming ? { ...m, streaming: false } : m,
+          m.id === assistantId && m.streaming
+            ? {
+                ...m,
+                streaming: false,
+                timeline: finalizeRunningTimeline(m.timeline),
+                toolCalls: m.toolCalls?.map((tc) =>
+                  tc.status === "running" ? { ...tc, status: "done" as const } : tc,
+                ),
+              }
+            : m,
         ),
       );
       updateSessionMeta(sessionIdRef.current, { updatedAt: Date.now() });
     } catch (err) {
       if ((err as Error).name === "AbortError") {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantId
+              ? {
+                  ...m,
+                  error: abortedByTimeout
+                    ? "收尾/生成超时（已自动停止）。请再点一次「收尾总结」。"
+                    : m.error,
+                  streaming: false,
+                  timeline: finalizeRunningTimeline(m.timeline),
+                }
+              : m,
+          ),
+        );
         finishStreaming();
         return;
       }
       const msg = formatBackendError(err);
       setMessages((prev) =>
         prev.map((m) =>
-          m.id === assistantId ? { ...m, error: msg, streaming: false } : m,
+          m.id === assistantId
+            ? {
+                ...m,
+                error: msg,
+                streaming: false,
+                timeline: finalizeRunningTimeline(m.timeline),
+                toolCalls: m.toolCalls?.map((tc) =>
+                  tc.status === "running" ? { ...tc, status: "error" as const } : tc,
+                ),
+              }
+            : m,
         ),
       );
     } finally {
+      window.clearTimeout(timeoutId);
       isStreamingRef.current = false;
       setIsStreaming(false);
       setActiveAgentName(null);
@@ -833,7 +973,7 @@ export function useChatStream(
         pendingSessionIdRef.current = null;
       }
     }
-  }, [isStreaming, chatMode, historyPref, mcpPref, agentPref, reasoningPref, cotMode, finishStreaming, callbacks, projectId]);
+  }, [isStreaming, chatMode, historyPref, mcpPref, agentPref, reasoningPref, cotMode, finishStreaming, callbacks, projectId, campaignId]);
 
   const clearSession = useCallback(async () => {
     historyEpochRef.current += 1;

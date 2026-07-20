@@ -1,10 +1,14 @@
 import type { ChatMode, AgentChoice, CotMode, ReasoningEffort } from "../utils/preferences";
+import type { UiEdition } from "../utils/uiEdition";
+import { UI_EDITION_OPTIONS } from "../utils/uiEdition";
 import type { McpStatus } from "../hooks/useMcpStatus";
 
 interface SettingsDrawerProps {
   open: boolean;
   onClose: () => void;
   disabled?: boolean;
+  uiEdition: UiEdition;
+  onUiEditionChange: (edition: UiEdition) => void;
   chatMode: ChatMode;
   onChatModeChange: (mode: ChatMode) => void;
   agentChoice: AgentChoice;
@@ -36,13 +40,14 @@ interface SettingsDrawerProps {
   onRefreshMcp: () => void;
   onReloadMcp?: () => Promise<void>;
   serverAgents?: { name: string; description: string }[];
-  onRunResearch: () => void;
 }
 
 export function SettingsDrawer({
   open,
   onClose,
   disabled,
+  uiEdition,
+  onUiEditionChange,
   chatMode,
   onChatModeChange,
   agentChoice,
@@ -74,12 +79,13 @@ export function SettingsDrawer({
   onRefreshMcp,
   onReloadMcp,
   serverAgents = [],
-  onRunResearch,
 }: SettingsDrawerProps) {
   if (!open) return null;
 
   const serverEnabled = mcpStatus?.server_enabled ?? false;
   const mcpToggleDisabled = disabled || useServerMcp || !serverEnabled;
+  const editionHint =
+    UI_EDITION_OPTIONS.find((o) => o.id === uiEdition)?.hint ?? "";
 
   return (
     <div className="settings-overlay" role="dialog" aria-modal="true" aria-label="高级设置">
@@ -93,10 +99,22 @@ export function SettingsDrawer({
         </header>
         <div className="settings-drawer-body">
       <section className="settings-section">
-        <h3>快捷操作</h3>
-        <button type="button" className="btn-primary btn-block" onClick={onRunResearch} disabled={disabled}>
-          运行完整研究
-        </button>
+        <h3>界面版本</h3>
+        <div className="mode-toggle settings-mode-toggle" role="group" aria-label="界面版本">
+          {UI_EDITION_OPTIONS.map((opt) => (
+            <button
+              key={opt.id}
+              type="button"
+              className={uiEdition === opt.id ? "mode-btn active" : "mode-btn"}
+              onClick={() => onUiEditionChange(opt.id)}
+              disabled={disabled}
+              title={opt.hint}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+        <p className="settings-hint">{editionHint}。仅影响界面入口，不限制 API。</p>
       </section>
       <section className="settings-section">
         <h3>对话模式</h3>

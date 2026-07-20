@@ -1,12 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ProjectInfo } from "../hooks/useProjects";
 import type { ProjectTask } from "../hooks/useProjectTasks";
 import type { SessionMeta } from "../utils/session";
-import { ProjectHub } from "./ProjectHub";
-import { SessionListSidebar } from "./SessionListSidebar";
+import type { LeftSidebarTab } from "../utils/uiEdition";
+import { ProjectSessionTree } from "./ProjectSessionTree";
 import { TaskBoard } from "./TaskBoard";
-
-type LeftSidebarTab = "project" | "tasks" | "sessions";
 
 interface LeftSidebarProps {
   projects: ProjectInfo[];
@@ -14,6 +12,8 @@ interface LeftSidebarProps {
   currentProject: ProjectInfo;
   onSelectProject: (id: string) => void;
   onCreateProject: (name: string, description?: string) => Promise<void>;
+  onUpdateProject: (projectId: string, patch: { name?: string; description?: string }) => Promise<void>;
+  onDeleteProject: (projectId: string) => Promise<void>;
   projectsError: string | null;
   linkStatus: string | null;
   projectMembers: { user_id: string; role: string }[];
@@ -26,60 +26,75 @@ interface LeftSidebarProps {
   sessions: SessionMeta[];
   currentSessionId: string;
   disabled?: boolean;
-  onSelectSession: (id: string) => void;
-  onNewSession: () => void;
+  onSelectSession: (id: string, projectId?: string) => void;
+  onNewSession: (projectId?: string) => void;
   onRemoveSession: (id: string) => void;
+  onMoveSession: (sessionId: string, projectId: string) => Promise<void>;
+  onUpdateSessionTitle: (sessionId: string, title: string) => void;
   campaignTitle?: string | null;
   campaignStage?: string | null;
   campaignStatus?: string | null;
   campaignProgress?: number;
   campaignGates?: Record<string, string>;
+  /** 界面版本允许的左栏 Tab；默认全开 */
+  allowedTabs?: LeftSidebarTab[];
 }
 
-const TABS: { id: LeftSidebarTab; label: string }[] = [
+const ALL_TABS: { id: LeftSidebarTab; label: string }[] = [
   { id: "sessions", label: "会话" },
-  { id: "project", label: "课题" },
   { id: "tasks", label: "任务" },
 ];
 
+const DEFAULT_ALLOWED: LeftSidebarTab[] = ["sessions", "tasks"];
+
 export function LeftSidebar(props: LeftSidebarProps) {
-  const [tab, setTab] = useState<LeftSidebarTab>("sessions");
+  const allowed =
+    props.allowedTabs?.length ? props.allowedTabs : DEFAULT_ALLOWED;
+  const visibleTabs = ALL_TABS.filter((t) => allowed.includes(t.id));
+
+  const [tab, setTab] = useState<LeftSidebarTab>(
+    () => allowed[0] ?? "sessions",
+  );
+
+  useEffect(() => {
+    if (!allowed.includes(tab)) {
+      setTab(allowed[0] ?? "sessions");
+    }
+  }, [allowed, tab]);
+
+  const campaignByProject = {
+    [props.currentProjectId]: {
+      title: props.campaignTitle,
+      stage: props.campaignStage,
+      status: props.campaignStatus,
+      progress: props.campaignProgress,
+    },
+  };
 
   return (
     <aside className="left-sidebar" aria-label="项目导航">
-      <nav className="left-sidebar-tabs" role="tablist">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            role="tab"
-            aria-selected={tab === t.id}
-            className={tab === t.id ? "left-sidebar-tab active" : "left-sidebar-tab"}
-            onClick={() => setTab(t.id)}
-          >
-            {t.label}
-          </button>
-        ))}
-      </nav>
+      {visibleTabs.length > 1 && (
+        <nav className="left-sidebar-tabs" role="tablist">
+          {visibleTabs.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              role="tab"
+              aria-selected={tab === t.id}
+              className={tab === t.id ? "left-sidebar-tab active" : "left-sidebar-tab"}
+              onClick={() => setTab(t.id)}
+            >
+              {t.label}
+            </button>
+          ))}
+        </nav>
+      )}
       <div className="left-sidebar-body">
-        {tab === "project" && (
-          <ProjectHub
-            projects={props.projects.length ? props.projects : [props.currentProject]}
-            currentProjectId={props.currentProjectId}
-            onSelect={props.onSelectProject}
-            onCreate={props.onCreateProject}
-            disabled={props.disabled}
-            error={props.projectsError}
-            linkStatus={props.linkStatus}
-            members={props.projectMembers}
-            campaignTitle={props.campaignTitle}
-            campaignStage={props.campaignStage}
-            campaignStatus={props.campaignStatus}
-            campaignProgress={props.campaignProgress}
-            campaignGates={props.campaignGates}
-          />
+        {props.projectsError && <p className="panel-error">{props.projectsError}</p>}
+        {props.linkStatus && (
+          <p className="panel-muted project-link-status">{props.linkStatus}</p>
         )}
-        {tab === "tasks" && (
+        {tab === "tasks" && allowed.includes("tasks") && (
           <TaskBoard
             tasks={props.tasks}
             loading={props.tasksLoading}
@@ -89,14 +104,25 @@ export function LeftSidebar(props: LeftSidebarProps) {
             onCreateTask={props.onCreateTask}
           />
         )}
-        {tab === "sessions" && (
-          <SessionListSidebar
+        {tab === "sessions" && allowed.includes("sessions") && (
+          <ProjectSessionTree
+            projects={props.projects.length ? props.projects : [props.currentProject]}
             sessions={props.sessions}
+            currentProjectId={props.currentProjectId}
             currentSessionId={props.currentSessionId}
             disabled={props.disabled}
-            onSelect={props.onSelectSession}
-            onNewSession={props.onNewSession}
-            onRemove={props.onRemoveSession}
+            campaignByProject={campaignByProject}
+            onSelectSession={(sid, pid) => {
+              props.onSelectProject(pid);
+              props.onSelectSession(sid, pid);
+            }}
+            onNewSession={(pid) => props.onNewSession(pid)}
+            onRemoveSession={props.onRemoveSession}
+            onCreateProject={props.onCreateProject}
+            onUpdateProject={props.onUpdateProject}
+            onDeleteProject={props.onDeleteProject}
+            onMoveSession={props.onMoveSession}
+            onUpdateSessionTitle={props.onUpdateSessionTitle}
           />
         )}
       </div>

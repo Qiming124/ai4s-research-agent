@@ -24,8 +24,10 @@ export function useVerificationRecords(
     setLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams({ project_id: projectId, limit: "50" });
-      if (sessionId) params.set("session_id", sessionId);
+      const params = new URLSearchParams({
+        project_id: projectId || "default",
+        limit: "50",
+      });
       const res = await fetch(`/v1/verification/records?${params}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
@@ -35,17 +37,22 @@ export function useVerificationRecords(
     } finally {
       setLoading(false);
     }
-  }, [enabled, projectId, sessionId]);
+  }, [enabled, projectId]);
 
   useEffect(() => {
     refresh();
   }, [refresh]);
 
-  const runVerification = async (claim: Record<string, unknown>) => {
+  const runVerification = async (payload: Record<string, unknown>) => {
+    const body = {
+      ...payload,
+      project_id: (payload.project_id as string) || projectId || "default",
+      session_id: (payload.session_id as string) || sessionId || undefined,
+    };
     const res = await fetch("/v1/verification/run", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(claim),
+      body: JSON.stringify(body),
     });
     if (!res.ok) throw new Error(await res.text());
     await refresh();

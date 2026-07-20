@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { formatBackendError } from "../utils/backend";
 
-export function useTheoryAssets(enabled: boolean) {
+export function useTheoryAssets(enabled: boolean, projectId = "default") {
   const [symbols, setSymbols] = useState("");
   const [assumptions, setAssumptions] = useState("");
   const [matrix, setMatrix] = useState("");
@@ -13,10 +13,11 @@ export function useTheoryAssets(enabled: boolean) {
     setLoading(true);
     setError(null);
     try {
+      const q = `project_id=${encodeURIComponent(projectId || "default")}`;
       const [sym, asm, mat] = await Promise.all([
-        fetch("/v1/theory/symbols"),
-        fetch("/v1/theory/assumptions"),
-        fetch("/v1/theory/assumption-matrix"),
+        fetch(`/v1/theory/symbols?${q}`),
+        fetch(`/v1/theory/assumptions?${q}`),
+        fetch(`/v1/theory/assumption-matrix?${q}`),
       ]);
       if (sym.ok) setSymbols(await sym.text());
       if (asm.ok) setAssumptions(await asm.text());
@@ -26,7 +27,7 @@ export function useTheoryAssets(enabled: boolean) {
     } finally {
       setLoading(false);
     }
-  }, [enabled]);
+  }, [enabled, projectId]);
 
   useEffect(() => {
     refresh();

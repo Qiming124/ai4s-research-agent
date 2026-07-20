@@ -9,6 +9,7 @@ interface VerificationDashboardPanelProps {
   recordsLoading: boolean;
   error: string | null;
   sessionId: string;
+  projectId: string;
   onRefresh: () => void;
   onRefreshRecords: () => void;
   onRunVerification: (claim: Record<string, unknown>) => Promise<unknown>;
@@ -21,18 +22,21 @@ export function VerificationDashboardPanel({
   recordsLoading,
   error,
   sessionId,
+  projectId,
   onRefresh,
   onRefreshRecords,
   onRunVerification,
 }: VerificationDashboardPanelProps) {
   const [running, setRunning] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
+  const [runNote, setRunNote] = useState<string | null>(null);
 
   const handleQuickVerify = async () => {
     setRunning(true);
     setRunError(null);
+    setRunNote(null);
     try {
-      await onRunVerification({
+      const result = (await onRunVerification({
         claim: {
           expression: "x0**2 + x1**2",
           point: "0,0",
@@ -41,7 +45,16 @@ export function VerificationDashboardPanel({
           tier_hint: "numerical",
         },
         session_id: sessionId,
-      });
+        project_id: projectId || "default",
+        // 样例连通性检查，不写入账本
+        persist: false,
+      })) as { overall_passed?: boolean; tiers?: { numerical?: { reason?: string } } };
+      const reason = result?.tiers?.numerical?.reason || "";
+      setRunNote(
+        result?.overall_passed
+          ? `样例验证通过（未写入账本）${reason ? `：${reason}` : ""}`
+          : `样例验证未通过（未写入账本）${reason ? `：${reason}` : ""}`,
+      );
       onRefresh();
       onRefreshRecords();
     } catch (err) {
@@ -71,6 +84,7 @@ export function VerificationDashboardPanel({
       </div>
       {error && <p className="panel-error">{error}</p>}
       {runError && <p className="panel-error">{runError}</p>}
+      {runNote && <p className="panel-muted">{runNote}</p>}
       {loading && <p className="panel-muted">加载中…</p>}
       {dashboard && (
         <>
@@ -121,8 +135,14 @@ export function VerificationDashboardPanel({
       {!loading && !dashboard && !error && (
         <p className="panel-muted">暂无验证记录；Theory 推导后将自动记录。</p>
       )}
-      <h5 className="panel-subtitle">验证账本</h5>
+      {!loading && dashboard && dashboard.total_records === 0 && !error && (
+        <p className="panel-muted">当前课题暂无验证记录；可点「重跑验证」写入一条样例。</p>
+      )}
+      <h5 className="panel-subtitle">验证账本（本课题）</h5>
       {recordsLoading && <p className="panel-muted">加载账本…</p>}
+      {!recordsLoading && records.length === 0 && (
+        <p className="panel-muted">账本为空</p>
+      )}
       <ul className="verify-recent-list">
         {records.slice(0, 12).map((r) => (
           <li key={r.id} className={r.passed ? "verify-pass" : "verify-fail"}>

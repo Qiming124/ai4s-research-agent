@@ -1,3 +1,4 @@
+import { memo } from "react";
 import type { ChatMessage } from "../hooks/useChatStream";
 import { parseCotSections, stripCotSections } from "../utils/cotParse";
 import { CotStepsPanel } from "./CotStepsPanel";
@@ -37,7 +38,7 @@ function streamingPlaceholder(message: ChatMessage): string | null {
   return "正在生成…";
 }
 
-export function MessageBubble({ message, showReasoning = true }: MessageBubbleProps) {
+function MessageBubbleInner({ message, showReasoning = true }: MessageBubbleProps) {
   const isUser = message.role === "user";
   const placeholder = !isUser ? streamingPlaceholder(message) : null;
   const cotSteps =
@@ -49,54 +50,6 @@ export function MessageBubble({ message, showReasoning = true }: MessageBubblePr
   const displayContent =
     cotSteps.length > 0 ? stripCotSections(message.content) : message.content;
 
-  const body = (
-    <div className={`message-row ${isUser ? "message-user" : "message-assistant"}`}>
-      <div className="message-avatar">{isUser ? "你" : "AI"}</div>
-      <div className="message-body">
-        {isUser ? (
-          <div className="user-text">{message.content}</div>
-        ) : (
-          <>
-            {message.error && (
-              <div className="message-error">错误：{message.error}</div>
-            )}
-            <WorkflowTimeline timeline={message.timeline} />
-            {message.memoryWarnings?.map((w, i) => (
-              <div key={i} className="memory-warning">⚠ {w}</div>
-            ))}
-            {message.pipelineStages && message.pipelineStages.length > 0 && (
-              <div className="pipeline-stages">
-                流水线: {message.pipelineStages.join(" → ")}
-              </div>
-            )}
-            {message.vizData && <LossLandscapeViz data={message.vizData} />}
-            {showReasoning && (
-              <ReasoningPanel
-                reasoning={message.reasoning ?? ""}
-                isStreaming={!!message.streaming}
-              />
-            )}
-            <CotStepsPanel steps={cotSteps} />
-            {placeholder && (
-              <div className="streaming-placeholder" aria-live="polite">
-                {placeholder}
-              </div>
-            )}
-            <MarkdownContent content={displayContent} isStreaming={!!message.streaming} />
-            {message.streaming && displayContent && (
-              <span className="cursor-blink">▍</span>
-            )}
-            {message.usage && !message.streaming && (
-              <div className="usage-hint">
-                tokens: {String((message.usage as { total_tokens?: number }).total_tokens ?? "—")}
-              </div>
-            )}
-          </>
-        )}
-      </div>
-    </div>
-  );
-
   return (
     <ErrorBoundary
       fallback={
@@ -105,7 +58,53 @@ export function MessageBubble({ message, showReasoning = true }: MessageBubblePr
         </div>
       }
     >
-      {body}
+      <div className={`message-row ${isUser ? "message-user" : "message-assistant"}`}>
+        <div className="message-avatar">{isUser ? "你" : "AI"}</div>
+        <div className="message-body">
+          {isUser ? (
+            <div className="user-text">{message.content}</div>
+          ) : (
+            <>
+              {message.error && (
+                <div className="message-error">错误：{message.error}</div>
+              )}
+              <WorkflowTimeline timeline={message.timeline} />
+              {message.memoryWarnings?.map((w, i) => (
+                <div key={i} className="memory-warning">⚠ {w}</div>
+              ))}
+              {message.pipelineStages && message.pipelineStages.length > 0 && (
+                <div className="pipeline-stages">
+                  流水线: {message.pipelineStages.join(" → ")}
+                </div>
+              )}
+              {message.vizData && <LossLandscapeViz data={message.vizData} />}
+              {showReasoning && (
+                <ReasoningPanel
+                  reasoning={message.reasoning ?? ""}
+                  isStreaming={!!message.streaming}
+                />
+              )}
+              <CotStepsPanel steps={cotSteps} />
+              {placeholder && (
+                <div className="streaming-placeholder" aria-live="polite">
+                  {placeholder}
+                </div>
+              )}
+              <MarkdownContent content={displayContent} isStreaming={!!message.streaming} />
+              {message.streaming && displayContent && (
+                <span className="cursor-blink">▍</span>
+              )}
+              {message.usage && !message.streaming && (
+                <div className="usage-hint">
+                  tokens: {String((message.usage as { total_tokens?: number }).total_tokens ?? "—")}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
     </ErrorBoundary>
   );
 }
+
+export const MessageBubble = memo(MessageBubbleInner);

@@ -26,7 +26,11 @@ const STAGE_ORDER = [
   "complete",
 ];
 
-export function stageProgress(stage: string): number {
+export function stageProgress(stage: string, status?: string): number {
+  // 已完成课题应显示 100%；仅停在 S8_archive 时旧逻辑算成 90%，看起来像「卡在收尾」
+  if (status === "done" || stage === "complete" || stage === "S8_archive") {
+    return 100;
+  }
   const idx = STAGE_ORDER.indexOf(stage);
   if (idx < 0) return 0;
   return Math.round(((idx + 1) / STAGE_ORDER.length) * 100);
@@ -91,6 +95,6 @@ export function useCampaign(projectId: string, enabled: boolean) {
     error,
     refresh,
     applyCampaignUpdate,
-    progress: campaign ? stageProgress(campaign.current_stage) : 0,
+    progress: campaign ? stageProgress(campaign.current_stage, campaign.status) : 0,
   };
 }

@@ -32,8 +32,8 @@ export function useVerification(sessionId: string, projectId: string, enabled: b
     setError(null);
     try {
       await waitForBackend();
-      const params = new URLSearchParams({ project_id: projectId });
-      if (sessionId) params.set("session_id", sessionId);
+      // 仪表盘按课题汇总，不按会话过滤（否则换会话会看起来像「空」）
+      const params = new URLSearchParams({ project_id: projectId || "default" });
       const res = await fetch(`/v1/verification/dashboard?${params}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
@@ -43,7 +43,7 @@ export function useVerification(sessionId: string, projectId: string, enabled: b
     } finally {
       setLoading(false);
     }
-  }, [enabled, projectId, sessionId]);
+  }, [enabled, projectId]);
 
   useEffect(() => {
     refresh();

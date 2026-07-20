@@ -66,7 +66,7 @@ const HELP_SECTIONS: HelpSection[] = [
     items: [
       {
         name: "四个阶段 Tab",
-        desc: "文献（上传/书目/RAG 引用）→ 理论（定理库、资产、假设图、关系图谱、工作区）→ 验证（验证看板、可观测性）→ 产出（实验、Jupyter、论文导出）。各分区可折叠展开。",
+        desc: "文献（上传/RAG 引用）→ 理论（定理库、资产、假设图、关系图谱、工作区）→ 验证（验证看板、可观测性）→ 产出（实验、Jupyter、论文导出）。各分区可折叠展开。",
       },
       {
         name: "定理库 (L4)",
@@ -78,7 +78,7 @@ const HELP_SECTIONS: HelpSection[] = [
       },
       {
         name: "实验与导出",
-        desc: "「产出」Tab：实验日志、Jupyter 模板/上传、Markdown/Word/PDF 导出（先渲染 MD 再转 PDF）。",
+        desc: "「产出」Tab：实验日志、Jupyter；论文导出默认勾选 AI「论文格式」预设（摘要→引言→定理→实验→结论），可预览后导出 MD/Word/PDF。",
       },
       {
         name: "理论工作区",
@@ -86,7 +86,7 @@ const HELP_SECTIONS: HelpSection[] = [
       },
       {
         name: "RAG 文档",
-        desc: "「文献」Tab：支持 PDF/DOCX/Markdown 上传、arXiv 一键导入、书目库与 RAG 引用列表。",
+        desc: "「文献」Tab：支持 PDF/DOCX/Markdown 上传、arXiv 一键导入与 RAG 引用列表。",
       },
     ],
   },
@@ -172,6 +172,10 @@ const HELP_SECTIONS: HelpSection[] = [
         desc: "点击会话右侧「×」永久删除（purge=true），含服务端数据与列表项；若删的是当前会话则自动切到下一个或新建。",
       },
       {
+        name: "删除课题",
+        desc: "课题「属性」中「删除课题」：整包删除会话、Campaign 与工作区文件（需确认）。默认课题不可删。",
+      },
+      {
         name: "历史恢复",
         desc: "刷新页面后自动恢复上次会话列表与消息。加载失败时顶栏下方显示琥珀色提示，可点重试或检查后端。",
       },
@@ -182,7 +186,7 @@ const HELP_SECTIONS: HelpSection[] = [
     items: [
       {
         name: "发送消息",
-        desc: "底部多行输入框，Enter 发送，Shift+Enter 换行。后端离线或生成中时输入禁用。多跳研究可在消息前加 /research（需 RESEARCH_PIPELINE_MODE=auto）。",
+        desc: "底部多行输入框，Enter 发送，Shift+Enter 换行。后端离线或生成中时输入禁用。科研版可在输入区选「AI润色提示词」填入导出同款体例；多跳研究仍可在消息前加 /research（需 RESEARCH_PIPELINE_MODE=auto）。",
       },
       {
         name: "流式占位提示",
