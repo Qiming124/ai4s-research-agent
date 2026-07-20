@@ -82,3 +82,13 @@ data/theory/_smoke.md
 data/theory/smoke_test_file.md
 app/web/tmp_*.json
 app/web/tmp_thm_cases.json
+
+# 导出实验室生成物与 arXiv 参考 PDF（保留 README / FORMAT_NOTES / 文本样例）
+data/arxiv_refs/*.pdf
+data/export_samples/*.pdf
+data/export_samples/*.docx
+data/export_test_lab/*/
+data/export_test_lab/reports/*.json
+!data/export_test_lab/README.md
+!data/export_test_lab/reports/
+!data/export_test_lab/reports/*.md
