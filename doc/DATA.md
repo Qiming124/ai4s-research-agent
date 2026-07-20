@@ -6,12 +6,22 @@
 
 | 路径 | 说明 |
 |------|------|
-| `data/theory/symbols.md` 等 | 符号表、假设、矩阵、审稿清单、推导工作流 |
+| `data/theory/symbols.md` 等 | 符号表、假设、矩阵、审稿清单（**只读种子**；运行时复制到课题工作区） |
 | `data/theory/campaigns/pl-critical-points.md` | Campaign 示范剧本 |
 | `data/theory/counterexamples/relu_saddle.md` | 反例种子 |
 | `data/theory/demo-quadratic-minimum.md` | 二次损失演示文稿 |
 | `data/experiments/configs/*.yaml` | 实验配置（`quadratic_minimum`、`width_scaling`） |
 | `data/**/.gitkeep` | 空目录占位 |
+
+## 课题隔离运行时目录
+
+```
+data/projects/{project_id}/
+  theory/          # 该课题理论工作区（symbols / assumptions / lemmas…）
+  experiments/     # 课题级实验产物（可选）
+```
+
+RAG 向量仍在 `data/chroma/`，元数据带 `project_id`（课题共享语料）；`session_rag_refs` 仍按会话记录引用轨迹。
 
 ## 可随时删除的运行时数据（勿提交）
 

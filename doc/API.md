@@ -86,6 +86,8 @@ curl -N -X POST http://127.0.0.1:8000/v1/chat/stream \
 |------|------|------|
 | GET/POST | `/v1/projects` | 列表 / 新建 |
 | GET | `/v1/projects/{id}` | 详情 |
+| PATCH | `/v1/projects/{id}` | 更新名称/简介 |
+| DELETE | `/v1/projects/{id}?purge=true` | 整包删除（会话+Campaign+工作区；`default` 不可删） |
 | GET | `/v1/projects/{id}/members` | 成员（角色） |
 | GET/POST | `/v1/projects/{id}/tasks` | 任务看板 |
 | PATCH | `/v1/projects/{id}/tasks/{tid}` | 更新任务状态 |

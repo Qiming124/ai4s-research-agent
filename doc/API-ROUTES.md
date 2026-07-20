@@ -238,6 +238,8 @@ curl -s -X POST http://127.0.0.1:8000/v1/experiments/runs \
 |------|------|------|
 | GET/POST | `/v1/projects` | 列表 / 创建 |
 | GET | `/v1/projects/{project_id}` | 详情 |
+| PATCH | `/v1/projects/{project_id}` | 更新 |
+| DELETE | `/v1/projects/{project_id}?purge=true` | 整包删除（不可删 default） |
 | GET | `/v1/projects/{project_id}/members` | 成员 |
 | GET/POST | `/v1/projects/{project_id}/tasks` | 任务看板 |
 | PATCH | `/v1/projects/{project_id}/tasks/{task_id}` | 更新任务 |

@@ -3,7 +3,7 @@
 面向「深度学习损失函数极小值理论」研究的 AI4S 智能体：对话、MCP 工具、多 Agent 路由、RAG 记忆、课题 / Campaign、验证账本、Docker 部署。
 
 **当前版本**：**v2.2**（分支 `v2.2`）  
-**文档索引**：[`doc/README.md`](doc/README.md) · API 清单 [`doc/API-COVERAGE.md`](doc/API-COVERAGE.md)（**67** 端点）· 全路径 [`doc/API-ROUTES.md`](doc/API-ROUTES.md) · 量化 [`doc/API-QUANT-TEST-RESULTS.md`](doc/API-QUANT-TEST-RESULTS.md) · 数据约定 [`doc/DATA.md`](doc/DATA.md) · 已知问题 [`doc/KNOWN_ISSUES.md`](doc/KNOWN_ISSUES.md)
+**文档索引**：[`doc/README.md`](doc/README.md) · **源码阅读顺序** [`doc/CODE_READING_ORDER.md`](doc/CODE_READING_ORDER.md) · API 清单 [`doc/API-COVERAGE.md`](doc/API-COVERAGE.md)（**67** 端点）· 全路径 [`doc/API-ROUTES.md`](doc/API-ROUTES.md) · 量化 [`doc/API-QUANT-TEST-RESULTS.md`](doc/API-QUANT-TEST-RESULTS.md) · 数据约定 [`doc/DATA.md`](doc/DATA.md) · 已知问题 [`doc/KNOWN_ISSUES.md`](doc/KNOWN_ISSUES.md)
 
 ### 当前能力（v2.2）
 
@@ -12,12 +12,12 @@
 | 对话与编排 | DeepSeek 流式 reasoning + content（SSE）；`legacy` / `langgraph` 多 Agent |
 | 多 Agent | general / theory / experiment / literature / **review** / **counterexample** |
 | MCP | web_search / arxiv / filesystem / sympy / rag / **numerical** |
-| 课题工作台 | Project、任务看板、会话联动；Tabs：文献/理论/验证/图谱/实验/导出 |
+| 课题工作台 | Project、任务看板、会话联动；可整包删除课题（默认课题除外）；Tabs：文献/理论/验证/图谱/实验/导出；Web 支持对话/科研/完整界面版本 |
 | Campaign | S0–S8 Supervisor；SSE `campaign_update` / `artifact_saved` |
 | 验证闭环 | Claim → SymPy / 数值 / Torch → 验证账本与仪表盘 |
-| 记忆 | L1–L4；假设 DAG；书目 BibTeX；理论工作区在线编辑 |
+| 记忆 | L1–L4；假设 DAG；书目 BibTeX（后端/LaTeX 导出；Web 书目面板已移除）；理论工作区在线编辑 |
 | 文献 | PDF/DOCX/arXiv 入库 + RAG |
-| 导出 | preview / polish / **md** / latex / docx / pdf（正文按 session；latex 可带课题书目） |
+| 导出 | preview / polish / **md** / latex / docx / pdf；对话区「AI润色提示词」与导出预设共用（arXiv 短文/定理汇编/摘要页/实验报告）；PDF 公式 Unicode 规范化；DOCX 预处理；本地实验室 `data/export_test_lab/` |
 | 可观测 | Token、`/v1/observability/*`、Agent 质量面板 |
 | 测试 | `tests/api/` 冒烟 + 分域；Playwright 三场景（课题/文献/导出） |
 | Docker | 单镜像前端 + API（理论种子打包问题见 KNOWN_ISSUES C1） |
@@ -232,7 +232,7 @@ curl -s -X POST http://127.0.0.1:8000/v1/experiments/runs \
 | `ValidationError` | 配置 `conf/.env` |
 | Connection refused | 先启动 uvicorn |
 | 重启丢会话 | `SESSION_STORE_BACKEND=sqlite` |
-| 公式异常 / 橙色原文乱码 | 优先 `cd app/web && npm run test:math`；见 `doc/web.md`（粘连/pmatrix/表/代码围栏） |
+| 公式异常 / 橙色原文乱码 | 优先 `cd app/web && npm run test:math`；见 `doc/web.md`。导出 PDF 公式/`→p` 乱码：跑 `scripts/export_test_lab.py`，看 `data/export_test_lab/reports/` |
 | 找不到 `web/` | 路径为 `app/web`，后端加 `--app-dir app` |
 | Docker 无理论 md | KNOWN_ISSUES C1（`.dockerignore`） |
 | 实验 API 报 event loop / 整站卡死 | 须 `await run_config_async`；禁止在 async 路由里 `new_event_loop` 调 MCP |
