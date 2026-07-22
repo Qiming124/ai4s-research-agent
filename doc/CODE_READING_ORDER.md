@@ -11,11 +11,10 @@
 | 顺序 | 读什么 | 为什么 |
 |------|--------|--------|
 | 1 | 根目录 [`../README.md`](../README.md) | 项目能干什么、怎么启动 |
-| 2 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | 分层与一次对话链路 |
-| 3 | [`SYSTEM_ARCHITECTURE.md`](SYSTEM_ARCHITECTURE.md)（可略读图） | 全景 |
-| 4 | [`ENV.md`](ENV.md) 前半 | 配置从哪来 |
-| 5 | [`DATA.md`](DATA.md) | `data/` 种子 vs 运行时 |
-| 6 | [`CODE_STYLE.md`](CODE_STYLE.md) | 中文注释约定 |
+| 2 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | 分层、全景图与一次对话链路 |
+| 3 | [`ENV.md`](ENV.md) 前半 | 配置从哪来 |
+| 4 | [`DATA.md`](DATA.md) | `data/` 种子 vs 运行时 |
+| 5 | [`CODE_STYLE.md`](CODE_STYLE.md) | 中文注释约定 |
 
 启动一遍后端（`uvicorn server.main:app --app-dir app`），打开 `/docs`，对照后面的 API 文件。
 
@@ -112,9 +111,9 @@ POST /v1/chat/stream
 |------|------|------|
 | 1 | `app/server/memory/projects.py` | 课题 CRUD、工作区、**整包删除** |
 | 2 | `app/server/api/projects.py` | HTTP：含 `DELETE ?purge=true`、会话关联/取消关联 |
-| 3 | `app/server/memory/theory_workspace.py` | 课题理论目录解析 |
-| 4 | `app/server/api/theory.py` | 理论工作区读写、假设 DAG |
-| 5 | `app/server/api/artifacts.py` | Artifact HTTP |
+| 3 | `app/server/memory/theory_workspace.py` | 课题理论目录与 prompt 注入（无 HTTP） |
+| 4 | `app/server/api/artifacts.py` | Artifact HTTP |
+| 5 | `app/server/api/structured_memory.py` | L4 定理库 HTTP |
 
 数据落盘：`data/projects/{id}/`（见 DATA.md）。Campaign 目录与 API 已移除。
 

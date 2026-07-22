@@ -56,7 +56,7 @@ literature → MethodCard → theory →（可选 review / counterexample）
 
 - `doc/PRODUCT-VISION.md` — 领域/定位/Agent 职责表述  
 - 根 `README.md`、`doc/README.md`  
-- `doc/ARCHITECTURE.md`、`doc/SYSTEM_ARCHITECTURE.md` 开篇与能力边界  
+- `doc/ARCHITECTURE.md` 开篇与能力边界  
 - 其它文档中「唯一领域 = 局部极小」的硬断言（Help 相关说明若在 `doc/web.md` 则同步）
 
 ### 3.2 前端帮助（必改）

@@ -9,10 +9,29 @@ import imageio_ffmpeg
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-ROOT = Path("/home/agent/submission/ai4s-theory-agent-v1")
+ROOT = Path(__file__).resolve().parents[1]
 FRAMES = ROOT / "demo" / "frames"
 OUT = ROOT / "demo" / "AI4S-智能体演示-3min.mp4"
-FONT = ROOT / "demo" / "assets" / "fonts" / "wqy-microhei.ttc"
+_FONT_CANDIDATES = [
+    ROOT / "demo" / "assets" / "fonts" / "wqy-microhei.ttc",
+    Path("/usr/share/fonts/truetype/wqy/wqy-microhei.ttc"),
+    Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"),
+    Path("/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc"),
+    Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
+]
+
+
+def _resolve_font() -> Path:
+    for p in _FONT_CANDIDATES:
+        if p.is_file():
+            return p
+    raise FileNotFoundError(
+        "未找到中文字体。请安装 fonts-wqy-microhei / Noto CJK，"
+        "或将字体放到 demo/assets/fonts/wqy-microhei.ttc"
+    )
+
+
+FONT = _resolve_font()
 
 W, H = 1280, 720
 FPS = 1  # 1 fps, duration per slide in seconds via repeat

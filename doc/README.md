@@ -7,8 +7,7 @@
 | 文档 | 说明 |
 |------|------|
 | [产品愿景](PRODUCT-VISION.md) | 理论侧定位、能力边界、下期 Agent/工件设计 |
-| [系统架构图](SYSTEM_ARCHITECTURE.md) | 分层架构、数据流、记忆与 CoT 全景图 |
-| [架构说明](ARCHITECTURE.md) | 分层、多 Agent / MCP / RAG / 场景工作流 |
+| [架构说明](ARCHITECTURE.md) | 产品边界、全景图、分层、多 Agent / MCP / 场景工作流 |
 | [环境变量](ENV.md) | `conf/.env` 全量配置（代码默认 vs 演示配置） |
 | [API 参考](API.md) | 端点速查、SSE、ChatRequest |
 | [API 覆盖清单](API-COVERAGE.md) | **71** 端点 · UI/Test 矩阵（权威清单） |
