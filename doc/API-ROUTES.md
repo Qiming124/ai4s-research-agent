@@ -137,31 +137,17 @@ curl -N -X POST http://127.0.0.1:8000/v1/chat/stream \
 |------|------|------|
 | GET | `/v1/memory/structured` | 会话定理库 |
 | GET | `/v1/memory/structured/global` | 全局 |
-| GET | `/v1/memory/structured/graph` | 图谱 |
 | POST | `/v1/memory/structured` | 写入条目 |
 | GET/POST | `/v1/memory/structured/{entry_id}/versions` | 版本 |
 | POST | `/v1/memory/structured/{entry_id}/edges` | 依赖边 |
 
 **链路**：`api` → `memory/structured/store.py`（SQLite）± 证明状态 / 闸门辅助模块。
 
----
-
-## 6. Theory
-
-**模块**：[`api/theory.py`](../app/server/api/theory.py) · tag `theory`
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | `/v1/theory/workspace` | 工作区文件列表 |
-| GET/PUT | `/v1/theory/workspace/{file_path:path}` | 读写 md（含 symbols/assumptions） |
-| GET | `/v1/theory/assumption-dag` | DAG |
-| GET | `/v1/theory/assumption-dag/impact/{assumption_id}` | 影响传播 |
-
-**链路**：读 `THEORY_WORKSPACE_PATH` / `data/theory` 种子。书目 HTTP API 已移除（LaTeX 导出仍可内部读 Bib store）。静态路径须注册在 `{file_path:path}` 之前（当前代码顺序正确）。
+> 已下线：`GET /graph` 视图、Theory HTTP（workspace / assumption-dag）。符号假设经 `theory_workspace` 注入。
 
 ---
 
-## 7. Experiments
+## 6. Experiments
 
 **模块**：[`api/experiments.py`](../app/server/api/experiments.py) · tag `experiments`
 
@@ -200,7 +186,7 @@ curl -s -X POST http://127.0.0.1:8000/v1/experiments/runs \
 
 ---
 
-## 8. Export
+## 7. Export
 
 **模块**：[`api/export.py`](../app/server/api/export.py) · tag `export`
 
@@ -226,6 +212,10 @@ curl -s -X POST http://127.0.0.1:8000/v1/experiments/runs \
 
 
 
+## 8. Projects
+
+**模块**：[`api/projects.py`](../app/server/api/projects.py) · tag `projects`
+
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | GET/POST | `/v1/projects` | 列表 / 创建 |
@@ -239,10 +229,9 @@ curl -s -X POST http://127.0.0.1:8000/v1/experiments/runs \
 | POST | `/v1/projects/{project_id}/sessions/{session_id}` | 关联会话 |
 | DELETE | `/v1/projects/{project_id}/sessions/{session_id}` | 取消关联（不删会话） |
 
-
 ---
 
-## 10. Verification
+## 9. Verification
 
 **模块**：[`api/verification.py`](../app/server/api/verification.py) · tag `verification`
 
@@ -270,7 +259,7 @@ curl -s -X POST http://127.0.0.1:8000/v1/verification/run \
 
 ---
 
-## 11. Observability / Sync / Jupyter
+## 10. Observability / Sync / Jupyter
 
 | 域 | 方法 | 路径 | 链路 |
 |----|------|------|------|
@@ -282,9 +271,9 @@ curl -s -X POST http://127.0.0.1:8000/v1/verification/run \
 
 ---
 
-## 12. Router 挂载顺序（main.py）
+## 11. Router 挂载顺序（main.py）
 
-1. chat · 2. agents · 3. mcp · 4. documents · 5. stats · 6. structured_memory · 7. theory · 8. experiments · 9. export · 10. prompt · 11. projects · 12. verification · 13. observability · 14. sync · 15. jupyter · 16. artifacts
+1. chat · 2. agents · 3. mcp · 4. documents · 5. stats · 6. structured_memory · 7. experiments · 8. export · 9. prompt · 10. projects · 11. verification · 12. observability · 13. sync · 14. jupyter · 15. artifacts
 
 另：存在 `app/web/dist` 时托管静态 `GET /` 与 `/assets`（不计入 65）。
 
@@ -308,4 +297,4 @@ curl -s -X POST http://127.0.0.1:8000/v1/verification/run \
 - ChatRequest agent 含 `review` / `counterexample`；`auto`/空串规范为未指定。
 - 实验运行须 `await run_config_async`，避免嵌套 event loop 卡死。
 - 2026-07-22：移除 Campaign / 书目 HTTP / sync metadata；对齐端点与场景工作流。
-- 2026-07-22：L4 CRUD + PDF 导入预览、Artifact PATCH/DELETE；权威清单 71 端点。
+- 2026-07-22：L4 CRUD + PDF 导入预览、Artifact PATCH/DELETE；权威清单 65 端点（Theory/graph HTTP 已下线）。

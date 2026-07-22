@@ -141,6 +141,3 @@ export function WorkflowTimeline(props: WorkflowTimelineProps) {
     </WorkflowTimelineGuard>
   );
 }
-
-/** @deprecated 使用 WorkflowTimeline */
-export { WorkflowTimeline as ToolTimeline };

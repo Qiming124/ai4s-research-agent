@@ -669,97 +669,29 @@ def run_theory(cli: Client, report: SuiteReport, ctx: dict[str, Any]) -> None:
         record(report, "B-05", "定理会话隔离", "FAIL", notes=str(exc))
         report.isolation["theorem_session_isolated"] = "FAIL"
 
-    # B-06 assumption DAG
-    try:
-        cli.post(
-            "/v1/memory/structured",
-            json={
-                "session_id": s1,
-                "kind": "hypothesis",
-                "title": "A1 L is C2",
-                "body": "假设 A1：损失函数 L 二阶连续可微。",
-                "metadata": {"assumption_id": "A1", "assumptions": ["A1"]},
-            },
-        )
-        cli.post(
-            "/v1/memory/structured",
-            json={
-                "session_id": s1,
-                "kind": "hypothesis",
-                "title": "A2 domain open",
-                "body": "假设 A2：定义域为开集。依赖 A1。",
-                "metadata": {"assumption_id": "A2", "assumptions": ["A1", "A2"]},
-            },
-        )
-        cli.post(
-            "/v1/memory/structured",
-            json={
-                "session_id": s1,
-                "kind": "theorem",
-                "title": "T-local-min",
-                "body": "定理依赖假设 A1 与 A2：临界点+H≻0 ⇒ 局部极小。",
-                "metadata": {"assumptions": ["A1", "A2"]},
-            },
-        )
-        r = cli.get("/v1/theory/assumption-dag", params={"session_id": s1})
-        r.raise_for_status()
-        data = r.json()
-        nodes = data.get("nodes") or []
-        edges = data.get("edges") or []
-        status = "PASS" if nodes and edges else ("PARTIAL" if nodes else "FAIL")
-        record(
-            report,
-            "B-06",
-            "假设依赖图",
-            status,
-            evidence=f"nodes={len(nodes)} edges={len(edges)}",
-        )
-        report.gold_path["G4"] = status
-    except Exception as exc:
-        record(report, "B-06", "假设依赖图", "FAIL", notes=str(exc))
-        report.gold_path["G4"] = "FAIL"
-
-    # B-07 knowledge graph
-    try:
-        r = cli.get("/v1/memory/structured/graph", params={"session_id": s1})
-        r.raise_for_status()
-        g = r.json()
-        n, e = len(g.get("nodes") or []), len(g.get("edges") or [])
-        status = "PASS" if n else "PARTIAL"
-        record(
-            report,
-            "B-07",
-            "关系图谱",
-            status if n else "N/A",
-            evidence=f"nodes={n} edges={e}",
-            notes="用途未产品化定义；此处验收可达性",
-        )
-    except Exception as exc:
-        record(report, "B-07", "关系图谱", "FAIL", notes=str(exc))
-
-    # B-08 workspace
-    try:
-        r = cli.get("/v1/theory/workspace", params={"project_id": p1})
-        r.raise_for_status()
-        files = r.json().get("files") or []
-        put = cli.put(
-            "/v1/theory/workspace/assumptions.md",
-            params={"project_id": p1},
-            json={"content": "# Assumptions\n\n- A1: L is C^2\n- acceptance fixture\n"},
-        )
-        status = "PASS" if r.status_code == 200 and put.status_code == 200 and files else "PARTIAL"
-        if r.status_code != 200:
-            status = "FAIL"
-        record(
-            report,
-            "B-08",
-            "工作区文件",
-            status,
-            evidence=f"files={len(files)} put={put.status_code}",
-            notes="对话引用能力未深测，记功能可达",
-        )
-    except Exception as exc:
-        record(report, "B-08", "工作区文件", "PARTIAL", notes=str(exc))
+    # B-06 / B-07 / B-08：假设 DAG、关系图谱视图、工作区文件 HTTP 已下线
+    record(
+        report,
+        "B-06",
+        "假设依赖图",
+        "SKIP",
+        notes="HTTP /v1/theory/assumption-dag* 已移除；符号假设仍经种子注入",
+    )
+    report.gold_path["G4"] = "SKIP"
+    record(
+        report,
+        "B-07",
+        "关系图谱",
+        "SKIP",
+        notes="GET /v1/memory/structured/graph 已移除；边 CRUD 仍可用",
+    )
+    record(
+        report,
+        "B-08",
+        "工作区文件",
+        "SKIP",
+        notes="HTTP /v1/theory/workspace* 已移除；磁盘种子与 prompt 注入保留",
+    )
 
 
 def run_outputs(cli: Client, report: SuiteReport, ctx: dict[str, Any]) -> None:

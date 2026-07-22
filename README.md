@@ -26,7 +26,7 @@
 | 多 Agent | general / theory / **experiment（实验顾问）** / literature / review / counterexample |
 | MCP | web_search / arxiv / filesystem / sympy / rag（numerical 为可选辅助，非代跑实验主路径） |
 | 课题工作台 | Project、会话联动；Tabs：文献 / 理论（定理库·推导迹）/ 产出；对话版 / 科研版；左右侧栏可用 « / » 收起 |
-| 记忆 | L1–L4；假设 DAG；理论工作区在线编辑（symbols/assumptions 注入模型；界面不展示只读速览） |
+| 记忆 | L1–L4；定理库 CRUD/导入；符号与假设经种子注入模型（无工作区/DAG HTTP） |
 | 文献 | 检索 + 方法提炼；手动入库 + RAG |
 | 导出 | preview / polish / md / latex / docx / pdf；「AI润色提示词」（模板/案例见 `conf/prompt/*.json`） |
 | 可观测 | Token、`/v1/observability/*`、Agent 质量面板 |
@@ -45,7 +45,7 @@
 │  Transport 层（SSE 流式推送）             │
 │  app/client/cli.py  /  app/web/src/     │
 ├─────────────────────────────────────────┤
-│  Route 层（FastAPI · 16 域 API）         │
+│  Route 层（FastAPI · 15 域 API）         │
 │  app/server/api/*.py                     │
 ├─────────────────────────────────────────┤
 │  Agent 层（理论侧多角色编排）             │
@@ -100,7 +100,7 @@ agent/
 | `app/server/llm/` | DeepSeek 客户端与 prompt |
 | `app/server/memory/` | 会话、RAG、L4、课题 |
 | `app/server/agents/` · `graph/` | 理论侧 Agent 与 LangGraph 路由 |
-| `app/server/api/` | HTTP 路由与 SSE（71 端点） |
+| `app/server/api/` | HTTP 路由与 SSE（65 端点） |
 | `app/server/main.py` | FastAPI 入口 |
 | `app/client/cli.py` | 终端 CLI |
 | `app/web/` | React 理论侧工作台 |
@@ -201,7 +201,7 @@ cd app/web && npm install && npm run dev   # http://localhost:5173
 
 ## API 参考
 
-[`doc/API-COVERAGE.md`](doc/API-COVERAGE.md)（71 端点）· [`doc/API-ROUTES.md`](doc/API-ROUTES.md)（全路径链路）· [`doc/API.md`](doc/API.md) · `GET /docs`（Swagger：中文接口说明、字段注解与样例值）· 前端 `#/api-lab` 同步读取 `/openapi.json`
+[`doc/API-COVERAGE.md`](doc/API-COVERAGE.md)（65 端点）· [`doc/API-ROUTES.md`](doc/API-ROUTES.md)（全路径链路）· [`doc/API.md`](doc/API.md) · `GET /docs`（Swagger：中文接口说明、字段注解与样例值）· 前端 `#/api-lab` 同步读取 `/openapi.json`
 
 ```bash
 curl http://127.0.0.1:8000/health

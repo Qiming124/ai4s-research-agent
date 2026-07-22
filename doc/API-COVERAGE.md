@@ -1,6 +1,6 @@
 # API 覆盖清单
 
-> **71** 个业务 REST 端点（`/health` + `/v1/*`）· **16** 域 · 更新于 **v2.2**（以 `GET /openapi.json` 为准）  
+> **65** 个业务 REST 端点（`/health` + `/v1/*`）· **15** 域 · 更新于 **v2.2**（以 `GET /openapi.json` 为准）  
 > OpenAPI 另含生产静态入口 `GET /`（不计入上表）。  
 > **调用链路详解**：[`API-ROUTES.md`](API-ROUTES.md)
 
@@ -29,7 +29,6 @@
 | Documents | GET | `/v1/sessions/{id}/rag-refs` | ✓ | ✓ | A | RAG 引用 |
 | Memory | GET | `/v1/memory/structured` | ✓ | ✓ | A | 定理库 |
 | Memory | GET | `/v1/memory/structured/global` | ✓ | ✓ | A | 全局记忆 |
-| Memory | GET | `/v1/memory/structured/graph` | ✓ | ✓ | A | 知识图谱 |
 | Memory | POST | `/v1/memory/structured` | — | ✓ | A | Agent / 手工写入 |
 | Memory | PATCH | `/v1/memory/structured/{id}` | ✓ | ✓ | A | 更新条目 |
 | Memory | DELETE | `/v1/memory/structured/{id}` | ✓ | ✓ | A | 删除条目 |
@@ -38,11 +37,6 @@
 | Memory | GET | `/v1/memory/structured/{id}/versions` | — | ✓ | H | L4 版本列表 |
 | Memory | POST | `/v1/memory/structured/{id}/versions` | — | ✓ | H | L4 新建版本 |
 | Memory | POST | `/v1/memory/structured/{id}/edges` | — | ✓ | H | 图谱边 |
-| Theory | GET | `/v1/theory/workspace` | ✓ | ✓ | A | 工作区列表 |
-| Theory | GET | `/v1/theory/workspace/{path}` | ✓ | ✓ | A | 读文件 |
-| Theory | PUT | `/v1/theory/workspace/{path}` | ✓ | ✓ | H | 写文件 |
-| Theory | GET | `/v1/theory/assumption-dag` | ✓ | ✓ | A | 假设 DAG |
-| Theory | GET | `/v1/theory/assumption-dag/impact/{id}` | ✓ | ✓ | H | 影响传播 |
 | Projects | GET | `/v1/projects` | ✓ | ✓ | A | 课题列表 |
 | Projects | POST | `/v1/projects` | ✓ | ✓ | H | 新建课题 |
 | Projects | GET | `/v1/projects/{id}` | ✓ | ✓ | A | 课题详情 |
@@ -88,7 +82,8 @@
 |--------|------|
 | `/v1/projects/.../campaign*` | Campaign S0–S8 整包删除 |
 | `/v1/bibliography*` | 书目 HTTP 移除；LaTeX 仍可内部用 `bibliography.py` |
-| `/v1/theory/symbols` 等速览 | 改走工作区文件读写 |
+| `/v1/theory/workspace*` · `/v1/theory/assumption-dag*` · `/v1/theory/symbols` | Theory HTTP 与速览移除；种子仍注入 prompt |
+| `GET /v1/memory/structured/graph` | 关系图谱视图移除；边 CRUD 保留 |
 | `POST /v1/sync/metadata` | 云同步元数据移除 |
 | `GET /v1/prompt/test-cases/{case_id}` | 单案例端点移除 |
 
@@ -96,7 +91,7 @@
 
 ```
 课题选择 → 新建会话(自动关联) → 文献导入(arXiv/PDF) → 对话(SSE / 场景工作流)
-  → Artifact（方法卡 / 实验计划 / 下一步）→ 导出 preview/polish → LaTeX/DOCX/PDF/MD
+  → Artifact（推导迹 / 实验计划 / 下一步）→ 导出 preview/polish → LaTeX/DOCX/PDF/MD
 ```
 
 ## 测试入口

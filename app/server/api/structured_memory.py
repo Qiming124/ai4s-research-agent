@@ -10,7 +10,7 @@
 #     - 被调用：server/main.py include_router
 #     - 调用：server/memory/structured/store.py
 #
-# 图谱边 API 仍保留；GET /graph 视图已下线（效果差）。
+# 图谱边 API 仍保留（POST/DELETE edges）；已移除 GET /graph 视图。
 # 阅读提示：
 #     - 新人先看 list_structured_memory 与 create_structured_memory
 #     - 边见 create_memory_edge
@@ -38,16 +38,6 @@ from shared.schemas import (
 )
 
 router = APIRouter(tags=["memory"])
-
-
-@router.get(
-    "/v1/memory/structured/graph",
-    summary="知识图谱（已下线）",
-    deprecated=True,
-)
-async def get_memory_graph_removed() -> None:
-    """关系图谱视图已下线（效果差）。"""
-    raise HTTPException(status_code=410, detail="关系图谱 API 已下线")
 
 
 @router.get(

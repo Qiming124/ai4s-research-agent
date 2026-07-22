@@ -820,21 +820,6 @@ class MemoryEdge(BaseModel):
     )
 
 
-class MemoryGraphResponse(BaseModel):
-    """GET /v1/memory/structured/graph 响应。"""
-
-    nodes: list[StructuredMemoryEntry] = Field(
-        default_factory=list,
-        description="图谱节点（记忆条目）",
-        examples=[[]],
-    )
-    edges: list[MemoryEdge] = Field(
-        default_factory=list,
-        description="图谱边",
-        examples=[[]],
-    )
-
-
 class MemoryEdgeCreateRequest(BaseModel):
     """POST /v1/memory/structured/{id}/edges 请求体。"""
 
@@ -849,30 +834,6 @@ class MemoryEdgeCreateRequest(BaseModel):
         default="depends_on",
         description="关系类型",
         examples=["depends_on"],
-    )
-
-
-class WorkspaceFileInfo(BaseModel):
-    """理论工作区文件条目。"""
-
-    path: str = Field(
-        description="相对工作区根的路径",
-        examples=["assumptions.md"],
-    )
-    kind: str = Field(
-        default="file",
-        description="条目类型：file / dir",
-        examples=["file"],
-    )
-
-
-class WorkspaceListResponse(BaseModel):
-    """GET /v1/theory/workspace 响应。"""
-
-    files: list[WorkspaceFileInfo] = Field(
-        default_factory=list,
-        description="工作区文件列表",
-        examples=[[]],
     )
 
 
@@ -1549,38 +1510,6 @@ class NotebookResultUploadResponse(BaseModel):
         default="indexed",
         description="入库状态",
         examples=["indexed"],
-    )
-
-
-class WorkspaceWriteRequest(BaseModel):
-    """写入理论工作区文件请求体。"""
-
-    model_config = ConfigDict(
-        json_schema_extra={
-            "examples": [{"content": "# Assumptions\n\n- f is C^2\n"}]
-        }
-    )
-
-    content: str = Field(
-        ...,
-        min_length=0,
-        description="文件全文内容（覆盖写入）",
-        examples=["# Assumptions\n\n- f is C^2\n"],
-    )
-
-
-class AssumptionDagResponse(BaseModel):
-    """假设 DAG 响应。"""
-
-    nodes: list[dict[str, Any]] = Field(
-        default_factory=list,
-        description="DAG 节点列表",
-        examples=[[{"id": "A1", "label": "f is C^2"}]],
-    )
-    edges: list[dict[str, Any]] = Field(
-        default_factory=list,
-        description="DAG 边列表",
-        examples=[[{"from": "A1", "to": "T1", "relation": "depends_on"}]],
     )
 
 

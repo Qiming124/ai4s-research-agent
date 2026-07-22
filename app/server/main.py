@@ -43,7 +43,6 @@ from server.api.projects import router as projects_router
 from server.api.prompt import router as prompt_router
 from server.api.sync import router as sync_router
 from server.api.structured_memory import router as structured_memory_router
-from server.api.theory import router as theory_router
 from server.api.verification import router as verification_router
 from server.config import get_settings, setup_logging
 from server.mcp.client import get_mcp_client, reset_mcp_client
@@ -178,7 +177,6 @@ def create_app() -> FastAPI:
     app.include_router(documents_router)
     app.include_router(stats_router)
     app.include_router(structured_memory_router)
-    app.include_router(theory_router)
     app.include_router(experiments_router)
     app.include_router(export_router)
     app.include_router(prompt_router)

@@ -53,13 +53,12 @@ Vite 将 `/v1`、`/health` 代理到 8000；SSE 已设 `X-Accel-Buffering: no`�
 | `DocumentPanel` / `RagRefsPanel` | 文献入库、RAG 引用 |
 | `TheoremLibraryPanel` / `ArtifactsPanel` | 定理库 CRUD、推导迹 / 实验计划工件；方法卡、假设 DAG、关系图谱、工作区文件编辑 UI 已下线 |
 | `VerificationDashboard` | 验证账本（遗留/可选） |
-| `TheoremLibraryPanel` / `KnowledgeGraphPanel` | L4 定理库与图谱 |
 | `ExperimentLogPanel` | 用户提交的实验/Notebook 结果记录（供顾问解读） |
 | `ExportPanel` | preview / polish / md / latex / docx / pdf |
 | `OnboardingWizard` | 首次引导（文献→推导→实验建议/数据→产出） |
 | `ErrorBoundary` | 渲染错误隔离 |
 
-主要 Hooks：`useChatStream`、`useDocuments`、`useStructuredMemory`、`useAssumptionDag`、`useExperimentLogs` 等。
+主要 Hooks：`useChatStream`、`useDocuments`、`useStructuredMemory`、`useArtifacts`、`useExperimentLogs` 等。
 
 ## Agent 与 SSE
 

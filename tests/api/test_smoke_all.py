@@ -1,4 +1,4 @@
-# 全量 API 冒烟（自 scripts/smoke_industrialization.py 迁入）。
+# 全量 API 冒烟。
 
 from __future__ import annotations
 
@@ -69,7 +69,7 @@ def test_theory_routes_removed(client):
     assert client.get("/v1/theory/assumption-dag/impact/A4").status_code == 404
     assert client.get("/v1/theory/workspace").status_code == 404
     # /graph 曾被 {entry_id} 路由吞掉时可能为 405；下线后应不可用
-    assert client.get("/v1/memory/structured/graph").status_code in (404, 405, 410)
+    assert client.get("/v1/memory/structured/graph").status_code in (404, 405, 422)
 
 
 def test_memory_versioning_smoke(client):

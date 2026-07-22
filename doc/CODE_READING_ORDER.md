@@ -129,7 +129,7 @@ POST /v1/chat/stream
 | 3 | `memory/structured/store.py` | L3/L4 定理库条目 |
 | 4 | `memory/structured/extract.py` | 从回复抽取结构 |
 | 5 | `memory/structured/injection.py` | 注入 system 上下文 |
-| 6 | `memory/structured/graph.py` / `dag.py` | 关系图 / 假设 DAG |
+| 6 | `memory/structured/graph.py` | L4 边/元数据辅助（图谱视图 HTTP 已下线） |
 | 7 | `api/structured_memory.py` | 结构化记忆 API |
 | 8 | `memory/rag/store.py` | 文档注册 + Chroma |
 | 9 | `memory/rag/chunking.py` / `embeddings.py` | 切块与向量 |
@@ -139,7 +139,7 @@ POST /v1/chat/stream
 | 13 | `api/documents.py` | 上传 / arXiv 导入 |
 
 **注意（读源码时别被文案骗到）：**  
-`memory/bibliography.py` 仍供 **LaTeX 导出**内部注入 BibTeX；**书目 HTTP API 与 Web 书目库面板均已移除**。符号/假设请走工作区文件读写，不再有独立 `/v1/theory/symbols` 等速览端点。
+`memory/bibliography.py` 仍供 **LaTeX 导出**内部注入 BibTeX；**书目 HTTP API 与 Web 书目库面板均已移除**。符号/假设经磁盘种子与 `theory_workspace` 注入 prompt，**无** `/v1/theory/workspace*` / `assumption-dag*` HTTP。
 
 ---
 

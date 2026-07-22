@@ -135,7 +135,7 @@ curl -N -X POST http://127.0.0.1:8000/v1/chat/stream \
 
 ---
 
-## L4 结构化记忆与理论工作区
+## L4 结构化记忆与工件
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
@@ -144,14 +144,12 @@ curl -N -X POST http://127.0.0.1:8000/v1/chat/stream \
 | POST | `/v1/memory/structured/preview-markdown` | Markdown 导入预览（不写库） |
 | POST | `/v1/memory/structured/import-preview` | PDF/DOCX/MD 导入预览（LLM 候选，不写库） |
 | GET | `/v1/memory/structured/global` | 全局引理 |
-| GET | `/v1/memory/structured/graph` | 知识图谱 |
 | GET/POST | `/v1/memory/structured/{id}/versions` | 版本 |
 | POST | `/v1/memory/structured/{id}/edges` | 依赖边 |
 | GET/POST | `/v1/artifacts` | 课题工件列表 / 手动创建 |
 | GET/PATCH/DELETE | `/v1/artifacts/{id}` | 工件详情 / 更新 / 删除 |
-| GET | `/v1/theory/workspace` | 文件列表 |
-| GET/PUT | `/v1/theory/workspace/{path}` | 读写（含 symbols/assumptions.md） |
-| GET | `/v1/theory/assumption-dag` (+ `/impact/{id}`) | 假设 DAG |
+
+> 已下线：`GET /v1/memory/structured/graph`、`/v1/theory/workspace*`、`/v1/theory/assumption-dag*`（符号/假设仍经磁盘种子注入 prompt）。
 
 ---
 
