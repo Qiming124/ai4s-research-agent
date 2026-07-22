@@ -2,10 +2,10 @@
   "global": [],
   "agents": {
     "general": ["*"],
-    "theory": ["sympy__*", "numerical__*", "rag__*", "web_search__*"],
-    "experiment": ["filesystem__*", "numerical__*"],
+    "theory": ["sympy__*", "rag__*", "web_search__*"],
+    "experiment": ["filesystem__*", "rag__*"],
     "literature": ["arxiv__*", "web_search__*"],
     "review": ["filesystem__*"],
-    "counterexample": ["sympy__*", "numerical__*"]
+    "counterexample": ["sympy__*"]
   }
 }

@@ -107,7 +107,7 @@ async def chat(request: ChatRequest) -> ChatResponse:
                 reasoning_effort=request.reasoning_effort,
                 cot_mode=_effective_cot_mode(request),
                 project_id=request.project_id,
-                campaign_id=request.campaign_id,
+                artifact_ids=request.artifact_ids,
             )
         else:
             agent = get_general_agent(math_mode=(request.mode == "math"))
@@ -122,7 +122,6 @@ async def chat(request: ChatRequest) -> ChatResponse:
                 reasoning_effort=request.reasoning_effort,
                 cot_mode=_effective_cot_mode(request),
                 project_id=request.project_id,
-                campaign_id=request.campaign_id,
             )
     except Exception as exc:
         logger.exception("非流式对话失败")
@@ -185,7 +184,7 @@ async def _stream_generator(request: ChatRequest) -> AsyncIterator[str]:
                 reasoning_effort=request.reasoning_effort,
                 cot_mode=_effective_cot_mode(request),
                 project_id=request.project_id,
-                campaign_id=request.campaign_id,
+                artifact_ids=request.artifact_ids,
             ):
                 payload = chunk.model_dump()
                 yield _sse_event(payload)
@@ -326,6 +325,12 @@ async def delete_session(
         existed = store.delete_session(session_id)
         if not existed:
             raise HTTPException(status_code=404, detail=f"会话不存在: {session_id}")
+        try:
+            from server.memory.projects import get_project_store
+
+            get_project_store().unlink_session(session_id)
+        except Exception:
+            logger.exception("解除课题会话关联失败 session_id=%s", session_id)
         try:
             from server.memory.rag.session_refs import SessionRagRefStore
             from server.memory.rag.store import get_rag_store

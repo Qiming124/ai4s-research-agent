@@ -8,7 +8,7 @@
 #
 # 架构位置：
 #     - 被调用：server/api/verification.py、experiments/runner.py、
-#               campaign_experiments.py、graph/theory_pipeline.py
+#               graph/theory_pipeline.py
 #     - 调用：server/mcp/client.py、memory/verification.py、claim_parser.py
 #
 # 阅读提示：

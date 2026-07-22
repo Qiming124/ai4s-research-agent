@@ -20,12 +20,17 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage
+from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage, HumanMessage, SystemMessage, ToolMessage
 
 from server.graph.workflow import (
     upsert_workflow_record,
     workflow_step_chunk,
     workflow_step_record,
+)
+from server.llm.client import get_deepseek_client
+from server.llm.thinking_messages import (
+    prepare_messages_for_deepseek,
+    resolve_thinking_for_messages,
 )
 from shared.schemas import PersistedToolCall, StreamChunk
 
@@ -68,6 +73,51 @@ def _usage_from_message(message: AIMessage | AIMessageChunk) -> dict[str, Any] |
         return dict(token_usage)
     usage = metadata.get("usage")
     return dict(usage) if usage else None
+
+
+def _lc_messages_to_openai_dicts(messages: list[BaseMessage]) -> list[dict[str, Any]]:
+    """LangChain BaseMessage → OpenAI chat dict（保留 reasoning_content / tool_calls）。"""
+    out: list[dict[str, Any]] = []
+    for msg in messages:
+        if isinstance(msg, SystemMessage):
+            out.append({"role": "system", "content": msg.content or ""})
+        elif isinstance(msg, HumanMessage):
+            out.append({"role": "user", "content": msg.content or ""})
+        elif isinstance(msg, ToolMessage):
+            out.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": msg.tool_call_id,
+                    "content": msg.content or "",
+                }
+            )
+        elif isinstance(msg, AIMessage):
+            entry: dict[str, Any] = {
+                "role": "assistant",
+                "content": msg.content if isinstance(msg.content, str) else (msg.content or ""),
+            }
+            additional = getattr(msg, "additional_kwargs", None) or {}
+            meta = getattr(msg, "response_metadata", None) or {}
+            rc = additional.get("reasoning_content")
+            if rc is None:
+                rc = meta.get("reasoning_content")
+            if msg.tool_calls:
+                entry["tool_calls"] = [
+                    {
+                        "id": tc["id"],
+                        "type": "function",
+                        "function": {
+                            "name": tc["name"],
+                            "arguments": json.dumps(tc.get("args") or {}, ensure_ascii=False),
+                        },
+                    }
+                    for tc in msg.tool_calls
+                ]
+                entry["reasoning_content"] = rc if rc is not None else ""
+            elif rc:
+                entry["reasoning_content"] = rc
+            out.append(entry)
+    return out
 
 
 async def stream_react_graph(
@@ -251,36 +301,57 @@ async def stream_react_graph(
 
     full_content = ""
     full_reasoning = ""
-    async for chunk in final_model.astream(messages):
-        if isinstance(chunk, AIMessageChunk):
-            # 提取 reasoning_content（DeepSeek thinking 模式）
-            reasoning = _extract_reasoning(chunk)
-            if reasoning:
-                # 只取增量：reasoning 可能重复累积，需对全长求 diff
-                delta = reasoning[len(full_reasoning):]
-                if delta:
-                    full_reasoning = reasoning
-                    yield (
-                        StreamChunk(type="reasoning", content=delta, agent_name=agent_name),
-                        None,
-                    )
-            content = chunk.content
-            if isinstance(content, str) and content:
-                # 去重: 第二个 chunk 可能从头开始包含第一个 chunk 的内容
-                if full_content and content.startswith(full_content):
-                    delta = content[len(full_content):]
-                    full_content = content
-                else:
-                    delta = content
-                    full_content += delta
-                if delta:
-                    yield (
-                        StreamChunk(type="content", content=delta, agent_name=agent_name),
-                        None,
-                    )
-        elif isinstance(chunk, AIMessage):
-            # 最终 message 可能含 token 用量
-            usage = _usage_from_message(chunk) or usage
+    # ChatOpenAI 不会把 additional_kwargs.reasoning_content 回传给 DeepSeek；
+    # 最终合成改走 DeepSeekClient，并补齐 tool_calls 消息的 reasoning_content。
+    openai_messages = prepare_messages_for_deepseek(
+        _lc_messages_to_openai_dicts(messages)
+    )
+    # 从 final_model 推断 thinking / effort（与 get_chat_model 对齐）
+    enable_thinking = True
+    reasoning_effort = None
+    try:
+        extra = getattr(final_model, "extra_body", None) or {}
+        thinking = extra.get("thinking") if isinstance(extra, dict) else None
+        if isinstance(thinking, dict) and thinking.get("type") == "disabled":
+            enable_thinking = False
+        reasoning_effort = getattr(final_model, "reasoning_effort", None)
+    except Exception:
+        pass
+
+    # 工具轮未产生可回传的 reasoning；thinking=on 会 400，强制关闭
+    requested_thinking = enable_thinking
+    enable_thinking = resolve_thinking_for_messages(openai_messages, enable_thinking)
+    if requested_thinking and not enable_thinking:
+        logger.info(
+            "最终合成因消息含 tool_calls 历史，强制关闭 thinking（避免 DeepSeek 400）"
+        )
+
+    client = get_deepseek_client()
+    async for chunk in client.stream_chat(
+        openai_messages,
+        enable_thinking=enable_thinking,
+        reasoning_effort=reasoning_effort,
+    ):
+        if chunk.type == "reasoning":
+            full_reasoning += chunk.content
+            yield (
+                StreamChunk(type="reasoning", content=chunk.content, agent_name=agent_name),
+                None,
+            )
+        elif chunk.type == "content":
+            full_content += chunk.content
+            yield (
+                StreamChunk(type="content", content=chunk.content, agent_name=agent_name),
+                None,
+            )
+        elif chunk.type == "error":
+            yield (
+                StreamChunk(type="error", content=chunk.content, agent_name=agent_name),
+                None,
+            )
+            return
+        elif chunk.type == "done":
+            usage = chunk.usage or usage
 
     upsert_workflow_record(
         wf_records,

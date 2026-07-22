@@ -7,6 +7,10 @@
 
 **进度**：Batch-1 · Batch-2 · Batch-3 · **Batch-4 全部完成**（分批量化闭环）
 
+> **2026-07-22 退役说明**：下列历史 MUT 对应端点已从产品移除，结果表中仍保留当时数字，**勿再作为回归目标**：  
+> Campaign（B3-10…14）· 书目 HTTP（B2-24/25）· 理论速览（B2-19…21）· `POST /v1/sync/metadata`（旧 B4-09）· `GET /v1/jupyter/template`（旧 B4-11）。  
+> 现行权威清单见 [`API-COVERAGE.md`](API-COVERAGE.md)（71 端点）。
+
 ---
 
 # Batch-1
@@ -88,13 +92,13 @@
 | B2-16 | GET `/v1/theory/workspace` | T1 | 200 | 1.25 | **1.4** | 5.85 | ✓ | ✓ | PASS | |
 | B2-17 | PUT `…/quant_b2_probe.md` | T2 | 200 | 0.96 | **1.13** | 1.49 | ✓ | ✓ | PASS | |
 | B2-18 | GET `…/quant_b2_probe.md` | T1 | 200 | 0.81 | **0.83** | 0.91 | ✓ | ✓ | PASS | QUANT_B2_MARK |
-| B2-19 | GET `/v1/theory/assumption-matrix` | T1 | 200 | 0.81 | **0.82** | 0.94 | ✓ | ✓ | PASS | |
-| B2-20 | GET `/v1/theory/symbols` | T1 | 200 | 0.68 | **0.68** | 0.84 | ✓ | ✓ | PASS | |
-| B2-21 | GET `/v1/theory/assumptions` | T1 | 200 | 0.72 | **0.73** | 0.79 | ✓ | ✓ | PASS | |
+| B2-19 | GET `/v1/theory/assumption-matrix` | T1 | 200 | 0.81 | **0.82** | 0.94 | ✓ | ✓ | **RETIRED**† | †历史速览 API |
+| B2-20 | GET `/v1/theory/symbols` | T1 | 200 | 0.68 | **0.68** | 0.84 | ✓ | ✓ | **RETIRED**† | †历史 |
+| B2-21 | GET `/v1/theory/assumptions` | T1 | 200 | 0.72 | **0.73** | 0.79 | ✓ | ✓ | **RETIRED**† | †历史 |
 | B2-22 | GET `/v1/theory/assumption-dag` | T1 | 200 | 0.84 | **0.9** | 1.07 | ✓ | ✓ | PASS | |
 | B2-23 | GET `…/impact/A4` | T1 | 200 | 0.8 | **0.81** | 1.51 | ✓ | ✓ | PASS | |
-| B2-24 | GET `/v1/bibliography` | T1 | 200 | 0.8 | **0.81** | 1.34 | ✓ | ✓ | PASS | |
-| B2-25 | GET `/v1/bibliography/export.bib` | T1 | 200 | 0.82 | **0.9** | 0.98 | ✓ | ✓ | PASS | |
+| B2-24 | GET `/v1/bibliography` | T1 | 200 | 0.8 | **0.81** | 1.34 | ✓ | ✓ | **RETIRED**† | †历史 |
+| B2-25 | GET `/v1/bibliography/export.bib` | T1 | 200 | 0.82 | **0.9** | 0.98 | ✓ | ✓ | **RETIRED**† | †历史 |
 
 **通过率**：`(24 PASS + 1 SKIP) / 25 = 100%`；无 FAIL，无需代码修复。
 
@@ -105,10 +109,10 @@
 
 ---
 
-# Batch-3（Projects · Campaigns · Verification · Experiments）
+# Batch-3（Projects · Verification · Experiments；含已退役 Campaign）
 
-> 探针：`batch3_20260718T131552Z` · **20 PASS · 0 FAIL**  
-> 链式：`project_id=cc065643-ce7` · `task_id=4` · `campaign_id=f9b8fe3d-4ba` · `run_id=d7c04719`
+> 探针：`batch3_20260718T131552Z` · **20 PASS · 0 FAIL**（含当时仍存在的 Campaign）  
+> 链式：`project_id=cc065643-ce7` · `task_id=4` · `campaign_id=f9b8fe3d-4ba`（历史）· `run_id=d7c04719`
 
 ## 部署记录
 
@@ -133,11 +137,11 @@
 | B3-07 | PATCH `…/tasks/{tid}?status=in_progress` | T2 | 200 | 10.34 | **10.34** | 10.34 | PASS | N=1 |
 | B3-08 | POST `…/sessions/quant-b3-sess` | T2 | 200 | 23.0 | **23.0** | 23.0 | PASS | N=1 |
 | B3-09 | GET `…/sessions` | T1 | 200 | 0.97 | **1.04** | 1.53 | PASS | FX 含 sess |
-| B3-10 | GET `…/campaigns` | T1 | 200 | 1.28 | **1.44** | 5.42 | PASS | |
-| B3-11 | POST `…/campaign` | T2 | 200 | 23.87 | **23.87** | 23.87 | PASS | N=1 |
-| B3-12 | GET `…/campaign` | T1 | 200 | 1.0 | **1.18** | 1.69 | PASS | 活跃 |
-| B3-13 | GET `…/campaigns/{cid}` | T1 | 200 | 0.89 | **1.07** | 1.25 | PASS | |
-| B3-14 | PATCH `…/campaigns/{cid}` | T2 | 200 | 7.66 | **7.66** | 7.66 | PASS | status=active |
+| B3-10 | GET `…/campaigns` | T1 | 200 | 1.28 | **1.44** | 5.42 | PASS† | †历史；端点已删 |
+| B3-11 | POST `…/campaign` | T2 | 200 | 23.87 | **23.87** | 23.87 | PASS† | †历史 N=1 |
+| B3-12 | GET `…/campaign` | T1 | 200 | 1.0 | **1.18** | 1.69 | PASS† | †历史 |
+| B3-13 | GET `…/campaigns/{cid}` | T1 | 200 | 0.89 | **1.07** | 1.25 | PASS† | †历史 |
+| B3-14 | PATCH `…/campaigns/{cid}` | T2 | 200 | 7.66 | **7.66** | 7.66 | PASS† | †历史 |
 | B3-15 | GET `/v1/verification/dashboard` | T1 | 200 | 0.94 | **1.08** | 4.85 | PASS | |
 | B3-16 | GET `/v1/verification/records` | T1 | 200 | 1.21 | **1.26** | 1.87 | PASS | |
 | B3-17 | POST `/v1/verification/run` | T3 | 200 | 118 | **118** | 118 | PASS | N=1；numerical |
@@ -179,9 +183,9 @@
 | B4-06 | POST `/v1/export/polish` | T4 | 200 | 1721 | **1721** | 1721 | PASS | N=1；AI 润色 |
 | B4-07 | GET `/v1/observability/summary` | T1 | 200 | 1.13 | **1.33** | 14.67 | PASS | |
 | B4-08 | GET `/v1/observability/agent-quality` | T1 | 200 | 1.0 | **1.04** | 1.24 | PASS | |
-| B4-09 | POST `/v1/sync/metadata` | T2 | 403 | 2.75 | **2.75** | 2.75 | PASS(expected) | ENABLE_CLOUD_SYNC=false |
-| B4-10 | GET `/v1/sync/audit/default` | T1 | 200 | 0.88 | **0.89** | 1.57 | PASS | |
-| B4-11 | GET `/v1/jupyter/template` | T1 | 200 | 0.66 | **0.72** | 2.09 | PASS | loss_landscape |
+| B4-09 | POST `/v1/sync/metadata` | T2 | 403 | 2.75 | **2.75** | 2.75 | **RETIRED**† | †历史；端点已删 |
+| B4-10 | GET `/v1/sync/audit/default` | T1 | 200 | 0.88 | **0.89** | 1.57 | PASS | 现行唯一 sync 端点 |
+| B4-11 | GET `/v1/jupyter/template` | T1 | 200 | 0.66 | **0.72** | 2.09 | **RETIRED**† | †历史 |
 | B4-12 | POST `/v1/jupyter/upload-result` | T2 | 200 | 2.45 | **2.45** | 2.45 | PASS | N=1 |
 
 **通过率**：`12/12 = 100%`；无 FAIL，无需代码修复。
@@ -195,13 +199,14 @@
 | Batch-3 | 20 PASS |
 | Batch-4 | 11 PASS + 1 PASS(expected)（sync 403） |
 
-量化排障覆盖 Health→Chat→Documents→Memory→Theory→Projects→Campaigns→Verification→Experiments→Export→Observability→Sync→Jupyter（与 API-COVERAGE 分域一致）。
+量化排障覆盖 Health→Chat→Documents→Memory→Theory→Projects→Verification→Experiments→Export→Prompt/Artifacts→Observability→Sync→Jupyter（与 API-COVERAGE 分域一致；Campaign/书目 HTTP 已退役）。
 
 ## 修订记录
 
 | 日期 | 说明 |
 |------|------|
 | 2026-07-18 | Batch-1 实测 + MCP close 小修 |
+| 2026-07-22 | 标注已退役端点；权威清单改为 65 端点 |
 | 2026-07-18 | Batch-2 实测；探针 `--batch 2` |
 | 2026-07-18 | Batch-3 实测；探针 `--batch 3`；20/20 PASS |
 | 2026-07-18 | Batch-4 实测；探针 `--batch 4`；12/12；四批闭环 |

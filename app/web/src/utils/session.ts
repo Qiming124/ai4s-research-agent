@@ -96,12 +96,20 @@ export async function fetchServerSessions(): Promise<SessionMeta[]> {
   const data = await res.json();
   const sessions = Array.isArray(data.sessions) ? data.sessions : [];
   return sessions.map(
-    (item: { session_id: string; updated_at?: string; project_id?: string }) => ({
-      id: item.session_id,
-      title: `会话 ${shortSessionId(item.session_id)}`,
-      updatedAt: item.updated_at ? Date.parse(item.updated_at) : Date.now(),
-      projectId: item.project_id || "default",
-    }),
+    (item: { session_id: string; updated_at?: string; project_id?: string }) => {
+      const id = item.session_id;
+      // 可读测试会话 ID（如「【测试】…」）直接作标题，便于侧栏查找
+      const title =
+        id.startsWith("【测试】") || id.startsWith("测试-") || id.startsWith("test-")
+          ? id
+          : `会话 ${shortSessionId(id)}`;
+      return {
+        id,
+        title,
+        updatedAt: item.updated_at ? Date.parse(item.updated_at) : Date.now(),
+        projectId: item.project_id || "default",
+      };
+    },
   );
 }
 

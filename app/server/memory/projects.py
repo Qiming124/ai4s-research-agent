@@ -7,7 +7,7 @@
 #     3. delete_project() 删除课题行（级联由 API 层处理磁盘与会话）
 #
 # 架构位置：
-#     - 被调用：server/api/projects.py、sync.py、theory.py、research_supervisor.py
+#     - 被调用：server/api/projects.py、sync.py、theory.py
 #     - 调用：server/config.py、shared/paths.DATA_ROOT
 #
 # 阅读提示：
@@ -218,7 +218,7 @@ class ProjectStore:
         """
         删除课题行及其成员/任务/会话绑定/审计记录。
 
-        不删会话消息、Campaign、磁盘目录——由 API 层级联处理。
+        不删会话消息与磁盘目录——由 API 层级联处理。
         默认课题 default 不可删。
 
         参数:
@@ -232,7 +232,9 @@ class ProjectStore:
         project = self.get_project(project_id)
         if not project:
             return None
-        session_ids = [s["session_id"] for s in self.list_sessions(project_id)]
+        session_ids = [
+            s["session_id"] for s in self.list_sessions(project_id, existing_only=False)
+        ]
         workspace_root = str(DATA_ROOT / "projects" / project_id)
         with self._lock:
             self._conn.execute(
@@ -386,17 +388,73 @@ class ProjectStore:
             )
             self._conn.commit()
 
-    def list_sessions(self, project_id: str) -> list[dict[str, Any]]:
+    def unlink_session(
+        self,
+        session_id: str,
+        *,
+        project_id: str | None = None,
+    ) -> int:
+        """解除会话与课题的关联；未指定 project_id 时解除该会话的全部课题绑定。"""
         with self._lock:
-            rows = self._conn.execute(
+            if project_id:
+                cur = self._conn.execute(
+                    "DELETE FROM project_sessions WHERE project_id = ? AND session_id = ?",
+                    (project_id, session_id),
+                )
+            else:
+                cur = self._conn.execute(
+                    "DELETE FROM project_sessions WHERE session_id = ?",
+                    (session_id,),
+                )
+            self._conn.commit()
+        return int(cur.rowcount or 0)
+
+    def prune_orphan_session_links(self) -> int:
+        """删除 sessions 表中已不存在的课题关联（幽灵链接）。"""
+        with self._lock:
+            cur = self._conn.execute(
                 """
-                SELECT session_id, project_id
-                FROM project_sessions
-                WHERE project_id = ?
-                ORDER BY rowid DESC
-                """,
-                (project_id,),
-            ).fetchall()
+                DELETE FROM project_sessions
+                WHERE session_id NOT IN (SELECT session_id FROM sessions)
+                """
+            )
+            self._conn.commit()
+        return int(cur.rowcount or 0)
+
+    def list_sessions(
+        self,
+        project_id: str,
+        *,
+        existing_only: bool = True,
+    ) -> list[dict[str, Any]]:
+        """列出课题关联会话。
+
+        existing_only=True（默认）：只返回 sessions 表中仍存在的会话，并顺带清理幽灵链接。
+        """
+        if existing_only:
+            self.prune_orphan_session_links()
+        with self._lock:
+            if existing_only:
+                rows = self._conn.execute(
+                    """
+                    SELECT ps.session_id, ps.project_id
+                    FROM project_sessions ps
+                    INNER JOIN sessions s ON s.session_id = ps.session_id
+                    WHERE ps.project_id = ?
+                    ORDER BY ps.rowid DESC
+                    """,
+                    (project_id,),
+                ).fetchall()
+            else:
+                rows = self._conn.execute(
+                    """
+                    SELECT session_id, project_id
+                    FROM project_sessions
+                    WHERE project_id = ?
+                    ORDER BY rowid DESC
+                    """,
+                    (project_id,),
+                ).fetchall()
         return [{"session_id": r["session_id"], "project_id": r["project_id"]} for r in rows]
 
     def get_project_for_session(self, session_id: str) -> str:

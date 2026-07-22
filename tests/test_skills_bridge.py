@@ -1,4 +1,4 @@
-# SkillsBridge 与 run_campaign CLI 测试。
+# SkillsBridge 测试。
 
 from __future__ import annotations
 
@@ -25,15 +25,3 @@ def test_skills_bridge_explore_output(tmp_path, monkeypatch):
     assert json.loads(Path(path).read_text())["ok"] is True
 
 
-def test_run_campaign_cli_list():
-    root = Path(__file__).resolve().parents[1]
-    proc = subprocess.run(
-        [sys.executable, str(root / "scripts" / "run_campaign.py"), "list"],
-        capture_output=True,
-        text=True,
-        cwd=str(root),
-        check=False,
-    )
-    assert proc.returncode == 0
-    data = json.loads(proc.stdout)
-    assert isinstance(data, list)

@@ -38,12 +38,9 @@ def test_verification_dashboard(client):
     assert "total_records" in data
 
 
-def test_assumption_dag(client):
+def test_assumption_dag_removed(client):
     res = client.get("/v1/theory/assumption-dag")
-    assert res.status_code == 200
-    data = res.json()
-    assert "nodes" in data
-    assert "edges" in data
+    assert res.status_code == 404
 
 
 def test_observability_summary(client):
@@ -51,8 +48,3 @@ def test_observability_summary(client):
     assert res.status_code == 200
     data = res.json()
     assert "verification_pass_rate" in data
-
-
-def test_jupyter_template(client):
-    res = client.get("/v1/jupyter/template")
-    assert res.status_code == 200

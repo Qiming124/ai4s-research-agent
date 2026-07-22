@@ -13,28 +13,26 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
   return (
     <div className="onboarding-overlay" role="dialog" aria-label="首次使用向导">
       <div className="onboarding-card">
-        <h2>欢迎使用 AI4S 科研工作台 v2.0</h2>
+        <h2>欢迎使用 AI4S 理论侧多智能体 v2.2</h2>
         <p className="onboarding-edition-note">
-          默认界面为「科研版」（课题 + 文献/理论/产出）。可在右上角「设置 → 界面版本」切换为对话版或完整版。
+          用深度学习做科学问题的理论侧协作：读文献、推导、实验建议与数据解读（不代跑训练）。
+          损失函数局部极小等为示范课题。界面为科研工作台（文献 / 理论 / 产出）。
         </p>
         <ol className="onboarding-steps">
           <li>
-            <strong>选择课题</strong> — 左栏会话树中展开课题文件夹，可新建课题/会话并编辑属性；会话挂在课题下。
+            <strong>选择课题</strong> — 左栏会话树中展开课题文件夹，新建课题/会话；会话挂在课题下。
           </li>
           <li>
-            <strong>上传文献</strong> — 右侧「文献」Tab：PDF/DOCX/arXiv 一键导入。
+            <strong>文献</strong> — 右侧「文献」Tab：检索讨论或 PDF/DOCX/arXiv 入库；用 literature Agent 做方法提炼。
           </li>
           <li>
-            <strong>对话研究</strong> — 中间对话区发送问题；可用「AI润色提示词」填入导出同款体例；流水线自动切换 Tab。
+            <strong>理论推导</strong> — 选 theory（或 Math 模式）对话推导；「理论」Tab 查看定理库、假设图与工作区。
           </li>
           <li>
-            <strong>理论推导</strong> — 「理论」Tab 查看定理库、假设图、关系图谱与工作区。
+            <strong>实验建议与数据</strong> — 选 experiment 获取实验计划（历史会累积保存）；将结果回传到「产出」后，可请顾问解读并生成修订计划。
           </li>
           <li>
-            <strong>验证与产出</strong> — 完整版含「验证」Tab；「产出」Tab 实验记录与导出 MD/Word/PDF。
-          </li>
-          <li>
-            <strong>任务看板</strong> — 完整版左栏「任务」Tab 管理课题待办（待办/进行中/完成）。
+            <strong>产出</strong> — 「产出」Tab：实验记录与导出 MD/Word/PDF；可用「优化提示词」内的导出润色体例。
           </li>
         </ol>
         <button type="button" className="btn-primary" onClick={handleDone}>

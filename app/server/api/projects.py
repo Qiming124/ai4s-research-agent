@@ -3,12 +3,12 @@
 #
 # 职责：
 #     1. CRUD 课题元数据、成员、任务与会话绑定
-#     2. purge=true 时级联删除会话、Campaign 与工作区目录
+#     2. purge=true 时级联删除会话与工作区目录
 #     3. 解析 project_id 别名（default / UUID / 名称）
 #
 # 架构位置：
 #     - 被调用：server/main.py include_router
-#     - 调用：server/memory/projects.py、campaigns.py、session.py
+#     - 调用：server/memory/projects.py、session.py
 #
 # 阅读提示：
 #     - 新人先看 list_projects / create_project / delete_project
@@ -24,12 +24,11 @@ from __future__ import annotations
 
 import logging
 import shutil
-from pathlib import Path
+from pathlib import Path as FsPath
 
 from fastapi import APIRouter, HTTPException, Path, Query
 
 from server.config import get_settings
-from server.memory.campaigns import get_campaign_store
 from server.memory.projects import get_project_store
 from server.memory.session import get_session_store
 from shared.schemas import (
@@ -108,7 +107,7 @@ async def delete_project(
     project_id: str = Path(..., description="课题 ID（default 不可删）", examples=["proj_demo"]),
     purge: bool = Query(
         default=False,
-        description="必须为 true：整包删除课题、关联会话、Campaign 与工作区文件",
+        description="必须为 true：整包删除课题、关联会话与工作区文件",
         examples=[True],
     ),
 ) -> dict:
@@ -116,7 +115,7 @@ async def delete_project(
     整包删除课题（需 ?purge=true）。
 
     - 默认课题 `default` 不可删
-    - 级联：关联会话（含 RAG 会话引用）→ Campaign → 课题 RAG 文档 → DB 行 → data/projects/{id}
+    - 级联：关联会话（含 RAG 会话引用）→ 课题 RAG 文档 → DB 行 → data/projects/{id}
     """
     if project_id == "default":
         raise HTTPException(status_code=400, detail="默认课题不可删除")
@@ -130,7 +129,9 @@ async def delete_project(
     if not store.get_project(project_id):
         raise HTTPException(status_code=404, detail="课题不存在")
 
-    session_ids = [s["session_id"] for s in store.list_sessions(project_id)]
+    session_ids = [
+        s["session_id"] for s in store.list_sessions(project_id, existing_only=False)
+    ]
     session_store = get_session_store()
     settings = get_settings()
     deleted_sessions: list[str] = []
@@ -156,11 +157,6 @@ async def delete_project(
     except Exception:
         logger.exception("清除课题 RAG 文档失败 project_id=%s", project_id)
 
-    campaigns_deleted = 0
-    try:
-        campaigns_deleted = get_campaign_store().delete_campaigns_for_project(project_id)
-    except Exception:
-        logger.exception("删除 Campaign 失败 project_id=%s", project_id)
 
     try:
         result = store.delete_project(project_id)
@@ -169,7 +165,7 @@ async def delete_project(
     if not result:
         raise HTTPException(status_code=404, detail="课题不存在")
 
-    workspace = Path(result["workspace_root"])
+    workspace = FsPath(result["workspace_root"])
     if workspace.exists():
         try:
             shutil.rmtree(workspace)
@@ -182,7 +178,6 @@ async def delete_project(
         "name": result.get("name", ""),
         "deleted_sessions": deleted_sessions,
         "deleted_session_count": len(deleted_sessions),
-        "deleted_campaigns": campaigns_deleted,
     }
 
 
@@ -250,7 +245,7 @@ async def update_project_task(
 async def list_project_sessions(
     project_id: str = Path(..., description="课题 ID", examples=["default"]),
 ) -> ProjectSessionsResponse:
-    """列出已关联到课题的会话。"""
+    """列出已关联到课题且仍存在的会话（自动剔除幽灵链接）。"""
     store = get_project_store()
     resolved = store.resolve_project_id(project_id)
     if not resolved:
@@ -271,3 +266,29 @@ async def link_session_to_project(
     store.link_session(project_id, session_id)
     store.append_audit(project_id, "link_session", payload={"session_id": session_id})
     return {"status": "ok", "project_id": project_id, "session_id": session_id}
+
+
+@router.delete(
+    "/v1/projects/{project_id}/sessions/{session_id}",
+    summary="取消会话与课题的关联",
+)
+async def unlink_session_from_project(
+    project_id: str = Path(..., description="课题 ID", examples=["default"]),
+    session_id: str = Path(..., description="会话 ID", examples=["sess_demo"]),
+) -> dict:
+    """仅解除关联，不删除会话消息。"""
+    store = get_project_store()
+    if not store.get_project(project_id):
+        raise HTTPException(status_code=404, detail="课题不存在")
+    removed = store.unlink_session(session_id, project_id=project_id)
+    store.append_audit(
+        project_id,
+        "unlink_session",
+        payload={"session_id": session_id, "removed": removed},
+    )
+    return {
+        "status": "ok",
+        "project_id": project_id,
+        "session_id": session_id,
+        "removed": removed,
+    }

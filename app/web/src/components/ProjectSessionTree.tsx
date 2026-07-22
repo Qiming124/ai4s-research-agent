@@ -9,10 +9,6 @@ interface ProjectSessionTreeProps {
   currentProjectId: string;
   currentSessionId: string;
   disabled?: boolean;
-  campaignByProject?: Record<
-    string,
-    { title?: string | null; stage?: string | null; status?: string | null; progress?: number }
-  >;
   onSelectSession: (sessionId: string, projectId: string) => void;
   onNewSession: (projectId: string) => void;
   onRemoveSession?: (sessionId: string) => void;
@@ -29,7 +25,6 @@ export function ProjectSessionTree({
   currentProjectId,
   currentSessionId,
   disabled = false,
-  campaignByProject = {},
   onSelectSession,
   onNewSession,
   onRemoveSession,
@@ -161,7 +156,6 @@ export function ProjectSessionTree({
         {projects.map((project) => {
           const open = expanded[project.id] ?? project.id === currentProjectId;
           const kids = grouped.get(project.id) ?? [];
-          const camp = campaignByProject[project.id];
           return (
             <li key={project.id} className="project-tree-folder">
               <div
@@ -200,21 +194,6 @@ export function ProjectSessionTree({
                   属性
                 </button>
               </div>
-
-              {open && camp?.title && (
-                <div className="campaign-progress campaign-progress--compact">
-                  <p className="campaign-title">{camp.title}</p>
-                  <div className="campaign-progress-bar">
-                    <div
-                      className="campaign-progress-fill"
-                      style={{ width: `${camp.progress ?? 0}%` }}
-                    />
-                  </div>
-                  <p className="campaign-stage">
-                    {camp.stage ?? "—"} · {camp.status ?? "active"} · {camp.progress ?? 0}%
-                  </p>
-                </div>
-              )}
 
               {open && editProjectId === project.id && (
                 <div className="inline-form tree-edit-panel">
@@ -272,7 +251,7 @@ export function ProjectSessionTree({
                         onClick={async () => {
                           const kids = grouped.get(project.id) ?? [];
                           const ok = window.confirm(
-                            `确定删除课题「${project.name}」？\n\n将永久删除：\n· 课题下 ${kids.length} 个会话\n· Campaign 与工作区文件\n\n此操作不可恢复。`,
+                            `确定删除课题「${project.name}」？\n\n将永久删除：\n· 课题下 ${kids.length} 个会话\n· 工作区文件\n\n此操作不可恢复。`,
                           );
                           if (!ok) return;
                           setBusy(true);

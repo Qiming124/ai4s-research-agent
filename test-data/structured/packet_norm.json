@@ -1,0 +1,157 @@
+{
+  "name": "Norm-NC+分类性能对照",
+  "summary": {
+    "paper_section_hint": "说明.txt：第一部分=优化器×gamma 分类性能；第二部分=论文5.3特征性质",
+    "setup": "batch_size=128, gamma=32, bias_var=0, WD: 0.0005 SGD / 0.05 AdamW",
+    "n_rows": 12,
+    "note": "从复杂 Excel 手工结构化抽取，非原始 parser 输出",
+    "table_preview": [
+      {
+        "row": 9,
+        "dataset": "cifar10",
+        "model": "ResNet18",
+        "loss": "ce",
+        "SGD_acc": 92.1,
+        "SGD_acc_uni": 85.64,
+        "AdamW_acc": 96.08,
+        "AdamW_acc_uni": 94.79
+      },
+      {
+        "row": 12,
+        "dataset": "cifar10",
+        "model": "ResNet50",
+        "loss": "ce",
+        "SGD_acc": 91.68,
+        "SGD_acc_uni": 88.56,
+        "AdamW_acc": 96.28,
+        "AdamW_acc_uni": 90.76
+      },
+      {
+        "row": 15,
+        "dataset": "cifar10",
+        "model": "DenseNet121",
+        "loss": "ce",
+        "SGD_acc": 84.79,
+        "SGD_acc_uni": 72.05,
+        "AdamW_acc": 92.21,
+        "AdamW_acc_uni": 80.87
+      },
+      {
+        "row": 18,
+        "dataset": "cifar100",
+        "model": "ResNet18",
+        "loss": "ce",
+        "SGD_acc": 72.92,
+        "SGD_acc_uni": 58.54,
+        "AdamW_acc": 77.63,
+        "AdamW_acc_uni": 68.99
+      },
+      {
+        "row": 21,
+        "dataset": "cifar100",
+        "model": "ResNet50",
+        "loss": "ce",
+        "SGD_acc": 71.59,
+        "SGD_acc_uni": 58.22,
+        "AdamW_acc": 79.64,
+        "AdamW_acc_uni": 73.87
+      },
+      {
+        "row": 24,
+        "dataset": "cifar100",
+        "model": "DenseNet121",
+        "loss": "ce",
+        "SGD_acc": 59.37,
+        "SGD_acc_uni": 43.47,
+        "AdamW_acc": 69.96,
+        "AdamW_acc_uni": 59.8
+      },
+      {
+        "row": 32,
+        "dataset": "cifar10",
+        "model": "ResNet18",
+        "loss": "ce",
+        "SGD_acc": 92.03,
+        "SGD_acc_uni": 85.43,
+        "AdamW_acc": 95.9,
+        "AdamW_acc_uni": 94.49
+      },
+      {
+        "row": 35,
+        "dataset": "cifar10",
+        "model": "ResNet50",
+        "loss": "ce",
+        "SGD_acc": 91.55,
+        "SGD_acc_uni": 88.42,
+        "AdamW_acc": 96.25,
+        "AdamW_acc_uni": 92.73
+      },
+      {
+        "row": 38,
+        "dataset": "cifar10",
+        "model": "DenseNet121",
+        "loss": "ce",
+        "SGD_acc": 84.57,
+        "SGD_acc_uni": 70.11,
+        "AdamW_acc": 92,
+        "AdamW_acc_uni": 76.38
+      },
+      {
+        "row": 41,
+        "dataset": "cifar100",
+        "model": "ResNet18",
+        "loss": "ce",
+        "SGD_acc": 72.69,
+        "SGD_acc_uni": 58.21,
+        "AdamW_acc": 77.2,
+        "AdamW_acc_uni": 68.3
+      },
+      {
+        "row": 44,
+        "dataset": "cifar100",
+        "model": "ResNet50",
+        "loss": "ce",
+        "SGD_acc": 71.59,
+        "SGD_acc_uni": 58.22,
+        "AdamW_acc": 79.31,
+        "AdamW_acc_uni": 72.28
+      },
+      {
+        "row": 47,
+        "dataset": "cifar100",
+        "model": "DenseNet121",
+        "loss": "ce",
+        "SGD_acc": 58.82,
+        "SGD_acc_uni": 43.17,
+        "AdamW_acc": 69.61,
+        "AdamW_acc_uni": 59.48
+      }
+    ]
+  },
+  "metrics": {
+    "cifar10_ResNet18_ce_SGD_acc": 92.03,
+    "cifar10_ResNet18_ce_SGD_acc_uni": 85.43,
+    "cifar10_ResNet18_ce_AdamW_acc": 95.9,
+    "cifar10_ResNet18_ce_AdamW_acc_uni": 94.49,
+    "cifar10_ResNet50_ce_SGD_acc": 91.55,
+    "cifar10_ResNet50_ce_SGD_acc_uni": 88.42,
+    "cifar10_ResNet50_ce_AdamW_acc": 96.25,
+    "cifar10_ResNet50_ce_AdamW_acc_uni": 92.73,
+    "cifar10_DenseNet121_ce_SGD_acc": 84.57,
+    "cifar10_DenseNet121_ce_SGD_acc_uni": 70.11,
+    "cifar10_DenseNet121_ce_AdamW_acc": 92.0,
+    "cifar10_DenseNet121_ce_AdamW_acc_uni": 76.38,
+    "cifar100_ResNet18_ce_SGD_acc": 72.69,
+    "cifar100_ResNet18_ce_SGD_acc_uni": 58.21,
+    "cifar100_ResNet18_ce_AdamW_acc": 77.2,
+    "cifar100_ResNet18_ce_AdamW_acc_uni": 68.3,
+    "cifar100_ResNet50_ce_SGD_acc": 71.59,
+    "cifar100_ResNet50_ce_SGD_acc_uni": 58.22,
+    "cifar100_ResNet50_ce_AdamW_acc": 79.31,
+    "cifar100_ResNet50_ce_AdamW_acc_uni": 72.28,
+    "cifar100_DenseNet121_ce_SGD_acc": 58.82,
+    "cifar100_DenseNet121_ce_SGD_acc_uni": 43.17,
+    "cifar100_DenseNet121_ce_AdamW_acc": 69.61,
+    "cifar100_DenseNet121_ce_AdamW_acc_uni": 59.48
+  }
+}

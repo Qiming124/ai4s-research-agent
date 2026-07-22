@@ -1,11 +1,39 @@
-# AI4S 科研辅助 Agent — 系统架构图
+# AI4S 理论侧多智能体 — 系统架构图
+
+面向「用深度学习解决科学问题」的理论侧协作：文献方法提炼、推导、实验建议与数据解读。  
+损失函数局部极小等为示范课题种子，非唯一领域。
+**不**以全流程科研复现或代跑训练为核心。产品边界见 [`PRODUCT-VISION.md`](PRODUCT-VISION.md)。
 
 本文档按**功能模块**描述系统架构，不涉及具体代码实现。  
 适用于理解整体能力边界、模块职责与数据流向。
 
 ---
 
-## 一、系统总览（用户视角）
+## 〇、产品能力（用户视角）
+
+```mermaid
+flowchart LR
+  User[研究者] --> TheoryCap[理论推导]
+  User --> LitCap[文献检索与方法提炼]
+  User --> ExpCap[实验建议与设计]
+  User --> DataCap[提交数据后解读]
+  LitCap --> TheoryCap
+  TheoryCap --> ExpCap
+  DataCap --> ExpCap
+```
+
+| 能力 | 说明 |
+|------|------|
+| 理论推导 | 符号/假设工作区、分步证明、审稿清单 |
+| 文献 | arXiv / 网页检索；方法提炼；RAG 入库（自动入库增强为后续） |
+| 实验顾问 | 计划表、对照、成功判据；根据用户数据给下一步与缺数清单 |
+| 边界 | 不代训模型、不以系统内大规模数值实跑为主路径 |
+
+可选模块（验证账本、Torch/numerical）见架构下层「兼容能力」，非主界面叙事。Campaign S0–S8 已从代码移除。
+
+---
+
+## 一、系统总览（技术视角）
 
 ```mermaid
 flowchart TB
@@ -463,8 +491,8 @@ flowchart LR
 |----------|------|
 | `meta` | 会话 ID、当前 Agent、路由原因 |
 | `workflow_step` | 工作流节点（规划 / 验证 / 综合等） |
-| `pipeline_stage` | 多跳研究流水线阶段（可驱动工作台 Tab） |
-| `campaign_update` | Campaign 阶段推进 |
+| `pipeline_stage` | 遗留兼容名（主路径用 `workflow_step`） |
+| `campaign_update` | 已废弃（Campaign 移除；schema 或仍保留字面量） |
 | `artifact_saved` | 产物落盘通知 |
 | `tool_call_*` | MCP 工具调用开始、成功、失败 |
 | `reasoning` | 模型内部思考过程片段 |
@@ -486,8 +514,8 @@ flowchart LR
 | **API 层** | 请求校验、路由分发、SSE 流式推送 |
 | **Supervisor** | 意图识别与 Agent 委派 |
 | **六大 Agent** | general / theory / experiment / literature / review / counterexample |
-| **Campaign** | S0–S8 多阶段研究战役与产物归档 |
-| **课题 / 验证账本** | Project 实体、任务看板、Claim 三层验证 |
+| **场景工作流 / Artifact** | lit→theory / 实验计划 / 数据→下一步；MethodCard 等工件 |
+| **课题 / 验证账本** | Project 实体、任务看板、Claim 三层验证（验证非主卖点） |
 | **思维链模块** | 深度思考、结构化分步、工作流可视化 |
 | **工具循环** | 多轮调用 MCP，汇总结果后生成回答 |
 | **LLM 层** | 对接 DeepSeek，分离 reasoning 与 content |

@@ -57,10 +57,10 @@ export const API_LAB_PRESETS: ApiLabPreset[] = [
     forceSse: true,
     bodyText: JSON.stringify(
       {
-        message: "用一句话介绍损失函数局部极小值",
+        message: "用一句话介绍本助手能做什么（AI4S 理论侧）",
         session_id: "api-lab-demo",
         mode: "chat",
-        agent: "auto",
+        auto_route: true,
         enable_thinking: false,
         max_history_messages: 0,
       },

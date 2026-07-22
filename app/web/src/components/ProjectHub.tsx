@@ -10,11 +10,6 @@ interface ProjectHubProps {
   error?: string | null;
   linkStatus?: string | null;
   members?: { user_id: string; role: string }[];
-  campaignTitle?: string | null;
-  campaignStage?: string | null;
-  campaignStatus?: string | null;
-  campaignProgress?: number;
-  campaignGates?: Record<string, string>;
 }
 
 export function ProjectHub({
@@ -26,11 +21,6 @@ export function ProjectHub({
   error,
   linkStatus,
   members = [],
-  campaignTitle,
-  campaignStage,
-  campaignStatus,
-  campaignProgress = 0,
-  campaignGates = {},
 }: ProjectHubProps) {
   const current = projects.find((p) => p.id === currentProjectId);
   const [showForm, setShowForm] = useState(false);
@@ -121,26 +111,6 @@ export function ProjectHub({
       </select>
       {current?.description && (
         <p className="project-desc">{current.description}</p>
-      )}
-      {campaignTitle && (
-        <div className="campaign-progress" aria-label="科研 Campaign 进度">
-          <p className="campaign-title">{campaignTitle}</p>
-          <div className="campaign-progress-bar" role="progressbar" aria-valuenow={campaignProgress} aria-valuemin={0} aria-valuemax={100}>
-            <div className="campaign-progress-fill" style={{ width: `${campaignProgress}%` }} />
-          </div>
-          <p className="campaign-stage">
-            {campaignStage ?? "—"} · {campaignStatus ?? "active"} · {campaignProgress}%
-          </p>
-          {Object.keys(campaignGates).length > 0 && (
-            <div className="campaign-gates">
-              {Object.entries(campaignGates).map(([stage, gate]) => (
-                <span key={stage} className={`gate-tag gate-${gate}`}>
-                  {stage.replace("S", "")}:{gate}
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
       )}
       <div className="project-roles-hint">
         {(members.length ? members : [

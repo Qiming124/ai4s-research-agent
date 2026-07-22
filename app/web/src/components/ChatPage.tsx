@@ -4,10 +4,8 @@ import { useDocuments } from "../hooks/useDocuments";
 import { useMcpStatus } from "../hooks/useMcpStatus";
 import { useTokenStats } from "../hooks/useTokenStats";
 import { useAgents } from "../hooks/useAgents";
-import { useAssumptionDag } from "../hooks/useAssumptionDag";
 import { useObservability } from "../hooks/useObservability";
 import { useProjectSessions } from "../hooks/useProjectSessions";
-import { useTheoryAssets } from "../hooks/useTheoryAssets";
 import { useVerificationRecords } from "../hooks/useVerificationRecords";
 import { waitForBackend } from "../utils/backend";
 import { pipelineStageToTab, type WorkbenchTab } from "../utils/workbenchTabs";
@@ -36,24 +34,20 @@ import {
   setUseServerHistoryDefault,
   setUseServerMcpDefault,
   setUseServerReasoningDefault,
-  getUiEdition,
-  setUiEdition,
   getEditionFeatures,
   clampWorkbenchTab,
   type ChatMode,
   type AgentChoice,
   type CotMode,
   type ReasoningEffort,
-  type UiEdition,
 } from "../utils/preferences";
 import { useRagRefs } from "../hooks/useRagRefs";
 import { useExperimentLogs } from "../hooks/useExperimentLogs";
 import { useLayoutPrefs } from "../hooks/useLayoutPrefs";
-import { useMemoryGraph } from "../hooks/useMemoryGraph";
+import { SIDEBAR_EDGE_WIDTH } from "../utils/layoutPrefs";
+import { SidebarEdgeToggle } from "./SidebarEdgeToggle";
 import { useStructuredMemory } from "../hooks/useStructuredMemory";
-import { useWorkspaceFiles } from "../hooks/useWorkspaceFiles";
 import { useProjects } from "../hooks/useProjects";
-import { useCampaign } from "../hooks/useCampaign";
 import { useVerification } from "../hooks/useVerification";
 import { useProjectTasks } from "../hooks/useProjectTasks";
 import {
@@ -76,6 +70,7 @@ import { ResearchWorkbench } from "./ResearchWorkbench";
 import { SettingsDrawer } from "./SettingsDrawer";
 import { ResizeHandle } from "./ResizeHandle";
 import { TheoremDetailDrawer } from "./TheoremDetailDrawer";
+import { TheoremImportModal } from "./TheoremImportModal";
 import { TopStatusBar } from "./TopStatusBar";
 import type { StructuredMemoryEntry } from "../hooks/useStructuredMemory";
 
@@ -94,10 +89,9 @@ export function ChatPage() {
   const [useServerMcp, setUseServerMcpState] = useState(getUseServerMcpDefault);
   const [enableMcp, setEnableMcpState] = useState(getEnableMcp);
   const [sessions, setSessions] = useState<SessionMeta[]>(getSessionList);
-  const [uiEdition, setUiEditionState] = useState<UiEdition>(getUiEdition);
-  const editionFeatures = getEditionFeatures(uiEdition);
+  const editionFeatures = getEditionFeatures("research");
   const [workbenchTab, setWorkbenchTab] = useState<WorkbenchTab>(() => {
-    const clamped = clampWorkbenchTab(getUiEdition(), "literature");
+    const clamped = clampWorkbenchTab("research", "literature");
     return clamped ?? "literature";
   });
   const [linkStatus, setLinkStatus] = useState<string | null>(null);
@@ -115,29 +109,16 @@ export function ChatPage() {
     refresh: refreshProjects,
   } = useProjects(true);
 
-  const {
-    campaign,
-    progress: campaignProgress,
-    applyCampaignUpdate,
-    refresh: refreshCampaign,
-  } = useCampaign(currentProjectId, true);
-
   const pipelineCallbacks = useMemo(
     () => ({
       onPipelineStage: (stage: string) => {
         const tab = pipelineStageToTab(stage);
         if (!tab) return;
-        const clamped = clampWorkbenchTab(uiEdition, tab);
+        const clamped = clampWorkbenchTab("research", tab);
         if (clamped) setWorkbenchTab(clamped);
       },
-      onCampaignUpdate: (payload: string) => {
-        applyCampaignUpdate(payload);
-      },
-      onPipelineGate: () => {
-        refreshCampaign();
-      },
     }),
-    [applyCampaignUpdate, refreshCampaign, uiEdition],
+    [],
   );
 
   const historyPref = {
@@ -190,7 +171,6 @@ export function ChatPage() {
     cotMode,
     pipelineCallbacks,
     currentProjectId,
-    campaign?.id,
   );
 
   const sessionIdRef = useRef(sessionId);
@@ -225,15 +205,15 @@ export function ChatPage() {
     loading: structuredLoading,
     error: structuredError,
     refresh: refreshStructured,
+    createEntry: createStructuredEntry,
+    updateEntry: updateStructuredEntry,
+    deleteEntry: deleteStructuredEntry,
+    previewMarkdown,
+    previewFile,
+    confirmImport,
   } = useStructuredMemory(sessionId, !backendOffline);
 
-  const {
-    nodes: graphNodes,
-    edges: graphEdges,
-    loading: graphLoading,
-    error: graphError,
-    refresh: refreshGraph,
-  } = useMemoryGraph(sessionId, !backendOffline);
+  const [importMode, setImportMode] = useState<"markdown" | "pdf" | null>(null);
 
   const {
     runs: experimentRuns,
@@ -242,33 +222,8 @@ export function ChatPage() {
     refresh: refreshExperiments,
   } = useExperimentLogs(!backendOffline);
 
-  const {
-    files: workspaceFiles,
-    loading: workspaceLoading,
-    error: workspaceError,
-    refresh: refreshWorkspace,
-  } = useWorkspaceFiles(!backendOffline, currentProjectId);
-
   const { sessions: _projectSessions, linkSession, refresh: refreshProjectSessions } =
     useProjectSessions(currentProjectId, !backendOffline);
-
-  const {
-    symbols: theorySymbols,
-    assumptions: theoryAssumptions,
-    matrix: theoryMatrix,
-    loading: theoryAssetsLoading,
-    error: theoryAssetsError,
-    refresh: refreshTheoryAssets,
-  } = useTheoryAssets(!backendOffline, currentProjectId);
-
-  const {
-    nodes: dagNodes,
-    edges: dagEdges,
-    loading: dagLoading,
-    error: dagError,
-    refresh: refreshDag,
-    fetchImpact: fetchDagImpact,
-  } = useAssumptionDag(sessionId, !backendOffline);
 
   const {
     records: verificationRecords,
@@ -311,11 +266,22 @@ export function ChatPage() {
   const [selectedTheorem, setSelectedTheorem] = useState<StructuredMemoryEntry | null>(null);
   const [retryingBackend, setRetryingBackend] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
-  const { prefs: layoutPrefs, resizeLeft, resizeRight, reset: resetLayout } = useLayoutPrefs();
+  const {
+    prefs: layoutPrefs,
+    resizeLeft,
+    resizeRight,
+    reset: resetLayout,
+    toggleLeftCollapsed,
+    toggleRightCollapsed,
+  } = useLayoutPrefs();
 
   const layoutStyle = {
-    "--layout-left": `${layoutPrefs.leftWidth}px`,
-    "--layout-right": `${layoutPrefs.rightWidth}px`,
+    "--layout-left": layoutPrefs.leftCollapsed
+      ? `${SIDEBAR_EDGE_WIDTH}px`
+      : `${layoutPrefs.leftWidth}px`,
+    "--layout-right": layoutPrefs.rightCollapsed
+      ? `${SIDEBAR_EDGE_WIDTH}px`
+      : `${layoutPrefs.rightWidth}px`,
   } as CSSProperties;
 
   useEffect(() => {
@@ -361,23 +327,17 @@ export function ChatPage() {
     if (!isStreaming) {
       refreshRagRefs();
       refreshStructured();
-      refreshGraph();
       refreshExperiments();
-      refreshWorkspace();
       refreshVerification();
       refreshTasks();
-      refreshDag();
     }
   }, [
     isStreaming,
     refreshRagRefs,
     refreshStructured,
-    refreshGraph,
     refreshExperiments,
-    refreshWorkspace,
     refreshVerification,
     refreshTasks,
-    refreshDag,
   ]);
 
   useEffect(() => {
@@ -443,19 +403,8 @@ export function ChatPage() {
     setAgentChoice(value);
   };
 
-  const handleUiEditionChange = (edition: UiEdition) => {
-    setUiEdition(edition);
-    setUiEditionState(edition);
-    const clamped = clampWorkbenchTab(edition, workbenchTab);
-    if (clamped) setWorkbenchTab(clamped);
-    if (edition === "chat") {
-      setAgentChoiceState("auto");
-      setAgentChoice("auto");
-    }
-  };
-
   const handleWorkbenchTabChange = (tab: WorkbenchTab) => {
-    const clamped = clampWorkbenchTab(uiEdition, tab);
+    const clamped = clampWorkbenchTab("research", tab);
     if (clamped) setWorkbenchTab(clamped);
   };
 
@@ -556,34 +505,48 @@ export function ChatPage() {
     refreshTokens();
   };
 
-  const handleRunExperiment = async () => {
-    await fetch("/v1/experiments/runs", {
+  const handleJupyterUpload = async (payload: {
+    name: string;
+    project_id: string;
+    session_id?: string | null;
+    summary: Record<string, unknown>;
+    metrics: Record<string, unknown>;
+  }) => {
+    const res = await fetch("/v1/jupyter/upload-result", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ config_path: "quadratic_minimum.yaml" }),
+      body: JSON.stringify(payload),
     });
+    if (!res.ok) {
+      const detail = await res.text();
+      throw new Error(detail || `回传失败 (${res.status})`);
+    }
     await refreshExperiments();
   };
 
-  const handleJupyterTemplate = async () => {
-    const res = await fetch("/v1/jupyter/template");
-    if (!res.ok) return;
-    const data = await res.json();
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "notebook-template.json";
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const handleJupyterUpload = async () => {
-    await fetch("/v1/jupyter/upload-result", {
+  const handleExperimentFileUpload = async (
+    file: File,
+    meta: { name: string; project_id: string; session_id?: string | null },
+  ) => {
+    const body = new FormData();
+    body.append("file", file);
+    body.append("name", meta.name);
+    body.append("project_id", meta.project_id || "default");
+    if (meta.session_id) body.append("session_id", meta.session_id);
+    const res = await fetch("/v1/jupyter/upload-file", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: "ui-upload", summary: { ok: true }, metrics: { loss: 0.1 } }),
+      body,
     });
+    if (!res.ok) {
+      let detail = await res.text();
+      try {
+        const j = JSON.parse(detail) as { detail?: string };
+        if (j.detail) detail = j.detail;
+      } catch {
+        /* keep text */
+      }
+      throw new Error(detail || `文件上传失败 (${res.status})`);
+    }
     await refreshExperiments();
   };
 
@@ -616,7 +579,6 @@ export function ChatPage() {
     } else {
       await refreshSessions();
     }
-    await refreshCampaign();
     setLinkStatus(`已删除课题「${data.name || projectId}」`);
   };
 
@@ -657,6 +619,8 @@ export function ChatPage() {
           isStreaming={isStreaming}
           tokenStats={tokenStats}
           tokenLoading={tokenLoading}
+          chatMode={chatMode}
+          onChatModeChange={handleModeChange}
           onStop={stopGeneration}
           onRetryBackend={handleRetryBackend}
           retryingBackend={retryingBackend}
@@ -678,7 +642,7 @@ export function ChatPage() {
             type="button"
             className="btn-secondary btn-sm"
             onClick={resetLayout}
-            title="恢复默认栏宽"
+            title="恢复默认栏宽并展开左右侧栏"
           >
             重置布局
           </button>
@@ -691,8 +655,6 @@ export function ChatPage() {
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
         disabled={isStreaming}
-        uiEdition={uiEdition}
-        onUiEditionChange={handleUiEditionChange}
         chatMode={chatMode}
         onChatModeChange={handleModeChange}
         agentChoice={agentChoice}
@@ -731,6 +693,17 @@ export function ChatPage() {
       <TheoremDetailDrawer
         entry={selectedTheorem}
         onClose={() => setSelectedTheorem(null)}
+        onUpdate={async (id, payload) => {
+          const updated = await updateStructuredEntry(id, payload);
+          setSelectedTheorem(updated);
+          await refreshStructured();
+          return updated;
+        }}
+        onDelete={async (id) => {
+          await deleteStructuredEntry(id);
+          setSelectedTheorem(null);
+          await refreshStructured();
+        }}
         onCreateTask={async (title, entryId) => {
           await fetch(`/v1/projects/${encodeURIComponent(currentProjectId)}/tasks`, {
             method: "POST",
@@ -744,17 +717,43 @@ export function ChatPage() {
           await refreshTasks();
         }}
       />
+      {importMode && (
+        <TheoremImportModal
+          mode={importMode}
+          sessionId={sessionId}
+          onClose={() => setImportMode(null)}
+          onPreviewMarkdown={previewMarkdown}
+          onPreviewFile={previewFile}
+          onConfirm={async (candidates, source, extraMeta) => {
+            const result = await confirmImport(candidates, source, extraMeta);
+            await refreshStructured();
+            return result;
+          }}
+          onAlsoUploadRag={async (file) => {
+            const ok = await uploadFile(file);
+            if (!ok) throw new Error("文献库上传失败");
+            await refreshDocuments();
+            await refreshRagRefs();
+          }}
+        />
+      )}
 
       {historyError && !backendOffline && (
         <div className="history-error">历史加载失败：{historyError}</div>
       )}
 
       <div
-        className={
+        className={[
           editionFeatures.showWorkbench
             ? "chat-layout"
-            : "chat-layout chat-layout--no-workbench"
-        }
+            : "chat-layout chat-layout--no-workbench",
+          layoutPrefs.leftCollapsed ? "chat-layout--left-collapsed" : "",
+          editionFeatures.showWorkbench && layoutPrefs.rightCollapsed
+            ? "chat-layout--right-collapsed"
+            : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
         style={layoutStyle}
       >
         <ErrorBoundary>
@@ -788,21 +787,22 @@ export function ChatPage() {
             onRemoveSession={handleRemoveSession}
             onMoveSession={handleMoveSession}
             onUpdateSessionTitle={handleUpdateSessionTitle}
-            campaignTitle={campaign?.title ?? null}
-            campaignStage={campaign?.current_stage ?? null}
-            campaignStatus={campaign?.status ?? null}
-            campaignProgress={campaignProgress}
-            campaignGates={campaign?.gates ?? {}}
             allowedTabs={editionFeatures.leftTabs}
+            collapsed={layoutPrefs.leftCollapsed}
+            onToggleCollapse={toggleLeftCollapsed}
           />
         </ErrorBoundary>
 
-        <ResizeHandle
-          direction="horizontal"
-          onResize={resizeLeft}
-          className="resize-col-left"
-          title="拖拽调整左侧栏宽度"
-        />
+        {layoutPrefs.leftCollapsed ? (
+          <div className="resize-col-left resize-slot--collapsed" aria-hidden="true" />
+        ) : (
+          <ResizeHandle
+            direction="horizontal"
+            onResize={resizeLeft}
+            className="resize-col-left"
+            title="拖拽调整左侧栏宽度"
+          />
+        )}
 
         <div className="chat-center">
           <main className="chat-main" ref={listRef}>
@@ -813,7 +813,7 @@ export function ChatPage() {
               <div className="empty-hint">
                 <p>输入科研或数学问题开始对话。</p>
                 <p className="hint-examples">
-                  示例：什么是损失函数的局部极小值？ / 帮我检索 transformer 相关文献
+                  示例：帮我检索某科学问题的相关文献 / 把这篇方法形式化推导一下 / 示范：什么是损失函数局部极小？
                 </p>
               </div>
             )}
@@ -824,8 +824,7 @@ export function ChatPage() {
 
           <ChatComposer
             chatMode={chatMode}
-            onChatModeChange={handleModeChange}
-            showAiPolishPrompts={editionFeatures.showAiPolishPrompts}
+            agentChoice={agentChoice}
             disabled={backendOffline}
             sendDisabled={isStreaming}
             onSend={handleSend}
@@ -837,15 +836,31 @@ export function ChatPage() {
 
         {editionFeatures.showWorkbench && (
           <>
-        <ResizeHandle
-          direction="horizontal"
-          onResize={resizeRight}
-          className="resize-col-right"
-          title="拖拽调整右侧栏宽度"
-        />
+        {layoutPrefs.rightCollapsed ? (
+          <div className="resize-col-right resize-slot--collapsed" aria-hidden="true" />
+        ) : (
+          <ResizeHandle
+            direction="horizontal"
+            onResize={resizeRight}
+            className="resize-col-right"
+            title="拖拽调整右侧栏宽度"
+          />
+        )}
 
         <ErrorBoundary>
-          <div className="right-column">
+          <div
+            className={
+              layoutPrefs.rightCollapsed
+                ? "right-column right-column--collapsed"
+                : "right-column"
+            }
+          >
+            <SidebarEdgeToggle
+              side="right"
+              collapsed={layoutPrefs.rightCollapsed}
+              onToggle={toggleRightCollapsed}
+            />
+            {!layoutPrefs.rightCollapsed && (
             <ResearchWorkbench
               sessionId={sessionId}
               projectId={currentProjectId}
@@ -858,34 +873,18 @@ export function ChatPage() {
               structuredError={structuredError}
               onRefreshStructured={refreshStructured}
               onSelectTheorem={setSelectedTheorem}
-              graphNodes={graphNodes}
-              graphEdges={graphEdges}
-              graphLoading={graphLoading}
-              graphError={graphError}
-              onRefreshGraph={refreshGraph}
+              onCreateTheorem={async (payload) => {
+                await createStructuredEntry(payload);
+                await refreshStructured();
+              }}
+              onOpenMarkdownImport={() => setImportMode("markdown")}
+              onOpenPdfImport={() => setImportMode("pdf")}
               experimentRuns={experimentRuns}
               experimentLoading={experimentLoading}
               experimentError={experimentError}
               onRefreshExperiments={refreshExperiments}
-              onRunExperiment={handleRunExperiment}
-              onJupyterTemplate={handleJupyterTemplate}
               onJupyterUpload={handleJupyterUpload}
-              workspaceFiles={workspaceFiles}
-              workspaceLoading={workspaceLoading}
-              workspaceError={workspaceError}
-              onRefreshWorkspace={refreshWorkspace}
-              theorySymbols={theorySymbols}
-              theoryAssumptions={theoryAssumptions}
-              theoryMatrix={theoryMatrix}
-              theoryAssetsLoading={theoryAssetsLoading}
-              theoryAssetsError={theoryAssetsError}
-              onRefreshTheoryAssets={refreshTheoryAssets}
-              dagNodes={dagNodes}
-              dagEdges={dagEdges}
-              dagLoading={dagLoading}
-              dagError={dagError}
-              onRefreshDag={refreshDag}
-              onDagImpact={fetchDagImpact}
+              onExperimentFileUpload={handleExperimentFileUpload}
               documents={documents}
               documentsLoading={documentsLoading}
               documentsUploading={documentsUploading}
@@ -914,6 +913,7 @@ export function ChatPage() {
               observabilityError={observabilityError}
               onRefreshObservability={refreshObservability}
             />
+            )}
           </div>
         </ErrorBoundary>
           </>

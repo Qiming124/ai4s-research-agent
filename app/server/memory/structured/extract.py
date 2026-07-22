@@ -71,6 +71,7 @@ def extract_structured_entries(content: str) -> list[dict[str, Any]]:
         if body:
             metadata = extract_metadata_from_body(body)
             metadata["status"] = "draft"
+            metadata.setdefault("source", "ai_extract")
             entries.append(
                 {"kind": kind, "title": title, "body": body, "metadata": metadata}
             )

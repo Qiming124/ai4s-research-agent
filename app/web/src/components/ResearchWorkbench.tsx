@@ -1,26 +1,20 @@
-import type { DagEdge, DagNode } from "../hooks/useAssumptionDag";
 import type { DocumentInfo } from "../hooks/useDocuments";
 import type { ExperimentRun } from "../hooks/useExperimentLogs";
-import type { MemoryEdge } from "../hooks/useMemoryGraph";
 import type { AgentQualityItem, ObservabilitySummary } from "../hooks/useObservability";
 import type { StructuredMemoryEntry } from "../hooks/useStructuredMemory";
 import type { VerificationDashboard } from "../hooks/useVerification";
 import type { VerificationRecord } from "../hooks/useVerificationRecords";
 import type { RagRef } from "../hooks/useRagRefs";
-import type { WorkspaceFile } from "../hooks/useWorkspaceFiles";
 import type { WorkbenchTab } from "../utils/workbenchTabs";
-import { AssumptionDagPanel } from "./AssumptionDagPanel";
+import { ArtifactsPanel } from "./ArtifactsPanel";
 import { DocumentPanel } from "./DocumentPanel";
-import { ExperimentLogPanel } from "./ExperimentLogPanel";
+import { ExperimentLogPanel, type NotebookUploadPayload, type ExperimentFileUploadMeta } from "./ExperimentLogPanel";
 import { ExportPanel } from "./ExportPanel";
-import { KnowledgeGraphPanel } from "./KnowledgeGraphPanel";
 import { ObservabilityPanel } from "./ObservabilityPanel";
 import { RagRefsPanel } from "./RagRefsPanel";
 import { TheoremLibraryPanel } from "./TheoremLibraryPanel";
-import { TheoryAssetsPanel } from "./TheoryAssetsPanel";
 import { VerificationDashboardPanel } from "./VerificationDashboard";
 import { WorkbenchSection } from "./WorkbenchSection";
-import { WorkspacePanel } from "./WorkspacePanel";
 
 interface ResearchWorkbenchProps {
   sessionId: string;
@@ -35,34 +29,19 @@ interface ResearchWorkbenchProps {
   structuredError: string | null;
   onRefreshStructured: () => void;
   onSelectTheorem: (entry: StructuredMemoryEntry) => void;
-  graphNodes: StructuredMemoryEntry[];
-  graphEdges: MemoryEdge[];
-  graphLoading: boolean;
-  graphError: string | null;
-  onRefreshGraph: () => void;
+  onCreateTheorem?: (payload: {
+    kind: string;
+    title: string;
+    body: string;
+  }) => Promise<void>;
+  onOpenMarkdownImport?: () => void;
+  onOpenPdfImport?: () => void;
   experimentRuns: ExperimentRun[];
   experimentLoading: boolean;
   experimentError: string | null;
   onRefreshExperiments: () => void;
-  onRunExperiment: () => Promise<void>;
-  onJupyterTemplate: () => Promise<void>;
-  onJupyterUpload: () => Promise<void>;
-  workspaceFiles: WorkspaceFile[];
-  workspaceLoading: boolean;
-  workspaceError: string | null;
-  onRefreshWorkspace: () => void;
-  theorySymbols: string;
-  theoryAssumptions: string;
-  theoryMatrix: string;
-  theoryAssetsLoading: boolean;
-  theoryAssetsError: string | null;
-  onRefreshTheoryAssets: () => void;
-  dagNodes: DagNode[];
-  dagEdges: DagEdge[];
-  dagLoading: boolean;
-  dagError: string | null;
-  onRefreshDag: () => void;
-  onDagImpact: (id: string) => Promise<unknown>;
+  onJupyterUpload: (payload: NotebookUploadPayload) => Promise<void>;
+  onExperimentFileUpload?: (file: File, meta: ExperimentFileUploadMeta) => Promise<void>;
   documents: DocumentInfo[];
   documentsLoading: boolean;
   documentsUploading: boolean;
@@ -161,6 +140,15 @@ export function ResearchWorkbench(props: ResearchWorkbenchProps) {
         )}
         {activeTab === "theory" && allowed.includes("theory") && (
           <>
+            <WorkbenchSection title="推导迹" defaultOpen>
+              <ArtifactsPanel
+                projectId={projectId}
+                sessionId={sessionId}
+                types={["DerivationTrace"]}
+                title="推导迹"
+                emptyHint="Theory Agent 在推导时输出 artifact:DerivationTrace 围栏后会出现在此：分步证明、待验证标记、关联定理。"
+              />
+            </WorkbenchSection>
             <WorkbenchSection
               title="定理库"
               defaultOpen
@@ -172,44 +160,9 @@ export function ResearchWorkbench(props: ResearchWorkbenchProps) {
                 error={props.structuredError}
                 onRefresh={props.onRefreshStructured}
                 onSelect={props.onSelectTheorem}
-              />
-            </WorkbenchSection>
-            <WorkbenchSection title="理论资产">
-              <TheoryAssetsPanel
-                symbols={props.theorySymbols}
-                assumptions={props.theoryAssumptions}
-                matrix={props.theoryMatrix}
-                loading={props.theoryAssetsLoading}
-                error={props.theoryAssetsError}
-                onRefresh={props.onRefreshTheoryAssets}
-              />
-            </WorkbenchSection>
-            <WorkbenchSection title="假设依赖图" badge={props.dagNodes.length || undefined}>
-              <AssumptionDagPanel
-                nodes={props.dagNodes}
-                edges={props.dagEdges}
-                loading={props.dagLoading}
-                error={props.dagError}
-                onRefresh={props.onRefreshDag}
-                onImpact={props.onDagImpact}
-              />
-            </WorkbenchSection>
-            <WorkbenchSection title="关系图谱" badge={props.graphNodes.length || undefined}>
-              <KnowledgeGraphPanel
-                nodes={props.graphNodes}
-                edges={props.graphEdges}
-                loading={props.graphLoading}
-                error={props.graphError}
-                onRefresh={props.onRefreshGraph}
-                onSelectNode={props.onSelectTheorem}
-              />
-            </WorkbenchSection>
-            <WorkbenchSection title="工作区文件" badge={props.workspaceFiles.length || undefined}>
-              <WorkspacePanel
-                files={props.workspaceFiles}
-                loading={props.workspaceLoading}
-                error={props.workspaceError}
-                onRefresh={props.onRefreshWorkspace}
+                onCreate={props.onCreateTheorem}
+                onOpenMarkdownImport={props.onOpenMarkdownImport}
+                onOpenPdfImport={props.onOpenPdfImport}
               />
             </WorkbenchSection>
           </>
@@ -243,19 +196,25 @@ export function ResearchWorkbench(props: ResearchWorkbenchProps) {
         )}
         {activeTab === "output" && allowed.includes("output") && (
           <>
-            <WorkbenchSection
-              title="数值实验"
-              defaultOpen
-              badge={props.experimentRuns.length || undefined}
-            >
+            <WorkbenchSection title="实验计划" defaultOpen>
+              <ArtifactsPanel
+                projectId={projectId}
+                sessionId={sessionId}
+                types={["ExperimentPlan", "NextStepMemo"]}
+                title="实验计划 / 下一步"
+                emptyHint="Experiment Agent 输出计划或下一步备忘后显示于此。"
+              />
+            </WorkbenchSection>
+            <WorkbenchSection title="实验记录" defaultOpen>
               <ExperimentLogPanel
                 runs={props.experimentRuns}
                 loading={props.experimentLoading}
                 error={props.experimentError}
+                sessionId={sessionId}
+                projectId={projectId}
                 onRefresh={props.onRefreshExperiments}
-                onRunExperiment={props.onRunExperiment}
-                onJupyterTemplate={props.onJupyterTemplate}
                 onJupyterUpload={props.onJupyterUpload}
+                onExperimentFileUpload={props.onExperimentFileUpload}
               />
             </WorkbenchSection>
             <WorkbenchSection title="论文导出" defaultOpen>

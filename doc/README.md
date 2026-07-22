@@ -1,17 +1,22 @@
 # 项目文档索引（v2.2）
 
-本目录为 AI4S 科研辅助 Agent 的中文技术文档。
+本目录为 **AI4S 理论侧科研助手** 的中文技术文档。
+
+**产品定位**：面向「用深度学习解决科学问题」的 **理论侧多智能体**——文献检索与方法提炼、理论推导、实验建议与数据解读；**不**以全流程科研复现或代跑训练为核心。损失函数局部极小等为示范子集。蓝图见 [`PRODUCT-VISION.md`](PRODUCT-VISION.md)。
 
 | 文档 | 说明 |
 |------|------|
+| [产品愿景](PRODUCT-VISION.md) | 理论侧定位、能力边界、下期 Agent/工件设计 |
 | [系统架构图](SYSTEM_ARCHITECTURE.md) | 分层架构、数据流、记忆与 CoT 全景图 |
-| [架构说明](ARCHITECTURE.md) | 分层、多 Agent / MCP / RAG / Campaign |
+| [架构说明](ARCHITECTURE.md) | 分层、多 Agent / MCP / RAG / 场景工作流 |
 | [环境变量](ENV.md) | `conf/.env` 全量配置（代码默认 vs 演示配置） |
 | [API 参考](API.md) | 端点速查、SSE、ChatRequest |
-| [API 覆盖清单](API-COVERAGE.md) | **67** 端点 · UI/Test 矩阵（权威清单） |
+| [API 覆盖清单](API-COVERAGE.md) | **71** 端点 · UI/Test 矩阵（权威清单） |
 | [API 全路径链路](API-ROUTES.md) | 分域契约 + HTTP→实现调用链 |
 | [API 量化测试计划](API-QUANT-TEST-PLAN.md) | MUT 定义、指标阈值、分批清单 |
 | [API 量化测试结果](API-QUANT-TEST-RESULTS.md) | Batch 1–4 实测延迟与判定（分批闭环） |
+| [功能验收方案](acceptance/ACCEPTANCE-TEST-PLAN.md) | L1–L3 功能/隔离/黄金路径验收设计 |
+| [功能验收报告](acceptance/ACCEPTANCE-REPORT.md) | 2026-07-22 实跑结论（核心通过） |
 | [数据目录](DATA.md) | 种子 vs 运行时；开发期清理建议 |
 | [已知问题](KNOWN_ISSUES.md) | 审查遗留项（Docker 种子、鉴权、版本号等） |
 | [部署指南](DEPLOY.md) | 本地、Docker、云服务器 |
@@ -27,10 +32,9 @@
 
 ## 阅读建议
 
-1. 新用户：根 `README.md` → `ENV.md` → 启动后端与 Web  
+1. 新用户：根 `README.md` → [`PRODUCT-VISION.md`](PRODUCT-VISION.md) → `ENV.md` → 启动后端与 Web  
 2. **通读后端源码**：[`CODE_READING_ORDER.md`](CODE_READING_ORDER.md)（推荐按日历推进）  
 3. **测接口**：主站 `#/api-lab` 或 [`API-LAB.md`](API-LAB.md)；契约对照仍可用 `GET /docs`  
 4. 对接 API：`API-COVERAGE.md` → `API-ROUTES.md`（全链路）→ `API.md` → `app/shared/schemas.py` / `GET /docs`  
-   - 量化排障：`API-QUANT-TEST-PLAN.md` → 探针 `scripts/api_quant_probe.py` → `API-QUANT-TEST-RESULTS.md`（B1–B4 已闭环）  
 5. 部署：`DEPLOY.md` → `docker.md`；注意 `DATA.md` 与 `KNOWN_ISSUES.md`  
 6. 扩展工具：`mcp-config.md` · 前端：`web.md`

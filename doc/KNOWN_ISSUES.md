@@ -1,7 +1,8 @@
 # 已知问题清单（v2.2）
 
 > 审查日期：2026-07-16 · 基线分支 `v2.2`  
-> 修复后请把状态改为 `fixed` / `wontfix` / `deferred`。
+> 修复后请把状态改为 `fixed` / `wontfix` / `deferred`。  
+> **产品说明（2026-07-22）**：定位为「用深度学习解决科学问题」的理论侧多智能体（见 [`PRODUCT-VISION.md`](PRODUCT-VISION.md)）。Campaign / 书目 HTTP / 云同步 metadata 已移除；下文技术债仍有效。
 
 ## 严重
 

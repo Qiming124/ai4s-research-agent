@@ -62,6 +62,21 @@ def make_call_model_node(
             config: LangGraph RunnableConfig（含 callbacks 等）
         """
         response = await bound.ainvoke(state["messages"], config)
+        # DeepSeek thinking：后续若开启 thinking 合成回答，含 tool_calls 的消息须带 reasoning_content
+        if isinstance(response, AIMessage) and response.tool_calls:
+            additional = dict(response.additional_kwargs or {})
+            if additional.get("reasoning_content") is None:
+                # 从 response_metadata 兜底提取（部分适配器放这里）
+                meta = getattr(response, "response_metadata", None) or {}
+                rc = additional.get("reasoning_content") or meta.get("reasoning_content") or ""
+                additional["reasoning_content"] = rc if rc is not None else ""
+                response = AIMessage(
+                    content=response.content,
+                    tool_calls=response.tool_calls,
+                    additional_kwargs=additional,
+                    id=getattr(response, "id", None),
+                    response_metadata=getattr(response, "response_metadata", None) or {},
+                )
         return {"messages": [response]}
 
     return call_model

@@ -42,6 +42,9 @@ def test_project_tasks_crud(client):
 
 
 def test_link_and_list_sessions(client, session_id):
+    from server.memory.session import get_session_store
+
+    get_session_store().get_or_create(session_id)
     r = client.post(f"/v1/projects/default/sessions/{session_id}")
     assert r.status_code == 200
 
@@ -49,6 +52,30 @@ def test_link_and_list_sessions(client, session_id):
     assert r.status_code == 200
     ids = [s["session_id"] for s in r.json().get("sessions", [])]
     assert session_id in ids
+
+
+def test_unlink_and_purge_clears_project_link(client):
+    from server.memory.session import get_session_store
+
+    sid = "unlink-purge-sess-test"
+    get_session_store().get_or_create(sid)
+
+    r = client.post(f"/v1/projects/default/sessions/{sid}")
+    assert r.status_code == 200
+
+    r = client.delete(f"/v1/projects/default/sessions/{sid}")
+    assert r.status_code == 200
+    assert r.json().get("removed", 0) >= 1
+
+    r = client.get("/v1/projects/default/sessions")
+    assert sid not in [s["session_id"] for s in r.json().get("sessions", [])]
+
+    # 再关联后 purge 会话，关联应一并消失
+    get_session_store().get_or_create(sid)
+    assert client.post(f"/v1/projects/default/sessions/{sid}").status_code == 200
+    assert client.delete(f"/v1/sessions/{sid}?purge=true").status_code == 200
+    r = client.get("/v1/projects/default/sessions")
+    assert sid not in [s["session_id"] for s in r.json().get("sessions", [])]
 
 
 def test_delete_project_cascade(client):

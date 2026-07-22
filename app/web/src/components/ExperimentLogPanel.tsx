@@ -1,15 +1,49 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { ExperimentRun } from "../hooks/useExperimentLogs";
 import { buildExperimentCard } from "../utils/experimentDisplay";
+
+export interface NotebookUploadPayload {
+  name: string;
+  project_id: string;
+  session_id?: string | null;
+  summary: Record<string, unknown>;
+  metrics: Record<string, unknown>;
+}
+
+export interface ExperimentFileUploadMeta {
+  name: string;
+  project_id: string;
+  session_id?: string | null;
+}
 
 interface ExperimentLogPanelProps {
   runs: ExperimentRun[];
   loading: boolean;
   error: string | null;
   onRefresh: () => void;
-  onRunExperiment?: () => Promise<void>;
-  onJupyterTemplate?: () => Promise<void>;
-  onJupyterUpload?: () => Promise<void>;
+  sessionId?: string;
+  projectId?: string;
+  /** 调用 POST /v1/jupyter/upload-result */
+  onJupyterUpload?: (payload: NotebookUploadPayload) => Promise<void>;
+  /** 调用 POST /v1/jupyter/upload-file（Excel/CSV/JSON 等） */
+  onExperimentFileUpload?: (file: File, meta: ExperimentFileUploadMeta) => Promise<void>;
+}
+
+const DEFAULT_SUMMARY = '{\n  "passed": true\n}';
+const DEFAULT_METRICS = '{\n  "min_loss": 0.0,\n  "min_eigen": 0.01\n}';
+
+function parseJsonObject(raw: string, label: string): Record<string, unknown> {
+  const text = raw.trim() || "{}";
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new Error(`${label} 不是合法 JSON`);
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error(`${label} 须为 JSON 对象`);
+  }
+  return parsed as Record<string, unknown>;
 }
 
 export function ExperimentLogPanel({
@@ -17,34 +51,118 @@ export function ExperimentLogPanel({
   loading,
   error,
   onRefresh,
-  onRunExperiment,
-  onJupyterTemplate,
+  sessionId,
+  projectId = "default",
   onJupyterUpload,
+  onExperimentFileUpload,
 }: ExperimentLogPanelProps) {
   const [expanded, setExpanded] = useState<string | null>(null);
-  const [running, setRunning] = useState(false);
   const [jupyterBusy, setJupyterBusy] = useState(false);
+  const [showUpload, setShowUpload] = useState(false);
+  const [uploadName, setUploadName] = useState("notebook_result");
+  const [summaryText, setSummaryText] = useState(DEFAULT_SUMMARY);
+  const [metricsText, setMetricsText] = useState(DEFAULT_METRICS);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const cards = useMemo(() => runs.map(buildExperimentCard), [runs]);
 
-  const handleRun = async () => {
-    if (!onRunExperiment) return;
-    setRunning(true);
+  const loadJsonFile = async (file: File) => {
+    const text = await file.text();
+    let data: unknown;
     try {
-      await onRunExperiment();
-      await onRefresh();
-    } finally {
-      setRunning(false);
+      data = JSON.parse(text);
+    } catch {
+      setUploadError("文件不是合法 JSON");
+      return;
     }
+    if (!data || typeof data !== "object" || Array.isArray(data)) {
+      setUploadError("文件须为 JSON 对象");
+      return;
+    }
+    const obj = data as Record<string, unknown>;
+    if (typeof obj.name === "string" && obj.name.trim()) {
+      setUploadName(obj.name.trim());
+    } else if (file.name) {
+      setUploadName(file.name.replace(/\.json$/i, "") || "notebook_result");
+    }
+    if (obj.summary && typeof obj.summary === "object" && !Array.isArray(obj.summary)) {
+      setSummaryText(JSON.stringify(obj.summary, null, 2));
+    } else if (obj.summary === undefined && obj.metrics === undefined) {
+      // 整个文件当作 metrics
+      setMetricsText(JSON.stringify(obj, null, 2));
+      setUploadError(null);
+      return;
+    }
+    if (obj.metrics && typeof obj.metrics === "object" && !Array.isArray(obj.metrics)) {
+      setMetricsText(JSON.stringify(obj.metrics, null, 2));
+    }
+    setUploadError(null);
   };
 
-  const handleJupyter = async (action: "template" | "upload") => {
-    const fn = action === "template" ? onJupyterTemplate : onJupyterUpload;
-    if (!fn) return;
+  const handlePickFile = async (file: File) => {
+    setUploadError(null);
+    const lower = file.name.toLowerCase();
+    const isTable =
+      lower.endsWith(".xlsx") ||
+      lower.endsWith(".xlsm") ||
+      lower.endsWith(".csv") ||
+      lower.endsWith(".tsv");
+    if (isTable) {
+      if (!onExperimentFileUpload) {
+        setUploadError("当前界面未接入文件上传接口");
+        return;
+      }
+      const name = uploadName.trim() || file.name.replace(/\.[^.]+$/, "") || "file_result";
+      setJupyterBusy(true);
+      try {
+        await onExperimentFileUpload(file, {
+          name,
+          project_id: projectId || "default",
+          session_id: sessionId || null,
+        });
+        await onRefresh();
+        setShowUpload(false);
+      } catch (err) {
+        setUploadError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setJupyterBusy(false);
+      }
+      return;
+    }
+    if (lower.endsWith(".json") || file.type.includes("json")) {
+      await loadJsonFile(file);
+      return;
+    }
+    setUploadError("支持格式：.xlsx / .csv / .tsv / .json");
+  };
+
+  const handleUploadSubmit = async () => {
+    if (!onJupyterUpload) return;
+    setUploadError(null);
+    let summary: Record<string, unknown>;
+    let metrics: Record<string, unknown>;
+    try {
+      summary = parseJsonObject(summaryText, "summary");
+      metrics = parseJsonObject(metricsText, "metrics");
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : String(err));
+      return;
+    }
+    const name = uploadName.trim() || "notebook_result";
     setJupyterBusy(true);
     try {
-      await fn();
+      await onJupyterUpload({
+        name,
+        project_id: projectId || "default",
+        session_id: sessionId || null,
+        summary,
+        metrics,
+      });
       await onRefresh();
+      setShowUpload(false);
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : String(err));
     } finally {
       setJupyterBusy(false);
     }
@@ -53,38 +171,21 @@ export function ExperimentLogPanel({
   return (
     <div className="experiment-log-panel">
       <p className="panel-muted experiment-intro">
-        记录数值验证与 Notebook 实验结果：例如损失函数临界点分类、二次函数最小值验证等。
+        提交你在本机/Notebook 得到的指标，供实验顾问解读（DataPacket）。系统不以代跑训练为核心。
       </p>
 
       <div className="experiment-toolbar">
-        {onRunExperiment && (
-          <button
-            type="button"
-            className="btn-small btn-primary"
-            onClick={() => void handleRun()}
-            disabled={running || loading}
-          >
-            {running ? "运行中…" : "运行示例实验"}
-          </button>
-        )}
-        {onJupyterTemplate && (
-          <button
-            type="button"
-            className="btn-small"
-            disabled={jupyterBusy || loading}
-            onClick={() => void handleJupyter("template")}
-          >
-            Notebook 模板
-          </button>
-        )}
         {onJupyterUpload && (
           <button
             type="button"
             className="btn-small"
             disabled={jupyterBusy || loading}
-            onClick={() => void handleJupyter("upload")}
+            onClick={() => {
+              setShowUpload((v) => !v);
+              setUploadError(null);
+            }}
           >
-            回传示例
+            {showUpload ? "收起回传" : "回传结果"}
           </button>
         )}
         <button type="button" className="btn-small" onClick={onRefresh} disabled={loading}>
@@ -92,10 +193,86 @@ export function ExperimentLogPanel({
         </button>
       </div>
 
+      {showUpload && onJupyterUpload && (
+        <div className="notebook-upload-form">
+          <p className="panel-muted">
+            可手填 JSON，或导入 <strong>.xlsx / .csv / .tsv / .json</strong>。
+            Excel/CSV 会按表格解析（两列键值→指标；多列表格→末行数值作指标）。课题：
+            <code>{projectId || "default"}</code>
+            {sessionId ? (
+              <>
+                {" "}
+                · 会话：<code>{sessionId.slice(0, 8)}</code>
+              </>
+            ) : null}
+          </p>
+          <label className="notebook-upload-field">
+            <span>结果名称</span>
+            <input
+              type="text"
+              value={uploadName}
+              disabled={jupyterBusy}
+              onChange={(e) => setUploadName(e.target.value)}
+              placeholder="hessian_scan_nb"
+            />
+          </label>
+          <label className="notebook-upload-field">
+            <span>summary（JSON）</span>
+            <textarea
+              rows={4}
+              value={summaryText}
+              disabled={jupyterBusy}
+              onChange={(e) => setSummaryText(e.target.value)}
+              spellCheck={false}
+            />
+          </label>
+          <label className="notebook-upload-field">
+            <span>metrics（JSON）</span>
+            <textarea
+              rows={5}
+              value={metricsText}
+              disabled={jupyterBusy}
+              onChange={(e) => setMetricsText(e.target.value)}
+              spellCheck={false}
+            />
+          </label>
+          <div className="notebook-upload-actions">
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".json,.csv,.tsv,.xlsx,.xlsm,application/json,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              className="visually-hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) void handlePickFile(file);
+                e.target.value = "";
+              }}
+            />
+            <button
+              type="button"
+              className="btn-small"
+              disabled={jupyterBusy}
+              onClick={() => fileRef.current?.click()}
+            >
+              导入文件（Excel/CSV/JSON）
+            </button>
+            <button
+              type="button"
+              className="btn-small btn-primary"
+              disabled={jupyterBusy || loading}
+              onClick={() => void handleUploadSubmit()}
+            >
+              {jupyterBusy ? "提交中…" : "提交回传"}
+            </button>
+          </div>
+          {uploadError && <p className="panel-error">{uploadError}</p>}
+        </div>
+      )}
+
       {error && <p className="panel-error">{error}</p>}
       {loading && <p className="panel-muted">加载中…</p>}
       {!loading && cards.length === 0 && (
-        <p className="panel-muted">暂无记录。可点「运行示例实验」或「回传示例」生成第一条。</p>
+        <p className="panel-muted">暂无记录。点「回传结果」提交第一条实验数据。</p>
       )}
 
       <ul className="experiment-list">

@@ -13,7 +13,8 @@
 #
 # 限制：
 #     - max_tool_rounds：防止无限循环（默认 10 轮）
-#     - tool_rounds >= max_tool_rounds 时从 call_model 直接 → END
+#     - tool_rounds >= max_tool_rounds 时：execute_tools 后直接 END
+#       （禁止再 call_model，否则易产生悬空 tool_calls → DeepSeek 400）
 #
 # OpenAI dict → LangChain BaseMessage 转换：
 #     messages_from_api_dicts 负责将 Legacy 路径的 dict 消息转为 LangGraph 可用的类型。
@@ -64,6 +65,12 @@ def messages_from_api_dicts(messages: list[dict[str, Any]]) -> list[BaseMessage]
             result.append(HumanMessage(content=content))
         elif role == "assistant":
             tool_calls = msg.get("tool_calls")
+            additional: dict[str, Any] = {}
+            if tool_calls:
+                # DeepSeek：含 tool_calls 时必须带 reasoning_content（可为空）
+                additional["reasoning_content"] = msg.get("reasoning_content") or ""
+            elif msg.get("reasoning_content"):
+                additional["reasoning_content"] = msg["reasoning_content"]
             if tool_calls:
                 # assistant 消息含 tool_calls → 解析为 LangChain 格式
                 lc_tool_calls = []
@@ -87,11 +94,14 @@ def messages_from_api_dicts(messages: list[dict[str, Any]]) -> list[BaseMessage]
                             "args": args,
                         }
                     )
-                result.append(AIMessage(content=content, tool_calls=lc_tool_calls))
+                result.append(
+                    AIMessage(
+                        content=content,
+                        tool_calls=lc_tool_calls,
+                        additional_kwargs=additional,
+                    )
+                )
             else:
-                additional: dict[str, Any] = {}
-                if msg.get("reasoning_content"):
-                    additional["reasoning_content"] = msg["reasoning_content"]
                 result.append(
                     AIMessage(
                         content=content,
@@ -120,15 +130,28 @@ def _route_after_call_model(
     规则：
         - AIMessage 且含 tool_calls 且未达回合上限 → "execute_tools"
         - 否则 → END（对话结束）
+
+    注意：若已达上限仍返回 tool_calls，绝不能直接 END（会留下悬空 tool_calls，
+    DeepSeek 最终合成 400）。此时仍走 execute_tools，由 _route_after_execute_tools
+    在执行后结束；或由出站 sanitize 补占位。优先执行最后一轮工具。
     """
     last = state["messages"][-1]
     if isinstance(last, AIMessage) and last.tool_calls:
-        # 检查是否已达工具调用轮次上限
-        if state.get("tool_rounds", 0) >= max_tool_rounds:
-            return END
+        # 有 tool_calls 必须先执行；达上限由 _route_after_execute_tools 结束。
         return "execute_tools"
 
     return END
+
+
+def _route_after_execute_tools(
+    state: ReactState,
+    *,
+    max_tool_rounds: int,
+) -> str:
+    """执行完工具后：未达上限则继续 call_model，否则 END（不再多要一轮 tool_calls）。"""
+    if state.get("tool_rounds", 0) >= max_tool_rounds:
+        return END
+    return "call_model"
 
 
 def build_react_graph(
@@ -156,9 +179,10 @@ def build_react_graph(
 
     图边：
         START → call_model
-        call_model → execute_tools（有 tool_calls 且未达上限）
-        call_model → END（无 tool_calls 或已达到上限）
-        execute_tools → call_model（循环回模型）
+        call_model → execute_tools（有 tool_calls）
+        call_model → END（无 tool_calls）
+        execute_tools → call_model（未达上限）
+        execute_tools → END（已达上限，避免再 call_model 产生悬空 tool_calls）
     """
     graph = StateGraph(ReactState)
 
@@ -181,7 +205,14 @@ def build_react_graph(
         },
     )
 
-    # execute_tools 完成后回到 call_model（下一步可能继续调工具或结束）
-    graph.add_edge("execute_tools", "call_model")
+    # 执行工具后：达上限则结束，否则回到 call_model
+    graph.add_conditional_edges(
+        "execute_tools",
+        lambda state: _route_after_execute_tools(state, max_tool_rounds=max_tool_rounds),
+        {
+            "call_model": "call_model",
+            END: END,
+        },
+    )
 
     return graph.compile()

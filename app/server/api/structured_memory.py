@@ -10,9 +10,10 @@
 #     - 被调用：server/main.py include_router
 #     - 调用：server/memory/structured/store.py
 #
+# 图谱边 API 仍保留；GET /graph 视图已下线（效果差）。
 # 阅读提示：
 #     - 新人先看 list_structured_memory 与 create_structured_memory
-#     - 图谱见 get_memory_graph / create_memory_edge
+#     - 边见 create_memory_edge
 #
 # Debug：
 #     - 条目未出现在 prompt → injection.py 未启用或 session 过滤
@@ -21,19 +22,32 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Path, Query
+from fastapi import APIRouter, File, Form, HTTPException, Path, Query, UploadFile
 
 from server.memory.structured.store import get_structured_memory_store
 from shared.schemas import (
     MemoryEdge,
     MemoryEdgeCreateRequest,
-    MemoryGraphResponse,
     StructuredMemoryCreateRequest,
     StructuredMemoryEntry,
+    StructuredMemoryImportCandidate,
+    StructuredMemoryImportPreviewResponse,
     StructuredMemoryListResponse,
+    StructuredMemoryMarkdownPreviewRequest,
+    StructuredMemoryUpdateRequest,
 )
 
 router = APIRouter(tags=["memory"])
+
+
+@router.get(
+    "/v1/memory/structured/graph",
+    summary="知识图谱（已下线）",
+    deprecated=True,
+)
+async def get_memory_graph_removed() -> None:
+    """关系图谱视图已下线（效果差）。"""
+    raise HTTPException(status_code=410, detail="关系图谱 API 已下线")
 
 
 @router.get(
@@ -138,24 +152,107 @@ async def create_entry_version(
     return version
 
 
-@router.get(
-    "/v1/memory/structured/graph",
-    response_model=MemoryGraphResponse,
-    summary="知识图谱",
+@router.post(
+    "/v1/memory/structured/preview-markdown",
+    response_model=StructuredMemoryImportPreviewResponse,
+    summary="Markdown 导入预览",
 )
-async def get_memory_graph(
-    session_id: str | None = Query(
-        default=None,
-        description="按会话过滤节点/边",
-        examples=["sess_demo"],
-    ),
-) -> MemoryGraphResponse:
-    """返回结构化记忆节点与关系边。"""
-    store = get_structured_memory_store()
-    graph = store.get_graph(session_id=session_id)
-    return MemoryGraphResponse(
-        nodes=[StructuredMemoryEntry.model_validate(n) for n in graph["nodes"]],
-        edges=[MemoryEdge.model_validate(e) for e in graph["edges"]],
+async def preview_markdown_import(
+    request: StructuredMemoryMarkdownPreviewRequest,
+) -> StructuredMemoryImportPreviewResponse:
+    """按 ## 定理/引理 规则解析候选，不写库。"""
+    from server.memory.structured.import_extract import candidates_from_markdown
+
+    candidates = candidates_from_markdown(request.content)
+    return StructuredMemoryImportPreviewResponse(
+        filename="",
+        text_chars=len(request.content),
+        truncated=False,
+        candidates=[StructuredMemoryImportCandidate.model_validate(c) for c in candidates],
+        warnings=[] if candidates else ["未识别到 ## 定理/引理/推论 标题"],
+    )
+
+
+@router.post(
+    "/v1/memory/structured/import-preview",
+    response_model=StructuredMemoryImportPreviewResponse,
+    summary="PDF/文档导入预览",
+)
+async def import_file_preview(
+    file: UploadFile = File(..., description="PDF / DOCX / MD / TXT"),
+    session_id: str | None = Form(default=None, description="可选会话 ID（仅记录用）"),
+) -> StructuredMemoryImportPreviewResponse:
+    """抽取全文并由 LLM 生成定理候选；确认入库由前端 POST 条目完成。"""
+    from server.memory.rag.doc_ingest import extract_text_from_docx
+    from server.memory.rag.pdf_ingest import extract_text_from_pdf
+    from server.memory.structured.import_extract import (
+        candidates_from_markdown,
+        extract_candidates_with_llm,
+    )
+
+    _ = session_id  # 预留：后续可按会话限流/审计
+    filename = file.filename or "upload.bin"
+    data = await file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="空文件")
+
+    lower = filename.lower()
+    warnings: list[str] = []
+    try:
+        if lower.endswith(".pdf"):
+            text = extract_text_from_pdf(data)
+        elif lower.endswith(".docx"):
+            text = extract_text_from_docx(data)
+        elif lower.endswith((".md", ".txt", ".markdown")):
+            text = data.decode("utf-8", errors="replace")
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="仅支持 .pdf / .docx / .md / .txt",
+            )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"解析失败: {exc}") from exc
+
+    text = (text or "").strip()
+    if not text:
+        raise HTTPException(
+            status_code=400,
+            detail="未能抽取到可选文字（扫描版 PDF 暂不支持 OCR）",
+        )
+
+    truncated = False
+    # 仅在极端体积时做基础设施保护（约 2M 字符），不为省 token
+    hard_cap = 2_000_000
+    if len(text) > hard_cap:
+        text = text[:hard_cap]
+        truncated = True
+        warnings.append(f"正文超过 {hard_cap} 字符，已截断尾部")
+
+    candidates: list[dict] = []
+    if lower.endswith((".md", ".markdown", ".txt")) and (
+        "## 定理" in text or "## 引理" in text or "## Theorem" in text or "## Lemma" in text
+    ):
+        candidates = candidates_from_markdown(text)
+        if not candidates:
+            warnings.append("Markdown 标题规则未命中，改用 LLM 抽取")
+
+    if not candidates:
+        try:
+            candidates = await extract_candidates_with_llm(text)
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=f"LLM 抽取失败: {exc}") from exc
+
+    if not candidates:
+        warnings.append("未抽到候选条目，可改用 Markdown 手工整理后导入")
+
+    return StructuredMemoryImportPreviewResponse(
+        filename=filename,
+        text_chars=len(text),
+        truncated=truncated,
+        candidates=[StructuredMemoryImportCandidate.model_validate(c) for c in candidates],
+        warnings=warnings,
     )
 
 
@@ -169,14 +266,62 @@ async def create_structured_memory(
 ) -> StructuredMemoryEntry:
     """新建一条定理/假设/结论等结构化记忆。"""
     store = get_structured_memory_store()
+    meta = dict(request.metadata or {})
+    if "source" not in meta:
+        meta["source"] = "manual"
+    if "status" not in meta:
+        meta["status"] = "draft"
     entry = store.create_entry(
         session_id=request.session_id,
         kind=request.kind,
         title=request.title,
         body=request.body,
-        metadata=request.metadata,
+        metadata=meta,
     )
     return StructuredMemoryEntry.model_validate(entry)
+
+
+@router.patch(
+    "/v1/memory/structured/{entry_id}",
+    response_model=StructuredMemoryEntry,
+    summary="更新结构化记忆",
+)
+async def update_structured_memory(
+    request: StructuredMemoryUpdateRequest,
+    entry_id: int = Path(..., description="记忆条目 ID", examples=[1]),
+) -> StructuredMemoryEntry:
+    if (
+        request.kind is None
+        and request.title is None
+        and request.body is None
+        and request.metadata is None
+    ):
+        raise HTTPException(status_code=400, detail="至少提供一个更新字段")
+    store = get_structured_memory_store()
+    entry = store.update_entry(
+        entry_id,
+        kind=request.kind,
+        title=request.title,
+        body=request.body,
+        metadata=request.metadata,
+    )
+    if not entry:
+        raise HTTPException(status_code=404, detail="条目不存在")
+    return StructuredMemoryEntry.model_validate(entry)
+
+
+@router.delete(
+    "/v1/memory/structured/{entry_id}",
+    summary="删除结构化记忆",
+)
+async def delete_structured_memory(
+    entry_id: int = Path(..., description="记忆条目 ID", examples=[1]),
+) -> dict:
+    store = get_structured_memory_store()
+    ok = store.delete_entry(entry_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="条目不存在")
+    return {"ok": True, "id": entry_id}
 
 
 @router.post(

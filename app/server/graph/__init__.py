@@ -3,7 +3,7 @@
 #
 # 职责：
 #     1. react.py / streaming.py — ReAct 工具循环子图
-#     2. research_supervisor.py / research_pipeline.py — Campaign 与多跳研究
+#     2. scenes/ — 场景工作流
 #     3. theory_pipeline.py / workflow.py — 推导验证与工作流 SSE
 #     4. router_llm.py — LLM 意图路由
 #

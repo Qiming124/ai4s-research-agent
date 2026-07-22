@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 # ── 核心对话模型 ─────────────────────────────────────────────
@@ -169,7 +169,7 @@ class ChatRequest(BaseModel):
     )
     agent: Literal["general", "theory", "experiment", "literature", "review", "counterexample"] | None = Field(
         default=None,
-        description="指定 Agent；省略时按 auto_route 自动路由",
+        description="指定 Agent；省略、null 或 auto 时按 auto_route 自动路由",
         examples=["theory"],
     )
     auto_route: bool = Field(
@@ -177,6 +177,16 @@ class ChatRequest(BaseModel):
         description="未指定 agent 时是否自动意图路由；False 则固定 general",
         examples=[True],
     )
+
+    @field_validator("agent", mode="before")
+    @classmethod
+    def _normalize_agent(cls, value: Any) -> Any:
+        """API 实验室/旧客户端常误传 auto 或空串，视为未指定。"""
+        if value is None:
+            return None
+        if isinstance(value, str) and value.strip().lower() in ("", "auto"):
+            return None
+        return value
     enable_thinking: bool | None = Field(
         default=None,
         description="是否启用 DeepSeek thinking（None=默认开启，仅影响最终回答）",
@@ -197,10 +207,10 @@ class ChatRequest(BaseModel):
         description="关联课题 ID；省略时从 session 解析或回退 default",
         examples=["default"],
     )
-    campaign_id: str | None = Field(
+    artifact_ids: list[str] | None = Field(
         default=None,
-        description="关联科研 Campaign ID；省略时使用课题活跃 Campaign",
-        examples=["camp_demo"],
+        description="注入上下文的工件 ID 列表（MethodCard / ExperimentPlan 等）",
+        examples=[["art_method_1"]],
     )
 
 
@@ -274,7 +284,6 @@ class StreamChunk(BaseModel):
         "numerical_verification_result",
         "pipeline_stage",
         "pipeline_gate",
-        "campaign_update",
         "artifact_saved",
         "memory_warning",
         "cot_step",
@@ -741,6 +750,45 @@ class StructuredMemoryCreateRequest(BaseModel):
         description="扩展元数据",
         examples=[{"source": "manual"}],
     )
+
+
+class StructuredMemoryUpdateRequest(BaseModel):
+    """PATCH /v1/memory/structured/{id} 请求体（字段均可选）。"""
+
+    kind: Literal["theorem", "hypothesis", "conclusion", "citation", "note"] | None = Field(
+        default=None,
+        description="记忆类型",
+    )
+    title: str | None = Field(default=None, description="标题")
+    body: str | None = Field(default=None, min_length=1, description="正文")
+    metadata: dict[str, Any] | None = Field(default=None, description="扩展元数据（整体替换）")
+
+
+class StructuredMemoryImportCandidate(BaseModel):
+    """PDF/Markdown 导入预览中的单条候选。"""
+
+    kind: Literal["theorem", "hypothesis", "conclusion", "citation", "note"] = "theorem"
+    title: str = ""
+    body: str = ""
+    page: int | None = None
+    confidence: float = 0.5
+    selected_default: bool = True
+
+
+class StructuredMemoryMarkdownPreviewRequest(BaseModel):
+    """POST /v1/memory/structured/preview-markdown 请求体。"""
+
+    content: str = Field(..., min_length=1, description="含 ## 定理/引理 标题的 Markdown")
+
+
+class StructuredMemoryImportPreviewResponse(BaseModel):
+    """Markdown/文件导入预览响应。"""
+
+    filename: str = ""
+    text_chars: int = 0
+    truncated: bool = False
+    candidates: list[StructuredMemoryImportCandidate] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
 
 
 class StructuredMemoryListResponse(BaseModel):
@@ -1401,55 +1449,7 @@ class ExperimentRunRequest(BaseModel):
     )
 
 
-# ── 同步 / 可观测性 ───────────────────────────────────────────
-
-class SyncMetadataRequest(BaseModel):
-    """云端元数据同步请求。"""
-
-    model_config = ConfigDict(
-        json_schema_extra={
-            "examples": [
-                {
-                    "project_id": "default",
-                    "session_id": "sess_demo",
-                    "actor": "alice",
-                }
-            ]
-        }
-    )
-
-    project_id: str = Field(
-        default="default",
-        description="课题 ID",
-        examples=["default"],
-    )
-    session_id: str | None = Field(
-        default=None,
-        description="可选会话范围",
-        examples=["sess_demo"],
-    )
-    actor: str = Field(
-        default="",
-        description="操作者标识（写入审计）",
-        examples=["alice"],
-    )
-
-
-class SyncMetadataResponse(BaseModel):
-    """元数据同步结果。"""
-
-    project_id: str = Field(description="课题 ID", examples=["default"])
-    synced_entries: int = Field(
-        default=0,
-        description="同步条目数",
-        examples=[3],
-    )
-    metadata: list[dict[str, Any]] = Field(
-        default_factory=list,
-        description="同步后的元数据快照",
-        examples=[[]],
-    )
-
+# ── 可观测性 ───────────────────────────────────────────
 
 class ObservabilitySummary(BaseModel):
     """可观测摘要。"""
@@ -1584,264 +1584,70 @@ class AssumptionDagResponse(BaseModel):
     )
 
 
-class BibliographyEntryInfo(BaseModel):
-    """书目条目。"""
+# ── 提示词优化 ──────────────────────────────────────────────
 
-    id: int | None = Field(default=None, description="条目 ID", examples=[1])
-    project_id: str = Field(
-        default="default",
-        description="课题 ID",
-        examples=["default"],
-    )
-    bib_key: str = Field(
-        description="BibTeX key",
-        examples=["choromanska2015loss"],
-    )
-    title: str = Field(
+
+class PromptTemplateInfo(BaseModel):
+    """科研提示词风格模板元数据。"""
+
+    id: str = Field(description="风格 id", examples=["rccf"])
+    name: str = Field(description="英文名", examples=["RCCF"])
+    name_zh: str = Field(description="中文名", examples=["角色-上下文-约束-格式"])
+    description: str = Field(description="风格说明")
+    reference: str = Field(default="", description="参考来源")
+    skeleton: str = Field(description="结构骨架")
+    best_for: list[str] = Field(default_factory=list, description="适用场景")
+
+
+class PromptTestCaseInfo(BaseModel):
+    """提示词优化测试案例。"""
+
+    id: str = Field(description="案例 id", examples=["loss_landscape"])
+    title: str = Field(description="标题")
+    category: str = Field(description="类别", examples=["theory"])
+    raw_prompt: str = Field(description="原始提示词")
+    context: str = Field(default="", description="补充语境")
+    expected_traits: list[str] = Field(default_factory=list, description="期望特质")
+    source_note: str = Field(default="", description="来源说明")
+
+
+class PromptOptimizeRequest(BaseModel):
+    """POST /v1/prompt/optimize 请求体。"""
+
+    text: str = Field(..., min_length=1, description="待优化的原始提示词")
+    context: str = Field(default="", description="补充语境")
+    goal: str = Field(
         default="",
-        description="文献标题",
-        examples=["The Loss Surfaces of Multilayer Networks"],
+        description="优化目标，如更清晰、更可验证、适合 Math 模式",
     )
-    authors: str = Field(
-        default="",
-        description="作者",
-        examples=["Choromanska et al."],
-    )
-    year: str = Field(default="", description="年份", examples=["2015"])
-    arxiv_id: str = Field(default="", description="arXiv ID", examples=["1412.0233"])
-    doi: str = Field(default="", description="DOI", examples=[""])
-    raw_bibtex: str = Field(
-        default="",
-        description="原始 BibTeX 文本",
-        examples=["@article{choromanska2015loss, ...}"],
-    )
-    metadata: dict[str, Any] = Field(
-        default_factory=dict,
-        description="扩展元数据",
-        examples=[{"venue": "AISTATS"}],
-    )
-    created_at: str | None = Field(
+    mode: Literal["chat", "math"] = Field(default="chat", description="对话模式")
+    agent: str | None = Field(default=None, description="目标 Agent")
+    style_ids: list[str] | None = Field(
         default=None,
-        description="创建时间",
-        examples=["2026-07-01T00:00:00"],
+        description="指定风格 id 列表；默认生成全部四种",
     )
 
 
-class BibliographyListResponse(BaseModel):
-    """书目列表响应。"""
+class PromptStyleVariant(BaseModel):
+    """一种风格的优化结果。"""
 
-    entries: list[BibliographyEntryInfo] = Field(
-        default_factory=list,
-        description="书目条目",
-        examples=[[]],
-    )
-    total: int = Field(default=0, description="总数", examples=[1])
-
-
-# ── 科研 Campaign ──────────────────────────────────────────────
-
-CampaignStageId = Literal[
-    "S0_campaign",
-    "S1_literature",
-    "S2_formalization",
-    "S3_theory",
-    "S4_counterexample",
-    "S5_experiment",
-    "S6_synthesis",
-    "S7_review",
-    "S8_archive",
-    "complete",
-]
-
-CampaignGateStatus = Literal["pending", "pass", "fail", "skipped"]
+    style_id: str
+    style_name: str
+    style_name_zh: str
+    prompt: str
+    scores: dict[str, int] = Field(default_factory=dict)
+    total_score: int = 0
+    highlights: list[str] = Field(default_factory=list)
+    recommended: bool = False
 
 
-class ResearchCampaignInfo(BaseModel):
-    """科研 Campaign 详情。"""
+class PromptOptimizeResponse(BaseModel):
+    """提示词优化响应。"""
 
-    id: str = Field(description="Campaign ID", examples=["camp_demo"])
-    project_id: str = Field(
-        default="default",
-        description="所属课题",
-        examples=["default"],
-    )
-    title: str = Field(
-        description="Campaign 标题",
-        examples=["Hessian PSD 充分条件验证"],
-    )
-    task_family: str = Field(
-        default="loss_landscape_critical_points",
-        description="任务族标识",
-        examples=["loss_landscape_critical_points"],
-    )
-    dataset: str = Field(
-        default="",
-        description="数据集说明",
-        examples=["synthetic_quadratic"],
-    )
-    benchmark: str = Field(
-        default="",
-        description="基准说明",
-        examples=["critical_point_scan"],
-    )
-    sota_reference: list[str] = Field(
-        default_factory=list,
-        description="SOTA / 参考论文列表",
-        examples=[["Choromanska et al. 2015"]],
-    )
-    compute_budget: dict[str, Any] = Field(
-        default_factory=dict,
-        description="算力预算 JSON",
-        examples=[{"gpu_hours": 2}],
-    )
-    assumptions: list[str] = Field(
-        default_factory=list,
-        description="本 Campaign 假设列表",
-        examples=[["f is C^2"]],
-    )
-    current_stage: CampaignStageId = Field(
-        default="S0_campaign",
-        description="当前阶段 S0–S8 / complete",
-        examples=["S3_theory"],
-    )
-    status: Literal["active", "blocked", "done", "iterate"] = Field(
-        default="active",
-        description="Campaign 状态",
-        examples=["active"],
-    )
-    stage_artifacts: dict[str, Any] = Field(
-        default_factory=dict,
-        description="各阶段产物元数据",
-        examples=[{"S3_theory": {"path": "proofs/thm1.md"}}],
-    )
-    gates: dict[str, CampaignGateStatus] = Field(
-        default_factory=dict,
-        description="阶段门禁状态",
-        examples=[{"S2_formalization": "pass"}],
-    )
-    session_id: str | None = Field(
-        default=None,
-        description="关联会话",
-        examples=["sess_demo"],
-    )
-    created_at: str | None = Field(
-        default=None,
-        description="创建时间",
-        examples=["2026-07-20T10:00:00"],
-    )
-    updated_at: str | None = Field(
-        default=None,
-        description="更新时间",
-        examples=["2026-07-20T12:00:00"],
-    )
-
-
-class ResearchCampaignListResponse(BaseModel):
-    """Campaign 列表响应。"""
-
-    campaigns: list[ResearchCampaignInfo] = Field(
-        default_factory=list,
-        description="Campaign 列表",
-        examples=[[]],
-    )
-    total: int = Field(default=0, description="总数", examples=[1])
-
-
-class ResearchCampaignCreateRequest(BaseModel):
-    """创建 Campaign 请求体。"""
-
-    model_config = ConfigDict(
-        json_schema_extra={
-            "examples": [
-                {
-                    "title": "Hessian PSD 充分条件验证",
-                    "task_family": "loss_landscape_critical_points",
-                    "dataset": "synthetic_quadratic",
-                    "benchmark": "critical_point_scan",
-                    "sota_reference": ["Choromanska et al. 2015"],
-                    "compute_budget": {"gpu_hours": 2},
-                    "assumptions": ["f is C^2"],
-                    "session_id": "sess_demo",
-                }
-            ]
-        }
-    )
-
-    title: str = Field(
-        ...,
-        min_length=1,
-        description="Campaign 标题",
-        examples=["Hessian PSD 充分条件验证"],
-    )
-    task_family: str = Field(
-        default="loss_landscape_critical_points",
-        description="任务族",
-        examples=["loss_landscape_critical_points"],
-    )
-    dataset: str = Field(
-        default="",
-        description="数据集",
-        examples=["synthetic_quadratic"],
-    )
-    benchmark: str = Field(
-        default="",
-        description="基准",
-        examples=["critical_point_scan"],
-    )
-    sota_reference: list[str] = Field(
-        default_factory=list,
-        description="SOTA 参考",
-        examples=[["Choromanska et al. 2015"]],
-    )
-    compute_budget: dict[str, Any] = Field(
-        default_factory=dict,
-        description="算力预算",
-        examples=[{"gpu_hours": 2}],
-    )
-    assumptions: list[str] = Field(
-        default_factory=list,
-        description="初始假设",
-        examples=[["f is C^2"]],
-    )
-    session_id: str | None = Field(
-        default=None,
-        description="关联会话",
-        examples=["sess_demo"],
-    )
-
-
-class ResearchCampaignUpdateRequest(BaseModel):
-    """更新 Campaign 阶段/状态请求体。"""
-
-    model_config = ConfigDict(
-        json_schema_extra={
-            "examples": [
-                {
-                    "current_stage": "S4_counterexample",
-                    "status": "active",
-                    "gates": {"S3_theory": "pass"},
-                }
-            ]
-        }
-    )
-
-    current_stage: CampaignStageId | None = Field(
-        default=None,
-        description="目标阶段；省略则不改",
-        examples=["S4_counterexample"],
-    )
-    status: Literal["active", "blocked", "done", "iterate"] | None = Field(
-        default=None,
-        description="目标状态；省略则不改",
-        examples=["active"],
-    )
-    stage_artifacts: dict[str, Any] | None = Field(
-        default=None,
-        description="合并/覆盖阶段产物元数据",
-        examples=[{"S3_theory": {"path": "proofs/thm1.md"}}],
-    )
-    gates: dict[str, CampaignGateStatus] | None = Field(
-        default=None,
-        description="更新门禁状态",
-        examples=[{"S3_theory": "pass"}],
-    )
+    original: str
+    recommended_style_id: str
+    recommended_prompt: str
+    rationale: str = ""
+    variants: list[PromptStyleVariant] = Field(default_factory=list)
+    ai_applied: bool = False
+    message: str = ""

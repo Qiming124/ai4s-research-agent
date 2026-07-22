@@ -8,8 +8,7 @@
 #     4. 判断是否需要 experiment Agent handoff
 #
 # 架构位置：
-#     - 被调用：server/graph/research_pipeline.py、research_supervisor.py、
-#               experiments/campaign_experiments.py、verification_executor.py
+#     - 被调用：server/graph/scenes、verification_executor.py
 #     - 调用：server/mcp/client.py、memory/verification.py、graph/workflow.py
 #
 # 阅读提示：

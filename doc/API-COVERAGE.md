@@ -1,11 +1,12 @@
 # API 覆盖清单
 
-> **67** 个 REST 端点 · **15** 域 · 更新于 **v2.2**（`app/server/api/*.py`）  
-> **调用链路详解**：[`API-ROUTES.md`](API-ROUTES.md)（契约 + HTTP→实现全路径）
+> **71** 个业务 REST 端点（`/health` + `/v1/*`）· **16** 域 · 更新于 **v2.2**（以 `GET /openapi.json` 为准）  
+> OpenAPI 另含生产静态入口 `GET /`（不计入上表）。  
+> **调用链路详解**：[`API-ROUTES.md`](API-ROUTES.md)
 
 图例：**UI** = 前端已接线 · **Test** = pytest/smoke · **Auto** = 自动化等级 (A=全自动/H=半自动/M=手动)
 
-> 表中 `{id}` / `{path}` / `{cid}` 为简写；代码参数名见 API-ROUTES（如 `{session_id}`、`{project_id}`、`{file_path:path}`）。
+> 表中 `{id}` / `{path}` 为简写；代码参数名见 API-ROUTES。
 
 | 域 | 方法 | 路径 | UI | Test | Auto | 说明 |
 |----|------|------|:--:|:----:|:----:|------|
@@ -29,34 +30,36 @@
 | Memory | GET | `/v1/memory/structured` | ✓ | ✓ | A | 定理库 |
 | Memory | GET | `/v1/memory/structured/global` | ✓ | ✓ | A | 全局记忆 |
 | Memory | GET | `/v1/memory/structured/graph` | ✓ | ✓ | A | 知识图谱 |
-| Memory | POST | `/v1/memory/structured` | — | ✓ | A | Agent 写入 |
+| Memory | POST | `/v1/memory/structured` | — | ✓ | A | Agent / 手工写入 |
+| Memory | PATCH | `/v1/memory/structured/{id}` | ✓ | ✓ | A | 更新条目 |
+| Memory | DELETE | `/v1/memory/structured/{id}` | ✓ | ✓ | A | 删除条目 |
+| Memory | POST | `/v1/memory/structured/preview-markdown` | ✓ | ✓ | A | Markdown 导入预览 |
+| Memory | POST | `/v1/memory/structured/import-preview` | ✓ | ✓ | A | PDF 等导入预览 |
 | Memory | GET | `/v1/memory/structured/{id}/versions` | — | ✓ | H | L4 版本列表 |
 | Memory | POST | `/v1/memory/structured/{id}/versions` | — | ✓ | H | L4 新建版本 |
 | Memory | POST | `/v1/memory/structured/{id}/edges` | — | ✓ | H | 图谱边 |
 | Theory | GET | `/v1/theory/workspace` | ✓ | ✓ | A | 工作区列表 |
 | Theory | GET | `/v1/theory/workspace/{path}` | ✓ | ✓ | A | 读文件 |
 | Theory | PUT | `/v1/theory/workspace/{path}` | ✓ | ✓ | H | 写文件 |
-| Theory | GET | `/v1/theory/assumption-matrix` | ✓ | ✓ | A | 假设矩阵 |
-| Theory | GET | `/v1/theory/symbols` | ✓ | ✓ | A | 符号表 |
-| Theory | GET | `/v1/theory/assumptions` | ✓ | ✓ | A | 假设列表 |
 | Theory | GET | `/v1/theory/assumption-dag` | ✓ | ✓ | A | 假设 DAG |
 | Theory | GET | `/v1/theory/assumption-dag/impact/{id}` | ✓ | ✓ | H | 影响传播 |
-| Theory | GET | `/v1/bibliography` | ✓ | ✓ | A | 书目 |
-| Theory | GET | `/v1/bibliography/export.bib` | ✓ | ✓ | H | BibTeX |
 | Projects | GET | `/v1/projects` | ✓ | ✓ | A | 课题列表 |
 | Projects | POST | `/v1/projects` | ✓ | ✓ | H | 新建课题 |
 | Projects | GET | `/v1/projects/{id}` | ✓ | ✓ | A | 课题详情 |
+| Projects | PATCH | `/v1/projects/{id}` | ✓ | ✓ | H | 更新课题 |
+| Projects | DELETE | `/v1/projects/{id}` | ✓ | ✓ | H | 删除课题（可 purge） |
 | Projects | GET | `/v1/projects/{id}/members` | ✓ | ✓ | A | 成员 |
-| Projects | GET | `/v1/projects/{id}/sessions` | ✓ | ✓ | A | 关联会话 |
+| Projects | GET | `/v1/projects/{id}/sessions` | ✓ | ✓ | A | 关联会话（存活） |
 | Projects | GET | `/v1/projects/{id}/tasks` | ✓ | ✓ | A | 任务看板 |
 | Projects | POST | `/v1/projects/{id}/tasks` | ✓ | ✓ | H | 新建任务 |
 | Projects | PATCH | `/v1/projects/{id}/tasks/{tid}` | ✓ | ✓ | H | 更新状态 |
 | Projects | POST | `/v1/projects/{id}/sessions/{sid}` | ✓ | ✓ | A | 关联会话 |
-| Campaigns | GET | `/v1/projects/{id}/campaign` | ✓ | ✓ | A | 当前活跃 Campaign |
-| Campaigns | GET | `/v1/projects/{id}/campaigns` | ✓ | ✓ | A | Campaign 列表 |
-| Campaigns | POST | `/v1/projects/{id}/campaign` | ✓ | ✓ | H | 创建/启动 Campaign |
-| Campaigns | GET | `/v1/projects/{id}/campaigns/{cid}` | ✓ | ✓ | A | Campaign 详情 |
-| Campaigns | PATCH | `/v1/projects/{id}/campaigns/{cid}` | ✓ | ✓ | H | 更新阶段/状态 |
+| Projects | DELETE | `/v1/projects/{id}/sessions/{sid}` | — | ✓ | H | 取消关联 |
+| Artifacts | GET | `/v1/artifacts` | ✓ | ✓ | A | 列出工件 |
+| Artifacts | GET | `/v1/artifacts/{id}` | ✓ | ✓ | H | 单条工件 |
+| Artifacts | POST | `/v1/artifacts` | — | ✓ | H | 写入工件 |
+| Artifacts | PATCH | `/v1/artifacts/{id}` | ✓ | ✓ | A | 更新工件 |
+| Artifacts | DELETE | `/v1/artifacts/{id}` | ✓ | ✓ | A | 删除工件 |
 | Verification | GET | `/v1/verification/dashboard` | ✓ | ✓ | A | 验证仪表盘 |
 | Verification | GET | `/v1/verification/records` | ✓ | ✓ | A | 验证账本 |
 | Verification | POST | `/v1/verification/run` | ✓ | ✓ | H | 手动验证 |
@@ -69,20 +72,31 @@
 | Export | POST | `/v1/export/latex` | ✓ | ✓ | H | LaTeX |
 | Export | POST | `/v1/export/docx` | ✓ | ✓ | H | Word |
 | Export | POST | `/v1/export/pdf` | ✓ | ✓ | H | PDF |
+| Prompt | GET | `/v1/prompt/templates` | ✓ | ✓ | A | 润色风格模板 |
+| Prompt | GET | `/v1/prompt/test-cases` | ✓ | ✓ | A | 提示词测试案例 |
+| Prompt | POST | `/v1/prompt/optimize` | ✓ | ✓ | H | AI 润色优化 |
 | Stats | GET | `/v1/stats/tokens` | ✓ | ✓ | A | Token 统计 |
 | Observability | GET | `/v1/observability/summary` | ✓ | ✓ | A | 可观测摘要 |
 | Observability | GET | `/v1/observability/agent-quality` | ✓ | ✓ | A | Agent 质量 |
-| Sync | POST | `/v1/sync/metadata` | — | ✓ | M | 云端元数据同步（需 `ENABLE_CLOUD_SYNC`） |
-| Sync | GET | `/v1/sync/audit/{id}` | — | ✓ | M | 审计日志 |
-| Jupyter | GET | `/v1/jupyter/template` | ✓ | ✓ | H | 笔记本模板 |
-| Jupyter | POST | `/v1/jupyter/upload-result` | ✓ | ✓ | H | 回传结果 |
+| Sync | GET | `/v1/sync/audit/{id}` | — | ✓ | M | 课题审计日志 |
+| Jupyter | POST | `/v1/jupyter/upload-result` | ✓ | ✓ | H | JSON 回传 → DataPacket |
+| Jupyter | POST | `/v1/jupyter/upload-file` | ✓ | ✓ | H | 多格式回传 |
+
+## 已移除（勿再测）
+
+| 原路径 | 说明 |
+|--------|------|
+| `/v1/projects/.../campaign*` | Campaign S0–S8 整包删除 |
+| `/v1/bibliography*` | 书目 HTTP 移除；LaTeX 仍可内部用 `bibliography.py` |
+| `/v1/theory/symbols` 等速览 | 改走工作区文件读写 |
+| `POST /v1/sync/metadata` | 云同步元数据移除 |
+| `GET /v1/prompt/test-cases/{case_id}` | 单案例端点移除 |
 
 ## 全链路黄金路径
 
 ```
-课题选择 → 新建会话(自动关联) → 文献导入(arXiv/PDF) → 对话(SSE流水线)
-  → 自动切Tab → Campaign 阶段推进(可选) → 验证仪表盘刷新
-  → 导出 preview/polish → LaTeX/DOCX/PDF/MD（正文按 session；latex 可带课题书目）
+课题选择 → 新建会话(自动关联) → 文献导入(arXiv/PDF) → 对话(SSE / 场景工作流)
+  → Artifact（方法卡 / 实验计划 / 下一步）→ 导出 preview/polish → LaTeX/DOCX/PDF/MD
 ```
 
 ## 测试入口

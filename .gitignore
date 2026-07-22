@@ -58,9 +58,8 @@ data/quant_probe/
 data/projects/*
 !data/projects/.gitkeep
 
-# Campaign 运行时产物（种子见 data/theory/campaigns/）
-data/campaigns/*
-!data/campaigns/.gitkeep
+# 已废弃：旧 Campaign 运行时目录（若本地残留可整目录删除）
+data/campaigns/
 
 # 流水线写出的形式化/反例稿（保留种子 pl-critical-points / relu_saddle）
 data/theory/campaigns/*-problem.md
@@ -92,3 +91,11 @@ data/export_test_lab/reports/*.json
 !data/export_test_lab/README.md
 !data/export_test_lab/reports/
 !data/export_test_lab/reports/*.md
+
+# 提交材料包：大字体与压缩包不入库（成片/文档保留）
+submission/**/assets/fonts/
+submission/*.tar.gz
+submission/*.zip
+
+# 本地联测大文件（结构化 JSON 可入库）
+test-data/Downloads/

@@ -236,7 +236,6 @@ export const TAG_LABELS: Record<string, string> = {
   experiments: "实验",
   jupyter: "Jupyter",
   projects: "课题",
-  campaigns: "Campaign",
   theory: "理论",
   verification: "验证",
   observability: "可观测",

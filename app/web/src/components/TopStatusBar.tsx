@@ -1,4 +1,5 @@
 import type { TokenStats } from "../hooks/useTokenStats";
+import type { ChatMode } from "../utils/preferences";
 import { shortSessionId } from "../utils/session";
 
 interface TopStatusBarProps {
@@ -9,6 +10,8 @@ interface TopStatusBarProps {
   isStreaming: boolean;
   tokenStats: TokenStats;
   tokenLoading: boolean;
+  chatMode: ChatMode;
+  onChatModeChange: (mode: ChatMode) => void;
   onStop?: () => void;
   onRetryBackend?: () => void;
   retryingBackend?: boolean;
@@ -22,6 +25,8 @@ export function TopStatusBar({
   isStreaming,
   tokenStats,
   tokenLoading,
+  chatMode,
+  onChatModeChange,
   onStop,
   onRetryBackend,
   retryingBackend = false,
@@ -50,6 +55,26 @@ export function TopStatusBar({
       <span className="status-pill status-tokens" title="本会话 token 用量">
         {tokenLoading ? "tokens…" : `${tokenStats.totals.total_tokens.toLocaleString()} tok`}
       </span>
+      <div className="mode-toggle header-mode-toggle" role="group" aria-label="对话模式">
+        <button
+          type="button"
+          className={chatMode === "chat" ? "mode-btn active" : "mode-btn"}
+          onClick={() => onChatModeChange("chat")}
+          disabled={backendOffline || isStreaming}
+          title="通用对话模式"
+        >
+          Chat
+        </button>
+        <button
+          type="button"
+          className={chatMode === "math" ? "mode-btn active" : "mode-btn"}
+          onClick={() => onChatModeChange("math")}
+          disabled={backendOffline || isStreaming}
+          title="数学推导模式"
+        >
+          Math
+        </button>
+      </div>
       {backendOffline && onRetryBackend && (
         <button
           type="button"

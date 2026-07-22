@@ -63,25 +63,13 @@ def test_experiments_smoke(client):
     assert r.status_code == 200
 
 
-def test_theory_smoke(client):
-    r = client.get("/v1/theory/assumption-dag")
-    assert r.status_code == 200
-
-    r = client.get("/v1/theory/assumption-dag/impact/A4")
-    assert r.status_code == 200
-
-    r = client.get("/v1/bibliography")
-    assert r.status_code == 200
-
-    r = client.get("/v1/theory/workspace")
-    assert r.status_code == 200
-
-    test_path = "smoke_test_file.md"
-    r = client.put(f"/v1/theory/workspace/{test_path}", json={"content": "# smoke test\n"})
-    read_r = client.get(f"/v1/theory/workspace/{test_path}")
-    assert r.status_code == 200
-    assert read_r.status_code == 200
-    assert "smoke test" in read_r.text
+def test_theory_routes_removed(client):
+    """工作区文件、假设 DAG、关系图谱 GET 已下线。"""
+    assert client.get("/v1/theory/assumption-dag").status_code == 404
+    assert client.get("/v1/theory/assumption-dag/impact/A4").status_code == 404
+    assert client.get("/v1/theory/workspace").status_code == 404
+    # /graph 曾被 {entry_id} 路由吞掉时可能为 405；下线后应不可用
+    assert client.get("/v1/memory/structured/graph").status_code in (404, 405, 410)
 
 
 def test_memory_versioning_smoke(client):
@@ -98,9 +86,6 @@ def test_memory_versioning_smoke(client):
 
 
 def test_jupyter_smoke(client):
-    r = client.get("/v1/jupyter/template")
-    assert r.status_code == 200
-
     r = client.post(
         "/v1/jupyter/upload-result",
         json={"name": "smoke", "summary": {"ok": True}, "metrics": {"loss": 0.1}},
@@ -109,9 +94,6 @@ def test_jupyter_smoke(client):
 
 
 def test_sync_smoke(client):
-    r = client.post("/v1/sync/metadata", json={"project_id": "default"})
-    assert r.status_code == 403
-
     r = client.get("/v1/sync/audit/default")
     assert r.status_code == 200
 

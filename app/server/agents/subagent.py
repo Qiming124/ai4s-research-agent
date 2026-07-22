@@ -24,6 +24,8 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from server.agents.config import AgentName, get_agent_prompt
+from server.artifacts.extract import extract_artifacts_from_text
+from server.artifacts.store import get_artifact_store
 from server.config import Settings, get_settings
 from server.graph.react import build_react_graph, messages_from_api_dicts
 from server.graph.streaming import stream_react_graph
@@ -40,6 +42,11 @@ from server.graph.workflow import (
 from server.llm.client import DeepSeekClient, get_deepseek_client
 from server.llm.cot_prompt import apply_cot_prompt
 from server.llm.reasoning_options import ResolvedReasoningOptions, resolve_reasoning_options
+from server.llm.thinking_messages import (
+    assistant_message_with_tools,
+    prepare_messages_for_deepseek,
+    resolve_thinking_for_messages,
+)
 from server.memory.base import BaseSessionStore
 from server.memory.manager import MemoryManager, get_memory_manager
 from server.memory.rag.context import reset_rag_session_id, set_rag_session_id
@@ -110,9 +117,13 @@ class SubAgent:
 
         for msg in history:
             entry: dict[str, Any] = {"role": msg.role, "content": msg.content}
-            # DeepSeek thinking：历史 assistant 若曾带推理，回传时必须带上 reasoning_content
-            if msg.role == "assistant" and msg.reasoning_content:
-                entry["reasoning_content"] = msg.reasoning_content
+            # DeepSeek thinking：历史 assistant 若曾带推理，回传时必须带上 reasoning_content；
+            # 若该条还带 tool_calls 元数据，也必须带上（可为空字符串）。
+            if msg.role == "assistant":
+                if msg.reasoning_content:
+                    entry["reasoning_content"] = msg.reasoning_content
+                elif msg.tool_calls:
+                    entry["reasoning_content"] = ""
             messages.append(entry)
 
         messages.append({"role": "user", "content": user_message})
@@ -274,10 +285,10 @@ class SubAgent:
                     return
                 break
 
-            assistant_msg: dict[str, Any] = {
-                "role": "assistant",
-                "content": result.content or "",
-                "tool_calls": [
+            assistant_msg = assistant_message_with_tools(
+                content=result.content or "",
+                reasoning_content=result.reasoning,
+                tool_calls=[
                     {
                         "id": tc.id,
                         "type": "function",
@@ -288,7 +299,7 @@ class SubAgent:
                     }
                     for tc in result.tool_calls
                 ],
-            }
+            )
             api_messages.append(assistant_msg)
 
             for tc in result.tool_calls:
@@ -388,9 +399,14 @@ class SubAgent:
 
         full_content = ""
         full_reasoning = ""
+        # 工具轮 thinking=off 时无真实 reasoning；最终合成须关闭 thinking 避免 400
+        final_messages = prepare_messages_for_deepseek(api_messages)
+        final_thinking = resolve_thinking_for_messages(
+            final_messages, reasoning.enable_thinking
+        )
         async for chunk in self._llm.stream_chat(
-            api_messages,
-            enable_thinking=reasoning.enable_thinking,
+            final_messages,
+            enable_thinking=final_thinking,
             reasoning_effort=reasoning.reasoning_effort,
         ):
             if chunk.type == "reasoning":
@@ -530,6 +546,7 @@ class SubAgent:
         persist_session: bool = True,
         enable_rag: bool | None = None,
         augment_structured_memory: bool = True,
+        project_id: str | None = None,
     ) -> AsyncIterator[StreamChunk]:
         """
         SubAgent 主入口：处理用户消息并流式产出回复。
@@ -550,6 +567,7 @@ class SubAgent:
             persist_session: 是否写入 L2 消息（默认 True）
             enable_rag: 是否注入 RAG（None=跟随全局配置）
             augment_structured_memory: 是否注入 L4 结构化记忆（收尾可关）
+            project_id: 课题 ID（用于 Artifact 落盘）
 
         产出:
             StreamChunk 流
@@ -573,6 +591,7 @@ class SubAgent:
                 persist_session=persist_session,
                 enable_rag=enable_rag,
                 augment_structured_memory=augment_structured_memory,
+                project_id=project_id or "default",
             ):
                 yield chunk
         finally:
@@ -594,7 +613,9 @@ class SubAgent:
         persist_session: bool = True,
         enable_rag: bool | None = None,
         augment_structured_memory: bool = True,
+        project_id: str = "default",
     ) -> AsyncIterator[StreamChunk]:
+        pid = project_id or "default"
         reasoning = resolve_reasoning_options(
             self._settings,
             enable_thinking=enable_thinking,
@@ -704,6 +725,37 @@ class SubAgent:
                         workflow_records=workflow_records,
                     ):
                         yield post_chunk
+                    if self._settings.enable_artifact_store and full_content.strip():
+                        for atype, payload in extract_artifacts_from_text(full_content):
+                            payload.setdefault("project_id", pid)
+                            payload.setdefault("session_id", sid)
+                            try:
+                                saved = get_artifact_store().save(atype, payload)
+                            except Exception as exc:
+                                logger.warning("artifact 落盘失败 type=%s: %s", atype, exc)
+                                yield self._with_agent(
+                                    StreamChunk(
+                                        type="error",
+                                        content=f"工件 {atype} 保存失败（已跳过）：{exc}",
+                                    ),
+                                    a2a_task_id=a2a_task_id,
+                                )
+                                continue
+                            yield self._with_agent(
+                                StreamChunk(
+                                    type="artifact_saved",
+                                    content=json.dumps(
+                                        {
+                                            "type": atype,
+                                            "id": saved["id"],
+                                            "title": saved.get("title") or saved["id"],
+                                        },
+                                        ensure_ascii=False,
+                                    ),
+                                    title=str(saved.get("title") or saved["id"]),
+                                ),
+                                a2a_task_id=a2a_task_id,
+                            )
                     if persist_session:
                         self._sessions.append_message(sid, ChatMessage(role="user", content=message))
                         self._sessions.append_message(
@@ -757,6 +809,37 @@ class SubAgent:
                     workflow_records=workflow_records,
                 ):
                     yield post_chunk
+                if self._settings.enable_artifact_store and full_content.strip():
+                    for atype, payload in extract_artifacts_from_text(full_content):
+                        payload.setdefault("project_id", pid)
+                        payload.setdefault("session_id", sid)
+                        try:
+                            saved = get_artifact_store().save(atype, payload)
+                        except Exception as exc:
+                            logger.warning("artifact 落盘失败 type=%s: %s", atype, exc)
+                            yield self._with_agent(
+                                StreamChunk(
+                                    type="error",
+                                    content=f"工件 {atype} 保存失败（已跳过）：{exc}",
+                                ),
+                                a2a_task_id=a2a_task_id,
+                            )
+                            continue
+                        yield self._with_agent(
+                            StreamChunk(
+                                type="artifact_saved",
+                                content=json.dumps(
+                                    {
+                                        "type": atype,
+                                        "id": saved["id"],
+                                        "title": saved.get("title") or saved["id"],
+                                    },
+                                    ensure_ascii=False,
+                                ),
+                                title=str(saved.get("title") or saved["id"]),
+                            ),
+                            a2a_task_id=a2a_task_id,
+                        )
                 if persist_session:
                     self._sessions.append_message(sid, ChatMessage(role="user", content=message))
                     self._sessions.append_message(

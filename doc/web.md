@@ -2,6 +2,8 @@
 
 Vite + React + TypeScript。源码在 **`app/web/`**；生产产物 `app/web/dist` 由 `app/server/main.py` 托管。
 
+产品定位：AI4S 理论侧工作台（文献 · 推导 · 实验建议/数据解读 · 产出），见 [`PRODUCT-VISION.md`](PRODUCT-VISION.md)。
+
 ## 环境与启动
 
 - Node.js 18+
@@ -18,32 +20,29 @@ Vite 将 `/v1`、`/health` 代理到 8000；SSE 已设 `X-Accel-Buffering: no`�
 
 | 区域 | 组件 | 说明 |
 |------|------|------|
-| 左栏 | `ProjectSessionTree` / `TaskBoard` | 课题文件夹树（含会话）+ 完整版任务看板 |
-| 中栏 | `ChatPage` + `MessageBubble` + 时间线 | SSE 对话、CoT、工具、验证、Loss Landscape |
-| 右栏 | `ResearchWorkbench` | Tabs：文献 / 理论 / 验证 / 图谱 / 实验 / 导出 |
+| 左栏 | `ProjectSessionTree` | 课题文件夹树（含会话） |
+| 中栏 | `ChatPage` + `MessageBubble` + 时间线 | SSE 对话、CoT、工具轨迹 |
+| 右栏 | `ResearchWorkbench` | Tabs：文献（读与入库）/ 理论（推导资产）/ 产出（实验建议相关记录 + 导出） |
 | 顶栏 | `TopStatusBar` / `HelpPanel` / `ObservabilityPanel` | Agent、MCP、Token、帮助、质量；「API 测试」进 `#/api-lab` |
-
-流水线 SSE `pipeline_stage` 可自动切换工作台 Tab（`workbenchTabs` 相关逻辑）；切换时会按当前**界面版本**钳制到可见 Tab（例如科研版不会切到「验证」）。
 
 自研接口测试页见 [`API-LAB.md`](API-LAB.md)（`#/api-lab`，从 OpenAPI 拉全量路由；非 Swagger 嵌入）。
 
 ## 界面版本
 
-仅前端展示层（`localStorage` 键 `ai4s_ui_edition`），**不**做后端鉴权。默认 **`research`（科研版）**。在「设置 → 界面版本」切换。实现见 `app/web/src/utils/uiEdition.ts`。
+仅前端展示层（`localStorage` 键 `ai4s_ui_edition`），**不**做后端鉴权。默认 **`research`（科研版）**。在「设置 → 界面版本」切换。实现见 `app/web/src/utils/uiEdition.ts`。历史 `full`（完整版）已移除，读到时自动迁移为 `research`。
 
 | 版本 id | 名称 | 左栏 | 右栏工作台 | 其它 |
 |---------|------|------|------------|------|
-| `chat` | 对话版 | 会话树 | 整栏隐藏（双栏布局） | 隐藏「AI润色提示词」；切到此版时 Agent 置为 `auto` |
-| `research` | 科研版（默认） | 会话树（课题文件夹） | 文献 / 理论 / 产出 | 无任务 Tab、无验证 Tab；文件夹头可看 Campaign 简要进度 |
-| `full` | 完整版 | 会话树 + 任务 | 文献 / 理论 / 验证 / 产出 | 与原先全能力一致 |
+| `chat` | 对话版 | 会话树 | 整栏隐藏（双栏布局） | 仍显示「AI润色提示词」；切到此版时 Agent 置为 `auto` |
+| `research` | 科研版（默认） | 会话树（课题文件夹） | 文献 / 理论 / 产出 | 产出含用户结果回传与导出；侧重建议与解读，非代跑实验 |
 
-嵌套面板（图谱、可观测、实验日志等）仍挂在对应 Tab 内，不随版本再拆子开关。
+嵌套面板（图谱、实验日志等）仍挂在对应 Tab 内。
 
 ### 附属材料挂靠
 
 | 材料 | 范围 |
 |------|------|
-| RAG 文献语料、理论工作区、书目 | **课题**（`data/projects/{id}/`） |
+| RAG 文献语料、理论工作区 | **课题**（`data/projects/{id}/`） |
 | 聊天消息、RAG 引用轨迹 | **会话** |
 | `data/theory/` | 只读种子模板，新建课题时复制进课题工作区 |
 
@@ -52,20 +51,20 @@ Vite 将 `/v1`、`/health` 代理到 8000；SSE 已设 `X-Accel-Buffering: no`�
 | 组件 | 说明 |
 |------|------|
 | `DocumentPanel` / `RagRefsPanel` | 文献入库、RAG 引用 |
-| `TheoryAssetsPanel` / `WorkspacePanel` / `AssumptionDagPanel` | 符号假设、工作区编辑、假设 DAG |
-| `VerificationDashboard` | 验证账本与手动重跑 |
+| `TheoremLibraryPanel` / `ArtifactsPanel` | 定理库 CRUD、推导迹 / 实验计划工件；方法卡、假设 DAG、关系图谱、工作区文件编辑 UI 已下线 |
+| `VerificationDashboard` | 验证账本（遗留/可选） |
 | `TheoremLibraryPanel` / `KnowledgeGraphPanel` | L4 定理库与图谱 |
-| `ExperimentLogPanel` / `LossLandscapeViz` | 实验日志与可视化 |
+| `ExperimentLogPanel` | 用户提交的实验/Notebook 结果记录（供顾问解读） |
 | `ExportPanel` | preview / polish / md / latex / docx / pdf |
-| `OnboardingWizard` | 首次引导 |
+| `OnboardingWizard` | 首次引导（文献→推导→实验建议/数据→产出） |
 | `ErrorBoundary` | 渲染错误隔离 |
 
-主要 Hooks：`useChatStream`、`useCampaign`、`useVerification`、`useDocuments`、`useStructuredMemory`、`useAssumptionDag`、`useExperimentLogs` 等。
+主要 Hooks：`useChatStream`、`useDocuments`、`useStructuredMemory`、`useAssumptionDag`、`useExperimentLogs` 等。
 
 ## Agent 与 SSE
 
-支持 Agent：`general` / `theory` / `experiment` / `literature` / `review` / `counterexample`。  
-重要 SSE：`pipeline_stage`、`campaign_update`、`artifact_saved`、`verification_result`、`numerical_verification_result`、`memory_warning`。详见 [`API.md`](API.md)。
+支持 Agent：`general` / `theory` / `experiment`（实验顾问）/ `literature` / `review` / `counterexample`。  
+主路径 SSE：`workflow_step`、`tool_call_*`、`reasoning`、`content`、`artifact_saved`、`done`。验证类事件可选。详见 [`API.md`](API.md)。
 
 ## 数学公式（KaTeX）
 

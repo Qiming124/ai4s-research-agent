@@ -241,11 +241,14 @@ class Settings(BaseSettings):
     )
     research_pipeline_mode: str = Field(
         default="single",
-        description="研究流水线模式：single=单次路由，auto=多跳 literature→theory→experiment→review",
+        description=(
+            "研究模式：single=单 Agent；auto=场景工作流（2–3 跳）；"
+            "auto=场景工作流；single=单 Agent"
+        ),
     )
-    enable_cloud_sync: bool = Field(
-        default=False,
-        description="是否启用可选云端元数据同步（不含原始推导正文）",
+    enable_artifact_store: bool = Field(
+        default=True,
+        description="是否启用理论侧 Artifact 持久化与解析",
     )
     enable_numerical_mcp: bool = Field(
         default=True,

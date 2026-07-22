@@ -60,7 +60,7 @@
 |------|-----|----------|------|
 | Batch-1 | Health · Chat/Sessions · Agents · MCP · Stats | 12 | 已完成 |
 | Batch-2 | Documents · Memory · Theory/Bibliography | 22+1 SKIP | 已完成 |
-| Batch-3 | Projects · Campaigns · Verification · Experiments | ~20 | 已完成 |
+| Batch-3 | Projects · Verification · Experiments（Campaign MUT 已退役） | ~15 | 历史完成；Campaign 项勿再跑 |
 | Batch-4 | Export · Observability · Sync · Jupyter | 12 | **已完成** |
 
 ---
@@ -180,20 +180,15 @@ python scripts/api_quant_probe.py --batch 1 --base-url http://127.0.0.1:8000 --n
 | B2-14 | GET | `/v1/memory/structured/{id}/versions` | T1 | {200} | `entry_id`,`versions`,`total` |
 | B2-15 | POST | `/v1/memory/structured/{id}/edges` | T2 | {200}；非法边 {400}`PASS(expected)` | `to_id` 指向第二条记忆 |
 
-### Theory / Bibliography（10）
+### Theory（5）
 
 | ID | Method | Path | Tier | 期望 `S` | 备注 |
 |----|--------|------|------|----------|------|
 | B2-16 | GET | `/v1/theory/workspace` | T1 | {200} | `files` |
 | B2-17 | PUT | `/v1/theory/workspace/quant_b2_probe.md` | T2 | {200} | body `content` 含 `QUANT_B2_MARK` |
 | B2-18 | GET | `/v1/theory/workspace/quant_b2_probe.md` | T1 | {200} | 正文含标记 |
-| B2-19 | GET | `/v1/theory/assumption-matrix` | T1 | {200} 或 {404}`PASS(expected)` | plaintext |
-| B2-20 | GET | `/v1/theory/symbols` | T1 | {200} | plaintext |
-| B2-21 | GET | `/v1/theory/assumptions` | T1 | {200} | |
-| B2-22 | GET | `/v1/theory/assumption-dag` | T1 | {200} | |
-| B2-23 | GET | `/v1/theory/assumption-dag/impact/A4` | T1 | {200} | 与 smoke 一致 |
-| B2-24 | GET | `/v1/bibliography` | T1 | {200} | |
-| B2-25 | GET | `/v1/bibliography/export.bib` | T1 | {200} | plaintext |
+| B2-19 | GET | `/v1/theory/assumption-dag` | T1 | {200} | |
+| B2-20 | GET | `/v1/theory/assumption-dag/impact/A4` | T1 | {200} | 与 smoke 一致 |
 
 测后清理：`unlink` 工作区 `quant_b2_probe.md`（无 DELETE 文件 API）。
 
@@ -224,15 +219,13 @@ python scripts/api_quant_probe.py --batch 2 --base-url http://127.0.0.1:8000 --n
 | B3-08 | POST | `/v1/projects/{project_id}/sessions/quant-b3-sess` | T2 | {200} | `status==ok` |
 | B3-09 | GET | `/v1/projects/{project_id}/sessions` | T1 | {200} | FX：含 quant-b3-sess |
 
-### Campaigns（5）
+### Campaigns（已退役 · 勿再测）
 
-| ID | Method | Path | Tier | 期望 `S` | 备注 |
-|----|--------|------|------|----------|------|
-| B3-10 | GET | `/v1/projects/{project_id}/campaigns` | T1 | {200} | |
-| B3-11 | POST | `/v1/projects/{project_id}/campaign` | T2 | {200} | title 短；记下 `campaign_id` |
-| B3-12 | GET | `/v1/projects/{project_id}/campaign` | T1 | {200}；无活跃 {404}`PASS(expected)` | 创建后期望 200 |
-| B3-13 | GET | `/v1/projects/{project_id}/campaigns/{campaign_id}` | T1 | {200} | |
-| B3-14 | PATCH | `…/campaigns/{campaign_id}` | T2 | {200} | body: `{"status":"active"}` |
+> 2026-07 起 Campaign HTTP 已从代码移除。下列 ID 仅保留历史编号，探针实现若仍引用应跳过或删除。
+
+| ID | 原 Path | 状态 |
+|----|---------|------|
+| B3-10 … B3-14 | `/v1/projects/.../campaign*` | **RETIRED** |
 
 ### Verification（3）
 
@@ -286,15 +279,13 @@ python scripts/api_quant_probe.py --batch 3 --base-url http://127.0.0.1:8000 --n
 
 | ID | Method | Path | Tier | 期望 `S` | 备注 |
 |----|--------|------|------|----------|------|
-| B4-09 | POST | `/v1/sync/metadata` | T2 | {403}`PASS(expected)` 或 {200} | 默认云同步关 |
-| B4-10 | GET | `/v1/sync/audit/default` | T1 | {200}；{404}`PASS(expected)` | `audit` |
+| B4-09 | GET | `/v1/sync/audit/default` | T1 | {200}；{404}`PASS(expected)` | `audit` |
 
-### Jupyter（2）
+### Jupyter（1）
 
 | ID | Method | Path | Tier | 期望 `S` |
 |----|--------|------|------|----------|
-| B4-11 | GET | `/v1/jupyter/template?name=loss_landscape` | T1 | {200} 含 `cells` |
-| B4-12 | POST | `/v1/jupyter/upload-result` | T2 | {200} `run_id`,`log_path`,`status` |
+| B4-10 | POST | `/v1/jupyter/upload-result` | T2 | {200} `run_id`,`log_path`,`status` |
 
 运行：
 

@@ -35,6 +35,18 @@ export function useLayoutPrefs() {
     );
   }, []);
 
+  const toggleLeftCollapsed = useCallback(() => {
+    setPrefs((current) =>
+      adjustLayoutPrefs(current, { leftCollapsed: !current.leftCollapsed }),
+    );
+  }, []);
+
+  const toggleRightCollapsed = useCallback(() => {
+    setPrefs((current) =>
+      adjustLayoutPrefs(current, { rightCollapsed: !current.rightCollapsed }),
+    );
+  }, []);
+
   const reset = useCallback(() => {
     setPrefs(resetLayoutPrefs());
   }, []);
@@ -45,6 +57,8 @@ export function useLayoutPrefs() {
     resizeRight,
     resizeSidebarProject,
     resizeSidebarTask,
+    toggleLeftCollapsed,
+    toggleRightCollapsed,
     reset,
   };
 }

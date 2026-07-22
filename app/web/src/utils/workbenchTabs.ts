@@ -22,7 +22,6 @@ export function pipelineStageToTab(stage: string): WorkbenchTab | null {
     s.includes("numerical") ||
     s.includes("synthesis") ||
     s.includes("review") ||
-    s.includes("campaign") ||
     s.includes("complete") ||
     s.includes("archive") ||
     s.includes("export") ||

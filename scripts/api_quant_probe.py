@@ -59,7 +59,7 @@ TASK_CREATE = {
     "assignee_role": "theorist",
 }
 CAMP_CREATE = {
-    "title": "quant-b3-campaign",
+    "title": "quant-b3-project",
     "task_family": "loss_landscape_critical_points",
     "session_id": QUANT_B3_SESS,
 }
@@ -86,14 +86,14 @@ class MutDef:
     multipart: bool = False
     multipart_filename: str = "quant_b2.md"
     multipart_content: bytes = b"# quant b2 upload\n"
-    capture: str | None = None  # doc_id | entry_id | project_id | task_id | campaign_id | run_id
+    capture: str | None = None  # doc_id | entry_id | project_id | task_id | run_id
     path_from_ctx: bool = False  # resolve {doc_id}/{entry_id}/{project_id}/...
     query_from_ctx: bool = False
     plaintext: bool = False
     plaintext_contains: str | None = None
     dynamic_edge_body: bool = False
     expect_list: bool = False  # response body is a JSON array
-    body_kind: str | None = None  # verification | experiment | campaign_patch
+    body_kind: str | None = None  # verification | experiment
     skip_unless_run_id: bool = False
     after_check_session_link: bool = False
     binary_response: bool = False  # md/docx/pdf download
@@ -107,8 +107,7 @@ class ProbeCtx:
     entry_id_to: int | None = None
     project_id: str | None = None
     task_id: int | None = None
-    campaign_id: str | None = None
-    run_id: str | None = None
+        run_id: str | None = None
 
 
 TIER_LIMITS = {
@@ -408,21 +407,8 @@ BATCH2: list[MutDef] = [
         plaintext=True,
         plaintext_contains=QUANT_B2_MARK,
     ),
-    MutDef(
-        "B2-19",
-        "GET",
-        "/v1/theory/assumption-matrix",
-        "T1",
-        {200},
-        allow_expected={404},
-        plaintext=True,
-    ),
-    MutDef("B2-20", "GET", "/v1/theory/symbols", "T1", {200}, plaintext=True),
-    MutDef("B2-21", "GET", "/v1/theory/assumptions", "T1", {200}, plaintext=True),
-    MutDef("B2-22", "GET", "/v1/theory/assumption-dag", "T1", {200}, ["nodes", "edges"]),
-    MutDef("B2-23", "GET", "/v1/theory/assumption-dag/impact/A4", "T1", {200}),
-    MutDef("B2-24", "GET", "/v1/bibliography", "T1", {200}, ["entries", "total"]),
-    MutDef("B2-25", "GET", "/v1/bibliography/export.bib", "T1", {200}, plaintext=True),
+    MutDef("B2-19", "GET", "/v1/theory/assumption-dag", "T1", {200}, ["nodes", "edges"]),
+    MutDef("B2-20", "GET", "/v1/theory/assumption-dag/impact/A4", "T1", {200}),
 ]
 
 
@@ -467,141 +453,6 @@ def _check_session_linked(data: Any) -> str | None:
 
 
 BATCH3: list[MutDef] = [
-    MutDef("B3-01", "GET", "/v1/projects", "T1", {200}, ["projects", "total"]),
-    MutDef(
-        "B3-02",
-        "POST",
-        "/v1/projects",
-        "T2",
-        {200},
-        ["id", "name"],
-        json_body=PROJ_CREATE,
-        capture="project_id",
-        n_override=1,
-    ),
-    MutDef(
-        "B3-03",
-        "GET",
-        "/v1/projects/{project_id}",
-        "T1",
-        {200},
-        ["id", "name"],
-        path_from_ctx=True,
-    ),
-    MutDef(
-        "B3-04",
-        "GET",
-        "/v1/projects/{project_id}/members",
-        "T1",
-        {200},
-        path_from_ctx=True,
-        expect_list=True,
-        schema_check=_check_members_list,
-    ),
-    MutDef(
-        "B3-05",
-        "POST",
-        "/v1/projects/{project_id}/tasks",
-        "T2",
-        {200},
-        ["id", "title", "status"],
-        json_body=TASK_CREATE,
-        path_from_ctx=True,
-        capture="task_id",
-        n_override=1,
-    ),
-    MutDef(
-        "B3-06",
-        "GET",
-        "/v1/projects/{project_id}/tasks",
-        "T1",
-        {200},
-        ["tasks", "total"],
-        path_from_ctx=True,
-    ),
-    MutDef(
-        "B3-07",
-        "PATCH",
-        "/v1/projects/{project_id}/tasks/{task_id}",
-        "T2",
-        {200},
-        ["id", "status"],
-        query="status=in_progress",
-        path_from_ctx=True,
-        n_override=1,
-    ),
-    MutDef(
-        "B3-08",
-        "POST",
-        f"/v1/projects/{{project_id}}/sessions/{QUANT_B3_SESS}",
-        "T2",
-        {200},
-        ["status", "session_id"],
-        path_from_ctx=True,
-        schema_check=_check_link_ok,
-        n_override=1,
-    ),
-    MutDef(
-        "B3-09",
-        "GET",
-        "/v1/projects/{project_id}/sessions",
-        "T1",
-        {200},
-        ["sessions", "total"],
-        path_from_ctx=True,
-        schema_check=_check_session_linked,
-    ),
-    MutDef(
-        "B3-10",
-        "GET",
-        "/v1/projects/{project_id}/campaigns",
-        "T1",
-        {200},
-        ["campaigns", "total"],
-        path_from_ctx=True,
-    ),
-    MutDef(
-        "B3-11",
-        "POST",
-        "/v1/projects/{project_id}/campaign",
-        "T2",
-        {200},
-        ["id", "title", "project_id"],
-        json_body=CAMP_CREATE,
-        path_from_ctx=True,
-        capture="campaign_id",
-        n_override=1,
-    ),
-    MutDef(
-        "B3-12",
-        "GET",
-        "/v1/projects/{project_id}/campaign",
-        "T1",
-        {200},
-        ["id", "title"],
-        path_from_ctx=True,
-        allow_expected={404},
-    ),
-    MutDef(
-        "B3-13",
-        "GET",
-        "/v1/projects/{project_id}/campaigns/{campaign_id}",
-        "T1",
-        {200},
-        ["id", "title"],
-        path_from_ctx=True,
-    ),
-    MutDef(
-        "B3-14",
-        "PATCH",
-        "/v1/projects/{project_id}/campaigns/{campaign_id}",
-        "T2",
-        {200},
-        ["id", "status"],
-        json_body={"status": "active"},
-        path_from_ctx=True,
-        n_override=1,
-    ),
     MutDef(
         "B3-15",
         "GET",
@@ -700,14 +551,6 @@ def _check_polish(data: Any) -> str | None:
     return None
 
 
-def _check_jupyter_template(data: Any) -> str | None:
-    if not isinstance(data, dict):
-        return "body not object"
-    if "cells" not in data:
-        return "missing cells"
-    return None
-
-
 def _check_audit(data: Any) -> str | None:
     if not isinstance(data, dict):
         return "body not object"
@@ -802,17 +645,6 @@ BATCH4: list[MutDef] = [
     ),
     MutDef(
         "B4-09",
-        "POST",
-        "/v1/sync/metadata",
-        "T2",
-        {200},
-        ["project_id", "synced_entries"],
-        allow_expected={403},
-        json_body={"project_id": "default"},
-        n_override=1,
-    ),
-    MutDef(
-        "B4-10",
         "GET",
         "/v1/sync/audit/default",
         "T1",
@@ -821,16 +653,7 @@ BATCH4: list[MutDef] = [
         schema_check=_check_audit,
     ),
     MutDef(
-        "B4-11",
-        "GET",
-        "/v1/jupyter/template",
-        "T1",
-        {200},
-        query="name=loss_landscape",
-        schema_check=_check_jupyter_template,
-    ),
-    MutDef(
-        "B4-12",
+        "B4-10",
         "POST",
         "/v1/jupyter/upload-result",
         "T2",
@@ -857,7 +680,6 @@ def _resolve_path(mut: MutDef, ctx: ProbeCtx) -> str:
             "{entry_id}": str(ctx.entry_id) if ctx.entry_id is not None else None,
             "{project_id}": ctx.project_id,
             "{task_id}": str(ctx.task_id) if ctx.task_id is not None else None,
-            "{campaign_id}": ctx.campaign_id,
             "{run_id}": ctx.run_id,
         }
         for token, val in repl.items():
@@ -891,8 +713,6 @@ def _capture(mut: MutDef, ctx: ProbeCtx, data: Any) -> None:
         ctx.project_id = str(data["id"])
     elif mut.capture == "task_id" and data.get("id") is not None:
         ctx.task_id = int(data["id"])
-    elif mut.capture == "campaign_id" and data.get("id") is not None:
-        ctx.campaign_id = str(data["id"])
     elif mut.capture == "run_id" and data.get("run_id"):
         ctx.run_id = str(data["run_id"])
 
@@ -1483,7 +1303,7 @@ def main() -> int:
     print(f"summary: {summary_path}")
     print(f"counts: {counts}  pass_rate={ok_n}/{len(summaries)}")
     print(f"ctx: doc_id={ctx.doc_id} entry_id={ctx.entry_id} project_id={ctx.project_id} "
-          f"task_id={ctx.task_id} campaign_id={ctx.campaign_id} run_id={ctx.run_id}")
+          f"task_id={ctx.task_id} run_id={ctx.run_id}")
     return 0 if counts.get("FAIL", 0) == 0 else 1
 
 

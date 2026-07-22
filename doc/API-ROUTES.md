@@ -1,9 +1,9 @@
 # API 全路径与调用链路（v2.2）
 
 Base URL 默认：`http://127.0.0.1:8000`。  
-**覆盖矩阵（67）**：[`API-COVERAGE.md`](API-COVERAGE.md) · **速查**：[`API.md`](API.md) · **OpenAPI**：`GET /docs` · **Schema**：`app/shared/schemas.py`。
+**覆盖矩阵（65）**：[`API-COVERAGE.md`](API-COVERAGE.md) · **速查**：[`API.md`](API.md) · **OpenAPI**：`GET /docs` · **Schema**：`app/shared/schemas.py`。
 
-> 路径参数在覆盖表里常写作 `{id}`；代码中实际名为 `{session_id}` / `{project_id}` / `{campaign_id}` 等，以下以**代码路径**为准。
+> 路径参数在覆盖表里常写作 `{id}`；代码中实际名为 `{session_id}` / `{project_id}` / `{artifact_id}` 等，以下以**代码路径**为准。
 
 ## 约定
 
@@ -12,7 +12,7 @@ Base URL 默认：`http://127.0.0.1:8000`。
 | 鉴权 | 当前无 Bearer / API Key（见 KNOWN_ISSUES C2） |
 | CORS | `allow_origins=["*"]`（`server/main.py`） |
 | 请求追踪 | `RequestContextMiddleware` → 响应头 `X-Request-ID` |
-| 挂载 | 15 个 `APIRouter` **无前缀**挂到 FastAPI（路径写在装饰器上） |
+| 挂载 | 16 个 `APIRouter` **无前缀**挂到 FastAPI（路径写在装饰器上） |
 | SSE | 仅 `POST /v1/chat/stream`：`text/event-stream`，帧格式 `data: {json}\n\n` |
 | 错误 | 422 校验 · 403 功能关闭/越界 · 404 缺失 · 502 LLM/上游 |
 
@@ -50,14 +50,13 @@ flowchart TD
   B --> C{ORCHESTRATION_BACKEND}
   C -->|langgraph| D[MultiAgentOrchestrator]
   C -->|legacy| E[GeneralAgent.run]
-  D --> F{research_pipeline?}
-  F -->|yes| G[ResearchSupervisorPipeline.execute]
+  D --> F{RESEARCH_PIPELINE_MODE=auto?}
+  F -->|yes + 命中场景| G[graph/scenes SceneExecutor]
   F -->|no| H[resolve_target_agent + SubAgent.run]
-  G --> I[Campaign / SubAgents / theory_pipeline / verification]
   H --> J[MemoryManager + MCP + LLM stream]
+  G --> J
   E --> J
-  I --> K[StreamChunk to SSE]
-  J --> K
+  J --> K[StreamChunk to SSE]
 ```
 
 编号链路：
@@ -65,15 +64,15 @@ flowchart TD
 1. [`api/chat.py`](../app/server/api/chat.py) `chat_stream` → `StreamingResponse(_stream_generator)`
 2. [`memory/session.py`](../app/server/memory/session.py) `get_session_store().get_or_create`
 3. 若 `orchestration_backend == langgraph`：[`agents/orchestrator.py`](../app/server/agents/orchestrator.py) `MultiAgentOrchestrator`
-   - 可选 [`graph/research_pipeline.py`](../app/server/graph/research_pipeline.py) → [`graph/research_supervisor.py`](../app/server/graph/research_supervisor.py)
+   - `RESEARCH_PIPELINE_MODE=auto` 且命中场景 → [`graph/scenes/`](../app/server/graph/scenes/) 短协作
    - 否则 `resolve_target_agent` → [`agents/subagent.py`](../app/server/agents/subagent.py) `SubAgent.run`
 4. 否则 [`agents/base.py`](../app/server/agents/base.py) `GeneralAgent.run`
 5. 共性：MemoryManager（L1/L2）+ 可选 RAG/结构化注入 + MCP ReAct + LLM；Theory 后处理可走 [`graph/theory_pipeline.py`](../app/server/graph/theory_pipeline.py)
 6. 每个 `StreamChunk` → SSE `data:` 行
 
-**副作用**：写会话消息（含 reasoning / tool_calls / workflow_steps）；Campaign 更新；验证账本（Theory 闭环）；Token 统计。
 
-**SSE 常见 type**：`meta` → `pipeline_stage` / `campaign_update` / `workflow_step` / `tool_call_*` / `reasoning` / `cot_step` / `content` / `verification_result` / `numerical_verification_result` / `memory_warning` / `done` | `error`。
+**SSE 常见 type**：`meta` → `workflow_step` → `tool_call_*` → `reasoning` → `cot_step` → `content` → `artifact_saved` → `verification_result`（可选）→ `done` | `error`。  
+（`pipeline_stage` / `campaign_update` 仅为 schema 兼容字面量，主路径不再发出。）
 
 ```bash
 curl -N -X POST http://127.0.0.1:8000/v1/chat/stream \
@@ -147,23 +146,18 @@ curl -N -X POST http://127.0.0.1:8000/v1/chat/stream \
 
 ---
 
-## 6. Theory / Bibliography
+## 6. Theory
 
 **模块**：[`api/theory.py`](../app/server/api/theory.py) · tag `theory`
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | GET | `/v1/theory/workspace` | 工作区文件列表 |
-| GET/PUT | `/v1/theory/workspace/{file_path:path}` | 读写 md |
-| GET | `/v1/theory/symbols` | 符号表种子 |
-| GET | `/v1/theory/assumptions` | 假设列表 |
-| GET | `/v1/theory/assumption-matrix` | 假设矩阵 |
+| GET/PUT | `/v1/theory/workspace/{file_path:path}` | 读写 md（含 symbols/assumptions） |
 | GET | `/v1/theory/assumption-dag` | DAG |
 | GET | `/v1/theory/assumption-dag/impact/{assumption_id}` | 影响传播 |
-| GET | `/v1/bibliography` | 书目 JSON |
-| GET | `/v1/bibliography/export.bib` | BibTeX |
 
-**链路**：读 `THEORY_WORKSPACE_PATH` / `data/theory` 种子；书目按 `project_id` 过滤。静态路径须注册在 `{file_path:path}` 之前（当前代码顺序正确）。
+**链路**：读 `THEORY_WORKSPACE_PATH` / `data/theory` 种子。书目 HTTP API 已移除（LaTeX 导出仍可内部读 Bib store）。静态路径须注册在 `{file_path:path}` 之前（当前代码顺序正确）。
 
 ---
 
@@ -230,9 +224,7 @@ curl -s -X POST http://127.0.0.1:8000/v1/experiments/runs \
 
 ---
 
-## 9. Projects / Campaigns
 
-**模块**：[`api/projects.py`](../app/server/api/projects.py) · [`api/campaigns.py`](../app/server/api/campaigns.py)
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
@@ -243,13 +235,10 @@ curl -s -X POST http://127.0.0.1:8000/v1/experiments/runs \
 | GET | `/v1/projects/{project_id}/members` | 成员 |
 | GET/POST | `/v1/projects/{project_id}/tasks` | 任务看板 |
 | PATCH | `/v1/projects/{project_id}/tasks/{task_id}` | 更新任务 |
-| GET | `/v1/projects/{project_id}/sessions` | 课题会话 |
+| GET | `/v1/projects/{project_id}/sessions` | 课题会话（仅仍存在的会话；自动清幽灵链接） |
 | POST | `/v1/projects/{project_id}/sessions/{session_id}` | 关联会话 |
-| GET | `/v1/projects/{project_id}/campaign` | 当前活跃 Campaign |
-| GET/POST | `/v1/projects/{project_id}/campaigns` · `.../campaign` | 列表 / 创建 |
-| GET/PATCH | `/v1/projects/{project_id}/campaigns/{campaign_id}` | 详情 / 更新阶段 |
+| DELETE | `/v1/projects/{project_id}/sessions/{session_id}` | 取消关联（不删会话） |
 
-**链路**：`memory/projects.py` · `memory/campaigns.py`（JSON/SQLite 持久化）。Campaign 阶段推进也可由对话 Supervisor SSE 驱动。
 
 ---
 
@@ -287,18 +276,17 @@ curl -s -X POST http://127.0.0.1:8000/v1/verification/run \
 |----|------|------|------|
 | Observability | GET | `/v1/observability/summary` | `api/observability` → 聚合统计 |
 | Observability | GET | `/v1/observability/agent-quality` | Agent 质量指标 |
-| Sync | POST | `/v1/sync/metadata` | `ENABLE_CLOUD_SYNC` 否则 **403** |
-| Sync | GET | `/v1/sync/audit/{project_id}` | 审计日志 |
-| Jupyter | GET | `/v1/jupyter/template` | 返回 ipynb 模板 |
-| Jupyter | POST | `/v1/jupyter/upload-result` | 结果回传落盘 |
+| Sync | GET | `/v1/sync/audit/{project_id}` | 课题审计日志 |
+| Jupyter | POST | `/v1/jupyter/upload-result` | 结果回传落盘（JSON） |
+| Jupyter | POST | `/v1/jupyter/upload-file` | 多格式文件回传（Excel/CSV/TSV/JSON） |
 
 ---
 
 ## 12. Router 挂载顺序（main.py）
 
-1. chat · 2. agents · 3. mcp · 4. documents · 5. stats · 6. structured_memory · 7. theory · 8. experiments · 9. export · 10. projects · 11. campaigns · 12. verification · 13. observability · 14. sync · 15. jupyter  
+1. chat · 2. agents · 3. mcp · 4. documents · 5. stats · 6. structured_memory · 7. theory · 8. experiments · 9. export · 10. prompt · 11. projects · 12. verification · 13. observability · 14. sync · 15. jupyter · 16. artifacts
 
-另：存在 `app/web/dist` 时托管静态 `/` 与 `/assets`（不计入 67）。
+另：存在 `app/web/dist` 时托管静态 `GET /` 与 `/assets`（不计入 65）。
 
 ---
 
@@ -317,5 +305,7 @@ curl -s -X POST http://127.0.0.1:8000/v1/verification/run \
 
 - 路径参数命名以代码为准；覆盖表 `{id}` 为简写。
 - 导出：`project_id` **不**用于 preview/md/docx/pdf 正文过滤；用于 latex/bib。
-- ChatRequest agent 含 `review` / `counterexample`。
+- ChatRequest agent 含 `review` / `counterexample`；`auto`/空串规范为未指定。
 - 实验运行须 `await run_config_async`，避免嵌套 event loop 卡死。
+- 2026-07-22：移除 Campaign / 书目 HTTP / sync metadata；对齐端点与场景工作流。
+- 2026-07-22：L4 CRUD + PDF 导入预览、Artifact PATCH/DELETE；权威清单 71 端点。

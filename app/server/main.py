@@ -30,6 +30,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from server.api.agents import router as agents_router
+from server.api.artifacts import router as artifacts_router
 from server.api.chat import router as chat_router
 from server.api.documents import router as documents_router
 from server.api.mcp import router as mcp_router
@@ -38,8 +39,8 @@ from server.api.export import router as export_router
 from server.api.experiments import router as experiments_router
 from server.api.jupyter import router as jupyter_router
 from server.api.observability import router as observability_router
-from server.api.campaigns import router as campaigns_router
 from server.api.projects import router as projects_router
+from server.api.prompt import router as prompt_router
 from server.api.sync import router as sync_router
 from server.api.structured_memory import router as structured_memory_router
 from server.api.theory import router as theory_router
@@ -106,12 +107,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         if synced:
             logger.info("  L4 全局记忆: 已同步 %d 条引理", synced)
     from server.memory.projects import get_project_store
-    from server.memory.campaigns import get_campaign_store
 
     get_project_store()
     logger.info("  课题存储: 已初始化（含默认课题与任务看板）")
-    get_campaign_store()
-    logger.info("  Campaign 存储: 已初始化（含 PL 临界点示范 Campaign）")
     logger.info("=" * 50)
 
     yield
@@ -133,11 +131,13 @@ def create_app() -> FastAPI:
         配置完成的 FastAPI 实例
     """
     app = FastAPI(
-        title="AI4S Research Agent",
+        title="AI4S Theory-Side Multi-Agent",
         description=(
-            "深度学习损失函数极小值理论 — 科研辅助多智能体系统（v2.2）。\n\n"
+            "AI4S 理论侧多智能体（v2.2）：用深度学习做科学问题的理论侧协作 — "
+            "文献检索与方法提炼、理论推导、实验建议与数据解读；不代跑训练/全流程复现。"
+            "损失函数局部极小等为示范子集。\n\n"
             "Swagger `/docs` 与 `/openapi.json` 已提供中文接口说明、字段注解与样例值；"
-            "亦可用前端 API 测试实验室（`#/api-lab`）试调。"
+            "亦可用前端 API 测试实验室（`#/api-lab`）试调。蓝图见 doc/PRODUCT-VISION.md。"
         ),
         version="2.2.0",
         lifespan=lifespan,
@@ -147,16 +147,17 @@ def create_app() -> FastAPI:
             {"name": "mcp", "description": "MCP 工具连接状态与配置热重载"},
             {"name": "documents", "description": "RAG 文档入库、上传、arXiv 导入与删除"},
             {"name": "memory", "description": "L4 结构化科研记忆、版本与知识图谱边"},
-            {"name": "theory", "description": "理论工作区、假设 DAG、符号表与书目 BibTeX"},
+            {"name": "theory", "description": "理论工作区读写与假设 DAG"},
             {"name": "projects", "description": "课题、成员、任务看板与会话关联"},
-            {"name": "campaigns", "description": "科研 Campaign（S0–S8）创建、查询与阶段更新"},
             {"name": "verification", "description": "验证账本、仪表盘与手动验证执行"},
             {"name": "experiments", "description": "实验运行列表、详情与触发"},
             {"name": "export", "description": "导出预览、AI 润色与 Markdown/LaTeX/DOCX/PDF"},
+            {"name": "prompt", "description": "AI 提示词多风格优化、模板与测试案例"},
             {"name": "stats", "description": "Token 用量统计"},
             {"name": "observability", "description": "可观测摘要与 Agent 质量面板"},
-            {"name": "sync", "description": "云端元数据同步与审计（需 ENABLE_CLOUD_SYNC）"},
-            {"name": "jupyter", "description": "Jupyter 笔记本模板与结果回传"},
+            {"name": "sync", "description": "课题操作审计日志"},
+            {"name": "jupyter", "description": "实验数据回传（JSON / Excel / CSV 等）"},
+            {"name": "artifacts", "description": "理论侧工件：方法卡、实验计划、数据包、下一步备忘"},
         ],
     )
 
@@ -180,12 +181,13 @@ def create_app() -> FastAPI:
     app.include_router(theory_router)
     app.include_router(experiments_router)
     app.include_router(export_router)
+    app.include_router(prompt_router)
     app.include_router(projects_router)
-    app.include_router(campaigns_router)
     app.include_router(verification_router)
     app.include_router(observability_router)
     app.include_router(sync_router)
     app.include_router(jupyter_router)
+    app.include_router(artifacts_router)
 
     # 生产模式：dist 存在时托管 web/dist 静态文件与首页。
     # 开发模式 dist 不存在则跳过（用 Vite :5173 + proxy）
@@ -196,7 +198,13 @@ def create_app() -> FastAPI:
 
         @app.get("/")
         async def serve_index() -> FileResponse:
-            return FileResponse(WEB_DIST / "index.html")
+            return FileResponse(
+                WEB_DIST / "index.html",
+                headers={
+                    "Cache-Control": "no-cache, no-store, must-revalidate",
+                    "Pragma": "no-cache",
+                },
+            )
 
     return app
 

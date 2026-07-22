@@ -1,21 +1,5 @@
 # =============================================================================
 # Skills 桥接：调用外部 Cursor skill 或本地脚本。
-#
-# 职责：
-#     1. SkillsBridge 映射 SKILL_SLUGS 到本地脚本或外部命令
-#     2. 将 Campaign 阶段与 loss-landscape-research 等 skill 衔接
-#     3. subprocess 执行并捕获 JSON 输出
-#
-# 架构位置：
-#     - 被调用：server/graph/research_supervisor.py（可选 skill 阶段）
-#     - 调用：shared/paths.PROJECT_ROOT、subprocess
-#
-# 阅读提示：
-#     - 新人先看 SkillsBridge.run_skill 与 SKILL_SLUGS
-#
-# Debug：
-#     - skill 未找到 → slug 不在 SKILL_SLUGS 或脚本路径缺失
-#     - 非零 exit code → 检查脚本 stderr 日志
 # =============================================================================
 
 from __future__ import annotations
@@ -39,7 +23,7 @@ SKILL_SLUGS = (
 
 
 class SkillsBridge:
-    """将项目内 Campaign 与外部 skill / 脚本衔接。"""
+    """将外部 skill / 本地脚本与课题工作流衔接。"""
 
     def __init__(self, explore_output_dir: Path | None = None) -> None:
         self._explore_dir = explore_output_dir or (DATA_ROOT / "explore_outputs")
@@ -82,16 +66,6 @@ class SkillsBridge:
         except Exception as exc:
             logger.warning("SkillsBridge 脚本调用失败: %s", exc)
             return {"status": "error", "reason": str(exc)}
-
-    def bootstrap_campaign_artifact(self, project_id: str, campaign: dict[str, Any]) -> str:
-        return self.write_explore_output(
-            f"campaign-{project_id}-{campaign.get('id', 'unknown')}",
-            {
-                "kind": "campaign_bootstrap",
-                "project_id": project_id,
-                "campaign": campaign,
-            },
-        )
 
 
 _bridge: SkillsBridge | None = None

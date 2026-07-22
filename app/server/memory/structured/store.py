@@ -95,6 +95,60 @@ class StructuredMemoryStore:
             self._conn.commit()
         return self._row_to_dict(row)
 
+    def get_entry(self, entry_id: int) -> dict[str, Any] | None:
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT * FROM structured_memory WHERE id = ?",
+                (entry_id,),
+            ).fetchone()
+        return self._row_to_dict(row) if row else None
+
+    def update_entry(
+        self,
+        entry_id: int,
+        *,
+        kind: str | None = None,
+        title: str | None = None,
+        body: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
+        current = self.get_entry(entry_id)
+        if not current:
+            return None
+        new_kind = kind if kind is not None else current["kind"]
+        new_title = title if title is not None else current["title"]
+        new_body = body if body is not None else current["body"]
+        new_meta = metadata if metadata is not None else current["metadata"]
+        meta_json = json.dumps(new_meta or {}, ensure_ascii=False)
+        with self._lock:
+            self._conn.execute(
+                """
+                UPDATE structured_memory
+                SET kind = ?, title = ?, body = ?, metadata = ?
+                WHERE id = ?
+                """,
+                (new_kind, new_title, new_body, meta_json, entry_id),
+            )
+            row = self._conn.execute(
+                "SELECT * FROM structured_memory WHERE id = ?",
+                (entry_id,),
+            ).fetchone()
+            self._conn.commit()
+        return self._row_to_dict(row) if row else None
+
+    def delete_entry(self, entry_id: int) -> bool:
+        with self._lock:
+            self._conn.execute(
+                "DELETE FROM memory_edges WHERE from_id = ? OR to_id = ?",
+                (entry_id, entry_id),
+            )
+            cursor = self._conn.execute(
+                "DELETE FROM structured_memory WHERE id = ?",
+                (entry_id,),
+            )
+            self._conn.commit()
+            return cursor.rowcount > 0
+
     def list_entries(
         self,
         *,

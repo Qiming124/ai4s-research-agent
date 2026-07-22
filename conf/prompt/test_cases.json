@@ -1,0 +1,56 @@
+[
+  {
+    "id": "loss_landscape",
+    "title": "示范：损失函数局部极小值（理论推导）",
+    "category": "theory",
+    "raw_prompt": "帮我分析一下损失函数的局部极小值",
+    "context": "Math 模式；深度学习优化示范课题；需要可验证的引理/定理结构",
+    "expected_traits": ["角色明确", "符号定义", "## 引理/定理 分节", "禁止捏造"],
+    "source_note": "示范理论场景；对标 theory agent + L4 抽取"
+  },
+  {
+    "id": "transformer_lit",
+    "title": "Transformer 优化文献检索",
+    "category": "literature",
+    "raw_prompt": "找几篇关于 transformer 训练稳定性的论文",
+    "context": "文献 Agent；需要检索策略与输出格式",
+    "expected_traits": ["检索词", "时间范围", "输出字段（标题/贡献/局限）"],
+    "source_note": "常见文献调研场景"
+  },
+  {
+    "id": "imrad_results",
+    "title": "IMRaD Results 段落",
+    "category": "writing",
+    "raw_prompt": "写一下实验结果，准确率从 82% 提到 91%",
+    "context": "论文 Results 节；只报告事实不解释",
+    "expected_traits": ["过去时", "具体数字", "禁止 suggests/indicates", "字数约束"],
+    "source_note": "From Data to Paper Results prompt pattern"
+  },
+  {
+    "id": "prisma_review",
+    "title": "PRISMA 系统综述",
+    "category": "review",
+    "raw_prompt": "综述一下 2020-2025 年联邦学习隐私保护方法",
+    "context": "系统综述；需 PRISMA 式筛选步骤",
+    "expected_traits": ["PRISMA/筛选流程", "纳入排除标准", "禁止虚构文献"],
+    "source_note": "Gatsbi structural mandate / PRISMA pattern"
+  },
+  {
+    "id": "ml_baseline",
+    "title": "ML 实验与基线对比",
+    "category": "experiment",
+    "raw_prompt": "帮我设计一个对比实验，看 Adam 和 SGD 在 CIFAR-10 上谁更好",
+    "context": "数值实验 Agent；可复现性",
+    "expected_traits": ["超参数", "基线", "评价指标", "随机种子/重复次数"],
+    "source_note": "ML paper action card pattern"
+  },
+  {
+    "id": "counterexample",
+    "title": "反例构造",
+    "category": "theory",
+    "raw_prompt": "这个定理对吗：凸函数的临界点都是全局最小值？",
+    "context": "反例/验证；最小维构造",
+    "expected_traits": ["待验证命题", "反例维度", "验证步骤"],
+    "source_note": "counterexample agent 场景"
+  }
+]

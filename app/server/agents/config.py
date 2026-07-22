@@ -8,7 +8,7 @@
 #
 # 架构位置：
 #     - 被调用：server/agents/orchestrator.py、subagent.py、server/api/agents.py、
-#               server/graph/router_llm.py、research_supervisor.py
+#               server/graph/router_llm.py
 #     - 调用：server/llm/prompts.py（各角色专用 prompt 常量）
 #
 # 阅读提示：
@@ -56,11 +56,11 @@ _AGENT_PROMPTS: dict[AgentName, str] = {
 # 内置默认白名单（可被 mcp_tool_whitelist.json agents 覆盖）
 _AGENT_DEFAULT_WHITELIST: dict[AgentName, list[str]] = {
     "general": ["*"],
-    "theory": ["sympy__*", "numerical__*", "rag__*", "web_search__*"],
-    "experiment": ["filesystem__*", "numerical__*"],
+    "theory": ["sympy__*", "rag__*", "web_search__*"],
+    "experiment": ["filesystem__*", "rag__*"],
     "literature": ["arxiv__*", "web_search__*"],
     "review": ["filesystem__*"],
-    "counterexample": ["sympy__*", "numerical__*"],
+    "counterexample": ["sympy__*"],
 }
 
 

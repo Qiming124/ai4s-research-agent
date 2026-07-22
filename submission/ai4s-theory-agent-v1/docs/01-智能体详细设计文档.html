@@ -1,0 +1,1045 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>AI4S智能体详细设计</title>
+  <style>
+    html {
+      color: #1a1a1a;
+      background-color: #fdfdfd;
+    }
+    body {
+      margin: 0 auto;
+      max-width: 36em;
+      padding-left: 50px;
+      padding-right: 50px;
+      padding-top: 50px;
+      padding-bottom: 50px;
+      hyphens: auto;
+      overflow-wrap: break-word;
+      text-rendering: optimizeLegibility;
+      font-kerning: normal;
+    }
+    @media (max-width: 600px) {
+      body {
+        font-size: 0.9em;
+        padding: 12px;
+      }
+      h1 {
+        font-size: 1.8em;
+      }
+    }
+    @media print {
+      html {
+        background-color: white;
+      }
+      body {
+        background-color: transparent;
+        color: black;
+        font-size: 12pt;
+      }
+      p, h2, h3 {
+        orphans: 3;
+        widows: 3;
+      }
+      h2, h3, h4 {
+        page-break-after: avoid;
+      }
+    }
+    p {
+      margin: 1em 0;
+    }
+    a {
+      color: #1a1a1a;
+    }
+    a:visited {
+      color: #1a1a1a;
+    }
+    img {
+      max-width: 100%;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      margin-top: 1.4em;
+    }
+    h5, h6 {
+      font-size: 1em;
+      font-style: italic;
+    }
+    h6 {
+      font-weight: normal;
+    }
+    ol, ul {
+      padding-left: 1.7em;
+      margin-top: 1em;
+    }
+    li > ol, li > ul {
+      margin-top: 0;
+    }
+    blockquote {
+      margin: 1em 0 1em 1.7em;
+      padding-left: 1em;
+      border-left: 2px solid #e6e6e6;
+      color: #606060;
+    }
+    code {
+      font-family: Menlo, Monaco, Consolas, 'Lucida Console', monospace;
+      font-size: 85%;
+      margin: 0;
+      hyphens: manual;
+    }
+    pre {
+      margin: 1em 0;
+      overflow: auto;
+    }
+    pre code {
+      padding: 0;
+      overflow: visible;
+      overflow-wrap: normal;
+    }
+    .sourceCode {
+     background-color: transparent;
+     overflow: visible;
+    }
+    hr {
+      background-color: #1a1a1a;
+      border: none;
+      height: 1px;
+      margin: 1em 0;
+    }
+    table {
+      margin: 1em 0;
+      border-collapse: collapse;
+      width: 100%;
+      overflow-x: auto;
+      display: block;
+      font-variant-numeric: lining-nums tabular-nums;
+    }
+    table caption {
+      margin-bottom: 0.75em;
+    }
+    tbody {
+      margin-top: 0.5em;
+      border-top: 1px solid #1a1a1a;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    th {
+      border-top: 1px solid #1a1a1a;
+      padding: 0.25em 0.5em 0.25em 0.5em;
+    }
+    td {
+      padding: 0.125em 0.5em 0.25em 0.5em;
+    }
+    header {
+      margin-bottom: 4em;
+      text-align: center;
+    }
+    #TOC li {
+      list-style: none;
+    }
+    #TOC ul {
+      padding-left: 1.3em;
+    }
+    #TOC > ul {
+      padding-left: 0;
+    }
+    #TOC a:not(:hover) {
+      text-decoration: none;
+    }
+    code{white-space: pre-wrap;}
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+    /* CSS for syntax highlighting */
+    pre > code.sourceCode { white-space: pre; position: relative; }
+    pre > code.sourceCode > span { line-height: 1.25; }
+    pre > code.sourceCode > span:empty { height: 1.2em; }
+    .sourceCode { overflow: visible; }
+    code.sourceCode > span { color: inherit; text-decoration: inherit; }
+    div.sourceCode { margin: 1em 0; }
+    pre.sourceCode { margin: 0; }
+    @media screen {
+    div.sourceCode { overflow: auto; }
+    }
+    @media print {
+    pre > code.sourceCode { white-space: pre-wrap; }
+    pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+    }
+    pre.numberSource code
+      { counter-reset: source-line 0; }
+    pre.numberSource code > span
+      { position: relative; left: -4em; counter-increment: source-line; }
+    pre.numberSource code > span > a:first-child::before
+      { content: counter(source-line);
+        position: relative; left: -1em; text-align: right; vertical-align: baseline;
+        border: none; display: inline-block;
+        -webkit-touch-callout: none; -webkit-user-select: none;
+        -khtml-user-select: none; -moz-user-select: none;
+        -ms-user-select: none; user-select: none;
+        padding: 0 4px; width: 4em;
+        color: #aaaaaa;
+      }
+    pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa;  padding-left: 4px; }
+    div.sourceCode
+      {   }
+    @media screen {
+    pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+    }
+    code span.al { color: #ff0000; font-weight: bold; } /* Alert */
+    code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+    code span.at { color: #7d9029; } /* Attribute */
+    code span.bn { color: #40a070; } /* BaseN */
+    code span.bu { color: #008000; } /* BuiltIn */
+    code span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+    code span.ch { color: #4070a0; } /* Char */
+    code span.cn { color: #880000; } /* Constant */
+    code span.co { color: #60a0b0; font-style: italic; } /* Comment */
+    code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+    code span.do { color: #ba2121; font-style: italic; } /* Documentation */
+    code span.dt { color: #902000; } /* DataType */
+    code span.dv { color: #40a070; } /* DecVal */
+    code span.er { color: #ff0000; font-weight: bold; } /* Error */
+    code span.ex { } /* Extension */
+    code span.fl { color: #40a070; } /* Float */
+    code span.fu { color: #06287e; } /* Function */
+    code span.im { color: #008000; font-weight: bold; } /* Import */
+    code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+    code span.kw { color: #007020; font-weight: bold; } /* Keyword */
+    code span.op { color: #666666; } /* Operator */
+    code span.ot { color: #007020; } /* Other */
+    code span.pp { color: #bc7a00; } /* Preprocessor */
+    code span.sc { color: #4070a0; } /* SpecialChar */
+    code span.ss { color: #bb6688; } /* SpecialString */
+    code span.st { color: #4070a0; } /* String */
+    code span.va { color: #19177c; } /* Variable */
+    code span.vs { color: #4070a0; } /* VerbatimString */
+    code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+  </style>
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">AI4S智能体详细设计</h1>
+</header>
+<h1 id="ai4s-理论侧多智能体系统-智能体详细设计文档">AI4S
+理论侧多智能体系统 — 智能体详细设计文档</h1>
+<table>
+<colgroup>
+<col style="width: 40%" />
+<col style="width: 60%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>项</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>文档版本</td>
+<td>v1.0（提交稿）</td>
+</tr>
+<tr class="even">
+<td>产品版本</td>
+<td>AI4S Research Agent v2.2</td>
+</tr>
+<tr class="odd">
+<td>日期</td>
+<td>2026-07-22</td>
+</tr>
+<tr class="even">
+<td>文档类型</td>
+<td>智能体详细设计（架构 / 角色 / 记忆 / 工件 / 接口 / 运行流程）</td>
+</tr>
+<tr class="odd">
+<td>对应交付</td>
+<td>提交材料第 1 项</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="概述">1. 概述</h2>
+<h3 id="建设目标">1.1 建设目标</h3>
+<p>构建面向 <strong>AI for Science（用深度学习解决科学问题）</strong> 的
+<strong>理论侧多智能体系统</strong>：协助研究者完成</p>
+<ol type="1">
+<li>文献检索与方法提炼；<br />
+</li>
+<li>理论推导与形式化；<br />
+</li>
+<li>实验方案设计与用户实验数据解读；</li>
+</ol>
+<p>形成可落盘、可复查的结构化科研工件，而非替代完整实验训练流水线。</p>
+<h3 id="一句话定位">1.2 一句话定位</h3>
+<p><strong>多智能体协作的理论侧科研助手</strong>：<code>文献 → 方法卡 → 理论推导 →（可选审稿/反例）→ 实验顾问（计划 / 读数 / 下一步）</code>。</p>
+<h3 id="能力边界">1.3 能力边界</h3>
+<table>
+<thead>
+<tr class="header">
+<th>做</th>
+<th>不做</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>检索与阅读文献、方法结构化</td>
+<td>系统内代训 / 部署模型</td>
+</tr>
+<tr class="even">
+<td>符号对齐、分步推导、定理库管理</td>
+<td>以大规模数值实跑为核心卖点</td>
+</tr>
+<tr class="odd">
+<td>实验计划、缺数诊断、数据解读</td>
+<td>完整科研 Campaign 八阶段自动复现</td>
+</tr>
+<tr class="even">
+<td>用户提交 metrics / 表格后的对照分析</td>
+<td>编造文献或实验结果</td>
+</tr>
+</tbody>
+</table>
+<p>示范课题种子（如损失函数局部极小、PL
+条件）用于验证能力闭环，<strong>不限制</strong>系统仅服务该领域。</p>
+<h3 id="术语">1.4 术语</h3>
+<table>
+<thead>
+<tr class="header">
+<th>术语</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Agent</td>
+<td>具有独立系统提示词与工具白名单的角色智能体</td>
+</tr>
+<tr class="even">
+<td>Artifact</td>
+<td>结构化科研工件（方法卡、推导迹、实验计划等）</td>
+</tr>
+<tr class="odd">
+<td>L1–L4</td>
+<td>工作记忆 / 会话记忆 / RAG / 结构化科研记忆</td>
+</tr>
+<tr class="even">
+<td>MCP</td>
+<td>Model Context Protocol，外部工具协议</td>
+</tr>
+<tr class="odd">
+<td>场景工作流</td>
+<td>在 <code>RESEARCH_PIPELINE_MODE=auto</code> 下触发的 2–3 跳协作</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="总体架构">2. 总体架构</h2>
+<h3 id="逻辑分层">2.1 逻辑分层</h3>
+<pre><code>┌─────────────────────────────────────────────────────────┐
+│ 接入层：Web UI / HTTP API / SSE                          │
+├─────────────────────────────────────────────────────────┤
+│ 编排层：意图路由 Supervisor + 场景工作流 SceneExecutor     │
+├─────────────────────────────────────────────────────────┤
+│ 智能体层：general / theory / literature / experiment /    │
+│           review / counterexample                         │
+├─────────────────────────────────────────────────────────┤
+│ 模型与工具：DeepSeek LLM + LangGraph + MCP 工具集群        │
+├─────────────────────────────────────────────────────────┤
+│ 记忆层：L1 工作记忆 · L2 会话 · L3 RAG · L4 定理库         │
+├─────────────────────────────────────────────────────────┤
+│ 持久化：SQLite · Chroma · 课题文件工作区 · Artifact JSON   │
+└─────────────────────────────────────────────────────────┘</code></pre>
+<h3 id="技术栈">2.2 技术栈</h3>
+<table>
+<colgroup>
+<col style="width: 37%" />
+<col style="width: 62%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>层级</th>
+<th>技术选型</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>API</td>
+<td>FastAPI + Uvicorn</td>
+</tr>
+<tr class="even">
+<td>前端</td>
+<td>React 18 + TypeScript + Vite</td>
+</tr>
+<tr class="odd">
+<td>LLM</td>
+<td>DeepSeek（Chat Completions，支持 thinking / 流式）</td>
+</tr>
+<tr class="even">
+<td>编排</td>
+<td>LangGraph（可配置）+ 多 Agent Orchestrator</td>
+</tr>
+<tr class="odd">
+<td>会话 / L4</td>
+<td>SQLite</td>
+</tr>
+<tr class="even">
+<td>向量检索</td>
+<td>Chroma</td>
+</tr>
+<tr class="odd">
+<td>工具</td>
+<td>MCP（arxiv / web_search / sympy / filesystem / rag /
+numerical）</td>
+</tr>
+<tr class="even">
+<td>部署形态</td>
+<td>单进程托管 API + <code>web/dist</code> 静态资源（Docker
+可选，本提交不含镜像包）</td>
+</tr>
+</tbody>
+</table>
+<h3 id="能力闭环主叙事">2.3 能力闭环（主叙事）</h3>
+<pre class="mermaid"><code>flowchart LR
+  Lit[literature] --&gt; MC[MethodCard]
+  MC --&gt; Th[theory]
+  Th --&gt; DT[DerivationTrace]
+  Th --&gt; L4[L4 定理库]
+  Th --&gt; Rev[review / counterexample]
+  Th --&gt; Exp[experiment]
+  Exp --&gt; EP[ExperimentPlan]
+  User[用户提交数据] --&gt; DP[DataPacket]
+  DP --&gt; Exp
+  Exp --&gt; NS[NextStepMemo]</code></pre>
+<hr />
+<h2 id="智能体角色详细设计">3. 智能体角色详细设计</h2>
+<h3 id="角色总表">3.1 角色总表</h3>
+<table>
+<colgroup>
+<col style="width: 21%" />
+<col style="width: 24%" />
+<col style="width: 24%" />
+<col style="width: 30%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Agent</th>
+<th>中文名</th>
+<th>主职责</th>
+<th>典型输出</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>general</td>
+<td>总览助手</td>
+<td>澄清问题、推荐角色、一般问答</td>
+<td>引导性回答</td>
+</tr>
+<tr class="even">
+<td>literature</td>
+<td>文献助手</td>
+<td>检索、读法、方法提炼</td>
+<td>MethodCard、文献列表</td>
+</tr>
+<tr class="odd">
+<td>theory</td>
+<td>理论助手</td>
+<td>形式化、分步证明、写入定理库</td>
+<td>引理/定理 Markdown、DerivationTrace</td>
+</tr>
+<tr class="even">
+<td>experiment</td>
+<td>实验顾问</td>
+<td>实验计划、读数、下一步</td>
+<td>ExperimentPlan、NextStepMemo</td>
+</tr>
+<tr class="odd">
+<td>review</td>
+<td>审稿助手</td>
+<td>对照清单审推导</td>
+<td>审稿意见</td>
+</tr>
+<tr class="even">
+<td>counterexample</td>
+<td>反例助手</td>
+<td>构造反例思路</td>
+<td>反例草案</td>
+</tr>
+</tbody>
+</table>
+<p>系统提示词集中于 <code>app/server/llm/prompts.py</code>，由
+<code>app/server/agents/config.py</code> 注册。</p>
+<h3 id="theory理论主路径">3.2 theory（理论主路径）</h3>
+<p><strong>输入</strong>：用户问题；可选 RAG 片段；可选 L4
+已有引理；理论工作区 <code>symbols.md</code> /
+<code>assumptions.md</code>。</p>
+<p><strong>处理步骤（提示词约束）</strong>：</p>
+<ol type="1">
+<li>问题形式化（目标量、假设、符号）<br />
+</li>
+<li>核心分析（一阶/二阶或其他）<br />
+</li>
+<li>文献方法到公式（若有）<br />
+</li>
+<li>结论以「引理 / 定理」分节<br />
+</li>
+<li>可选 SymPy 核对</li>
+</ol>
+<p><strong>输出</strong>：Markdown 证明 + 可选
+<code>artifact:DerivationTrace</code>；含 <code>## 引理/定理</code>
+时自动抽取写入 L4。</p>
+<p><strong>工具白名单（典型）</strong>：sympy、rag、filesystem（只读配置类）。</p>
+<h3 id="literature文献">3.3 literature（文献）</h3>
+<p><strong>输入</strong>：检索意图、论文线索、已上传 PDF（RAG）。</p>
+<p><strong>处理</strong>：arXiv / 网页检索 → 方法卡结构提炼。</p>
+<p><strong>输出</strong>：方法说明 +
+<code>artifact:MethodCard</code>（问题设定、损失/目标形式、假设、步骤、公式骨架、符号对照）。</p>
+<h3 id="experiment实验顾问">3.4 experiment（实验顾问）</h3>
+<p><strong>输入</strong>：理论主张、用户问题、可选 DataPacket。</p>
+<p><strong>处理</strong>：</p>
+<ul>
+<li>无数据：产出实验计划（目标、变量、对照、判据、记录字段）<br />
+</li>
+<li>有数据：判读 supported / refuted / inconclusive，列缺数与下一步</li>
+</ul>
+<p><strong>输出</strong>：<code>ExperimentPlan</code>、<code>NextStepMemo</code>；<strong>禁止</strong>代跑大规模训练。</p>
+<h3 id="review-counterexample">3.5 review / counterexample</h3>
+<ul>
+<li><strong>review</strong>：对照审稿清单检查符号一致性、假设完整性、证明缺口。<br />
+</li>
+<li><strong>counterexample</strong>：针对猜想构造最小复杂度反例思路；数值工具非必须。</li>
+</ul>
+<h3 id="general">3.6 general</h3>
+<p>理论侧总览与分流入口；<code>auto_route=false</code>
+时作为默认落点。</p>
+<hr />
+<h2 id="编排与路由设计">4. 编排与路由设计</h2>
+<h3 id="单跳意图路由supervisor">4.1 单跳意图路由（Supervisor）</h3>
+<p>请求字段：<code>agent</code>、<code>auto_route</code>（默认
+true）。</p>
+<p>优先级：</p>
+<ol type="1">
+<li><strong>显式指定 agent</strong> → 直接执行该角色；<br />
+</li>
+<li><strong>auto_route=true</strong> → LLM 轻量分类或规则分类 →
+<code>general|theory|literature|experiment</code>；<br />
+</li>
+<li><strong>auto_route=false</strong> → 固定 general。</li>
+</ol>
+<h3 id="场景工作流短协作23-跳">4.2 场景工作流（短协作，2–3 跳）</h3>
+<p>配置项：<code>RESEARCH_PIPELINE_MODE=auto|single</code>。</p>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 37%" />
+<col style="width: 29%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>场景 ID</th>
+<th>触发条件</th>
+<th>协作链</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>lit_to_theory</td>
+<td><code>/method</code> 或 literature + 方法/公式类意图</td>
+<td>literature → MethodCard → theory → DerivationTrace（可选
+review）</td>
+</tr>
+<tr class="even">
+<td>experiment_plan</td>
+<td>experiment 且无数据解读意图</td>
+<td>experiment → ExperimentPlan</td>
+</tr>
+<tr class="odd">
+<td>data_to_nextstep</td>
+<td>experiment 且有 DataPacket 或读数意图</td>
+<td>experiment → NextStepMemo（可修订计划）</td>
+</tr>
+</tbody>
+</table>
+<p>场景命中时优先于单跳路由；流式事件含
+<code>pipeline_stage</code>、<code>artifact_saved</code>。</p>
+<h3 id="对话主路径sse">4.3 对话主路径（SSE）</h3>
+<pre><code>客户端 POST /v1/chat/stream
+  → Orchestrator 解析目标 / 场景
+  → SubAgent：组装 system（RAG/L4/工作区）+ 历史(L1) + 用户消息
+  → DeepSeek 流式：reasoning / content / tool_calls
+  → 工具循环（MCP）
+  → 后处理：Artifact 抽取、L4 定理抽取、会话落库
+  → SSE 推送至前端</code></pre>
+<hr />
+<h2 id="记忆体系设计">5. 记忆体系设计</h2>
+<h3 id="四层记忆">5.1 四层记忆</h3>
+<table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>层级</th>
+<th>名称</th>
+<th>存储</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>L1</td>
+<td>工作记忆</td>
+<td>请求时计算</td>
+<td>截断历史、可选摘要，控制进模窗口</td>
+</tr>
+<tr class="even">
+<td>L2</td>
+<td>会话记忆</td>
+<td>SQLite</td>
+<td>完整多轮对话、工具记录、工作流节点</td>
+</tr>
+<tr class="odd">
+<td>L3</td>
+<td>RAG 向量记忆</td>
+<td>Chroma</td>
+<td>PDF/文本切块语义检索，增强文献上下文</td>
+</tr>
+<tr class="even">
+<td>L4</td>
+<td>结构化科研记忆</td>
+<td>SQLite</td>
+<td>定理/引理/假设条目 + 依赖边（关系图谱）</td>
+</tr>
+</tbody>
+</table>
+<h3 id="l4-与前端定理库">5.2 L4 与前端定理库</h3>
+<ul>
+<li>来源：Theory 自动抽取、用户手工 CRUD、Markdown/PDF
+导入（候选确认）。<br />
+</li>
+<li>注入：默认对 <code>theory,experiment,review</code>
+注入当前会话条目。<br />
+</li>
+<li>图谱：节点即 L4 条目；边由正文 <code>**依据**</code> 解析或 API
+创建。</li>
+</ul>
+<h3 id="课题project">5.3 课题（Project）</h3>
+<p>课题绑定会话、任务看板、共享工作区文件与 Artifact 目录；默认课题
+<code>default</code>。</p>
+<hr />
+<h2 id="科研工件artifact设计">6. 科研工件（Artifact）设计</h2>
+<h3 id="类型与字段摘要">6.1 类型与字段（摘要）</h3>
+<table>
+<colgroup>
+<col style="width: 27%" />
+<col style="width: 27%" />
+<col style="width: 45%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>类型</th>
+<th>用途</th>
+<th>关键字段</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>MethodCard</td>
+<td>文献方法中间表示</td>
+<td>problem_setup, loss_form, key_assumptions, proof_or_algo_steps,
+formula_skeleton_latex, symbol_map</td>
+</tr>
+<tr class="even">
+<td>DerivationTrace</td>
+<td>分步推导迹</td>
+<td>steps[{title,body,status}], method_card_ids, l4_ref_ids,
+claim_yaml</td>
+</tr>
+<tr class="odd">
+<td>ExperimentPlan</td>
+<td>实验计划（追加式）</td>
+<td>objectives, variables, controls, success_criteria, record_fields,
+status</td>
+</tr>
+<tr class="even">
+<td>DataPacket</td>
+<td>用户实验数据</td>
+<td>metrics, summary, source</td>
+</tr>
+<tr class="odd">
+<td>NextStepMemo</td>
+<td>读数后建议</td>
+<td>verdict, missing_data, next_experiments</td>
+</tr>
+</tbody>
+</table>
+<h3 id="落盘机制">6.2 落盘机制</h3>
+<p>Agent 在回答中输出围栏：</p>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode markdown"><code class="sourceCode markdown"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="in">```artifact:MethodCard</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="in">{ ... JSON ... }</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span></code></pre></div>
+<p>服务端解析、字段归一化（兼容 LLM
+把列表写成字符串等偏差）、校验后写入：</p>
+<p><code>data/projects/{project_id}/artifacts/{Type}/{uuid}.json</code></p>
+<h3 id="与用户操作的关系">6.3 与用户操作的关系</h3>
+<ul>
+<li>定理库、实验计划、读数建议支持前端 CRUD；<br />
+</li>
+<li>MethodCard / DerivationTrace 以 Agent 产出 + 面板展示为主；<br />
+</li>
+<li>Jupyter / 文件上传可旁路写入 DataPacket。</li>
+</ul>
+<hr />
+<h2 id="工具系统设计mcp">7. 工具系统设计（MCP）</h2>
+<table>
+<thead>
+<tr class="header">
+<th>Server</th>
+<th>能力</th>
+<th>主要服务 Agent</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>arxiv</td>
+<td>论文检索与元数据</td>
+<td>literature</td>
+</tr>
+<tr class="even">
+<td>web_search</td>
+<td>网页检索</td>
+<td>literature / general</td>
+</tr>
+<tr class="odd">
+<td>sympy</td>
+<td>符号微分、Hessian、凸性检查等</td>
+<td>theory / counterexample</td>
+</tr>
+<tr class="even">
+<td>filesystem</td>
+<td>受限目录读写</td>
+<td>experiment / review</td>
+</tr>
+<tr class="odd">
+<td>rag</td>
+<td>按会话检索语料</td>
+<td>theory / experiment</td>
+</tr>
+<tr class="even">
+<td>numerical</td>
+<td>小规模数值核对（非默认主路径）</td>
+<td>可选</td>
+</tr>
+</tbody>
+</table>
+<p>白名单：<code>conf/mcp_tool_whitelist.json</code>；运行时：<code>GET /v1/mcp/status</code>。</p>
+<hr />
+<h2 id="接口设计调用侧摘要">8. 接口设计（调用侧摘要）</h2>
+<blockquote>
+<p>完整清单见仓库 <code>doc/API-COVERAGE.md</code>（约 71 端点）。提交第
+2
+项「远程调用说明」可在后续镜像交付中展开；此处给出智能体运行必需接口。</p>
+</blockquote>
+<h3 id="对话">8.1 对话</h3>
+<table>
+<thead>
+<tr class="header">
+<th>方法</th>
+<th>路径</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>POST</td>
+<td><code>/v1/chat/stream</code></td>
+<td>SSE 流式对话（主路径）</td>
+</tr>
+<tr class="even">
+<td>POST</td>
+<td><code>/v1/chat</code></td>
+<td>非流式</td>
+</tr>
+<tr class="odd">
+<td>GET</td>
+<td><code>/v1/sessions</code></td>
+<td>会话列表</td>
+</tr>
+<tr class="even">
+<td>GET</td>
+<td><code>/health</code></td>
+<td>健康检查</td>
+</tr>
+</tbody>
+</table>
+<p><strong>ChatRequest 关键字段</strong>：<code>message</code>,
+<code>session_id</code>, <code>agent</code>, <code>auto_route</code>,
+<code>mode</code>, <code>project_id</code>, <code>enable_tools</code>,
+<code>cot_mode</code>, <code>enable_thinking</code>。</p>
+<h3 id="文献-记忆-工件">8.2 文献 / 记忆 / 工件</h3>
+<table>
+<thead>
+<tr class="header">
+<th>域</th>
+<th>代表接口</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>RAG</td>
+<td><code>POST /v1/documents/upload</code>,
+<code>GET /v1/documents</code></td>
+</tr>
+<tr class="even">
+<td>L4</td>
+<td><code>GET/POST/PATCH/DELETE /v1/memory/structured</code>,
+<code>GET .../graph</code></td>
+</tr>
+<tr class="odd">
+<td>Artifact</td>
+<td><code>GET/POST/PATCH/DELETE /v1/artifacts</code></td>
+</tr>
+<tr class="even">
+<td>数据回传</td>
+<td><code>POST /v1/jupyter/upload-result</code>,
+<code>upload-file</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="调用示例非流式">8.3 调用示例（非流式）</h3>
+<div class="sourceCode" id="cb5"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-s</span> http://127.0.0.1:8000/v1/chat <span class="dt">\</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">-H</span> <span class="st">&#39;Content-Type: application/json&#39;</span> <span class="dt">\</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">-d</span> <span class="st">&#39;{</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="st">    &quot;message&quot;: &quot;请对二次损失 L=½‖Xθ−y‖² 做简短形式化并输出 DerivationTrace&quot;,</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a><span class="st">    &quot;session_id&quot;: &quot;demo-submit&quot;,</span></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a><span class="st">    &quot;agent&quot;: &quot;theory&quot;,</span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a><span class="st">    &quot;auto_route&quot;: false,</span></span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a><span class="st">    &quot;project_id&quot;: &quot;default&quot;,</span></span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a><span class="st">    &quot;enable_tools&quot;: false</span></span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a><span class="st">  }&#39;</span></span></code></pre></div>
+<hr />
+<h2 id="前端与人机交互设计">9. 前端与人机交互设计</h2>
+<h3 id="主界面">9.1 主界面</h3>
+<ul>
+<li>左：会话 / 课题 / 任务看板<br />
+</li>
+<li>中：多轮对话（含推理过程、工具调用、流水线阶段）<br />
+</li>
+<li>右：科研工作台 Tabs</li>
+</ul>
+<h3 id="工作台-tabs">9.2 工作台 Tabs</h3>
+<table>
+<thead>
+<tr class="header">
+<th>Tab</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>文献</td>
+<td>文档上传、RAG 引用、方法卡</td>
+</tr>
+<tr class="even">
+<td>理论</td>
+<td>推导迹、定理库、假设 DAG、关系图谱、工作区文件</td>
+</tr>
+<tr class="odd">
+<td>验证</td>
+<td>验证看板、可观测性</td>
+</tr>
+<tr class="even">
+<td>产出</td>
+<td>实验计划 / 读数建议、实验记录、导出</td>
+</tr>
+</tbody>
+</table>
+<h3 id="关键交互原则">9.3 关键交互原则</h3>
+<ul>
+<li>Artifact / L4 变更后可刷新面板复查；<br />
+</li>
+<li>导入 PDF 到定理库采用「候选确认」防脏写；<br />
+</li>
+<li>实验顾问强调用户本机出数，系统解读。</li>
+</ul>
+<hr />
+<h2 id="运行与安全约束">10. 运行与安全约束</h2>
+<ol type="1">
+<li><strong>密钥</strong>：<code>DEEPSEEK_API_KEY</code> 等置于
+<code>conf/.env</code>，不入库明文提交。<br />
+</li>
+<li><strong>文件系统</strong>：MCP filesystem 限制在
+<code>MCP_ALLOWED_DIRS</code>。<br />
+</li>
+<li><strong>RAG 隔离</strong>：按 session / project
+检索，避免串会话；课题共享语料需注意主题污染。<br />
+</li>
+<li><strong>场景健壮性</strong>：Literature 未产出有效 MethodCard
+时，不宜把澄清话术误当作「文献方法」喂给 Theory（已知改进点）。<br />
+</li>
+<li><strong>SSE</strong>：反向代理须关闭 buffering，超时建议 ≥
+600s。</li>
+</ol>
+<hr />
+<h2 id="典型运行全过程与演示视频对应">11.
+典型运行全过程（与演示视频对应）</h2>
+<table>
+<thead>
+<tr class="header">
+<th>步骤</th>
+<th>用户操作</th>
+<th>系统行为</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>1</td>
+<td>打开 Web，选择/新建会话与默认课题</td>
+<td>加载工作台</td>
+</tr>
+<tr class="even">
+<td>2</td>
+<td>上传 PDF 或检索文献</td>
+<td>L3 入库 / literature 检索</td>
+</tr>
+<tr class="odd">
+<td>3</td>
+<td><code>/method</code> 或 literature 提炼方法</td>
+<td>MethodCard 落盘</td>
+</tr>
+<tr class="even">
+<td>4</td>
+<td>theory 形式化推导</td>
+<td>DerivationTrace + L4 定理</td>
+</tr>
+<tr class="odd">
+<td>5</td>
+<td>experiment 要实验计划</td>
+<td>ExperimentPlan</td>
+</tr>
+<tr class="even">
+<td>6</td>
+<td>上传实验指标</td>
+<td>DataPacket → NextStepMemo</td>
+</tr>
+<tr class="odd">
+<td>7</td>
+<td>复查定理库 / 计划 / 图谱</td>
+<td>人机共改</td>
+</tr>
+</tbody>
+</table>
+<p>详细分镜见同目录 <code>demo/演示脚本.md</code> 与演示视频。</p>
+<hr />
+<h2 id="验收对照智能体能力">12. 验收对照（智能体能力）</h2>
+<table>
+<thead>
+<tr class="header">
+<th>验收点</th>
+<th>设计对应</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>多角色智能体</td>
+<td>六 Agent + 独立提示词与工具白名单</td>
+</tr>
+<tr class="even">
+<td>可观测协作</td>
+<td>SSE 阶段事件、Artifact 落盘、工作台面板</td>
+</tr>
+<tr class="odd">
+<td>记忆与知识</td>
+<td>L1–L4 + 课题工作区</td>
+</tr>
+<tr class="even">
+<td>闭环</td>
+<td>文献→理论→实验计划→数据→下一步</td>
+</tr>
+<tr class="odd">
+<td>边界清晰</td>
+<td>不代训、不部署、不大规模实跑</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="附录关键源码索引">13. 附录：关键源码索引</h2>
+<table>
+<thead>
+<tr class="header">
+<th>内容</th>
+<th>路径</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>产品愿景</td>
+<td><code>doc/PRODUCT-VISION.md</code></td>
+</tr>
+<tr class="even">
+<td>系统架构</td>
+<td><code>doc/SYSTEM_ARCHITECTURE.md</code> /
+<code>doc/ARCHITECTURE.md</code></td>
+</tr>
+<tr class="odd">
+<td>Agent 提示词</td>
+<td><code>app/server/llm/prompts.py</code></td>
+</tr>
+<tr class="even">
+<td>场景路由</td>
+<td><code>app/server/graph/scenes/workflow.py</code></td>
+</tr>
+<tr class="odd">
+<td>编排器</td>
+<td><code>app/server/agents/orchestrator.py</code></td>
+</tr>
+<tr class="even">
+<td>Artifact 模型</td>
+<td><code>app/shared/artifact_models.py</code></td>
+</tr>
+<tr class="odd">
+<td>MCP 配置</td>
+<td><code>conf/mcp_servers.json</code></td>
+</tr>
+<tr class="even">
+<td>API 覆盖</td>
+<td><code>doc/API-COVERAGE.md</code></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="修订记录">修订记录</h2>
+<table>
+<thead>
+<tr class="header">
+<th>版本</th>
+<th>日期</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>v1.0</td>
+<td>2026-07-22</td>
+<td>提交稿：智能体详细设计</td>
+</tr>
+</tbody>
+</table>
+</body>
+</html>

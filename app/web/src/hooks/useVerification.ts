@@ -21,7 +21,7 @@ export interface VerificationDashboard {
   recent: VerificationRecord[];
 }
 
-export function useVerification(sessionId: string, projectId: string, enabled: boolean) {
+export function useVerification(_sessionId: string, projectId: string, enabled: boolean) {
   const [dashboard, setDashboard] = useState<VerificationDashboard | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

@@ -38,6 +38,11 @@ from server.llm.client import DeepSeekClient, get_deepseek_client
 from server.llm.cot_prompt import apply_cot_prompt
 from server.llm.prompts import DEFAULT_SYSTEM_PROMPT, MATH_MODE_SYSTEM_PROMPT
 from server.llm.reasoning_options import ResolvedReasoningOptions, resolve_reasoning_options
+from server.llm.thinking_messages import (
+    assistant_message_with_tools,
+    prepare_messages_for_deepseek,
+    resolve_thinking_for_messages,
+)
 from server.graph.workflow import (
     cot_step_chunks,
     finalize_workflow_records,
@@ -151,9 +156,13 @@ class GeneralAgent(BaseAgent):
 
         for msg in history:
             entry: dict[str, Any] = {"role": msg.role, "content": msg.content}
-            # DeepSeek thinking：历史 assistant 若曾带推理，回传时必须带上 reasoning_content
-            if msg.role == "assistant" and msg.reasoning_content:
-                entry["reasoning_content"] = msg.reasoning_content
+            # DeepSeek thinking：历史 assistant 若曾带推理，回传时必须带上 reasoning_content；
+            # 若该条还带 tool_calls 元数据，也必须带上（可为空字符串）。
+            if msg.role == "assistant":
+                if msg.reasoning_content:
+                    entry["reasoning_content"] = msg.reasoning_content
+                elif msg.tool_calls:
+                    entry["reasoning_content"] = ""
             messages.append(entry)
 
         messages.append({"role": "user", "content": user_message})
@@ -253,11 +262,11 @@ class GeneralAgent(BaseAgent):
                     return
                 break  # 既无 tool_calls 也无 content，结束循环
 
-            # 第三步：将 assistant 消息（含 tool_calls）追加到对话上下文
-            assistant_msg: dict[str, Any] = {
-                "role": "assistant",
-                "content": result.content or "",
-                "tool_calls": [
+            # 第三步：将 assistant 消息（含 tool_calls + reasoning_content）追加到对话上下文
+            assistant_msg = assistant_message_with_tools(
+                content=result.content or "",
+                reasoning_content=result.reasoning,
+                tool_calls=[
                     {
                         "id": tc.id,
                         "type": "function",
@@ -268,7 +277,7 @@ class GeneralAgent(BaseAgent):
                     }
                     for tc in result.tool_calls
                 ],
-            }
+            )
             api_messages.append(assistant_msg)
 
             for tc in result.tool_calls:
@@ -360,12 +369,16 @@ class GeneralAgent(BaseAgent):
             ),
         )
 
-        # 最终流式回答（含 reasoning）
+        # 最终流式回答；含 tool_calls 历史时强制关闭 thinking 避免 DeepSeek 400
         full_content = ""
         full_reasoning = ""
+        final_messages = prepare_messages_for_deepseek(api_messages)
+        final_thinking = resolve_thinking_for_messages(
+            final_messages, reasoning.enable_thinking
+        )
         async for chunk in self._llm.stream_chat(
-            api_messages,
-            enable_thinking=reasoning.enable_thinking,
+            final_messages,
+            enable_thinking=final_thinking,
             reasoning_effort=reasoning.reasoning_effort,
         ):
             if chunk.type == "reasoning":

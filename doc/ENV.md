@@ -65,8 +65,7 @@
 | `ORCHESTRATION_BACKEND` | `legacy` | `legacy` 单 Agent；`langgraph`/`multi` 多 Agent（演示用 langgraph） |
 | `ROUTER_USE_LLM` | `false` | `true` 时 LLM 意图路由，失败回退规则 |
 
-多 Agent：`general` / `theory` / `experiment` / `literature` / `review` / `counterexample`。  
-`RESEARCH_PIPELINE_MODE=auto` 时复杂问题走 literature→theory→experiment→review 多跳；Campaign 另见 Supervisor（S0–S8）。
+多 Agent：`general` / `theory` / `experiment`（顾问）/ `literature` / `review` / `counterexample`。  
 
 ## 理论 / 实验 / 流水线 / 同步
 
@@ -74,11 +73,10 @@
 |------|----------|------|
 | `THEORY_WORKSPACE_PATH` | `./data/theory` | 符号表、假设、引理种子 |
 | `EXPERIMENTS_PATH` | `./data/experiments` | 实验配置与日志 |
-| `RESEARCH_PIPELINE_MODE` | `single` | `auto` = 多跳流水线 |
-| `ENABLE_NUMERICAL_MCP` | `true` | 注册 numerical MCP |
+| `ENABLE_ARTIFACT_STORE` | `true` | 理论侧工件持久化 |
+| `ENABLE_NUMERICAL_MCP` | `true` | 注册 numerical MCP（顾问路径非必须） |
 | `GLOBAL_MEMORY_SYNC` | `true` | 启动同步 `data/theory/lemmas/` → L4 |
 | `PDF_INGEST_ENABLED` | `true` | PDF 上传解析 |
-| `ENABLE_CLOUD_SYNC` | `false` | 可选云端元数据同步（不含推导正文） |
 | `TAVILY_API_KEY` | 空 | web_search 优先 Tavily（国内推荐） |
 
 ## RAG（L3）

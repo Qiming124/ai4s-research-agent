@@ -88,15 +88,12 @@ check(
 r = client.get("/v1/experiments/runs")
 check("GET /v1/experiments/runs", r.status_code == 200)
 
-# ── Phase 2: 假设 DAG / 文献 / 工作区 ──
+# ── Phase 2: 假设 DAG / 工作区 ──
 r = client.get("/v1/theory/assumption-dag")
 check("GET /v1/theory/assumption-dag", r.status_code == 200, f"nodes={len(r.json().get('nodes', []))}")
 
 r = client.get("/v1/theory/assumption-dag/impact/A4")
 check("GET assumption impact A4", r.status_code == 200)
-
-r = client.get("/v1/bibliography")
-check("GET /v1/bibliography", r.status_code == 200)
 
 r = client.get("/v1/theory/workspace")
 check("GET /v1/theory/workspace", r.status_code == 200)
@@ -125,19 +122,13 @@ else:
     check("L4 versioning", False, f"create failed {r.status_code}")
 
 # ── Phase 3: Jupyter ──
-r = client.get("/v1/jupyter/template")
-check("GET /v1/jupyter/template", r.status_code == 200)
-
 r = client.post(
     "/v1/jupyter/upload-result",
     json={"name": "smoke", "summary": {"ok": True}, "metrics": {"loss": 0.1}},
 )
 check("POST /v1/jupyter/upload-result", r.status_code == 200)
 
-# ── Phase 4: 同步（默认关闭应 403）──
-r = client.post("/v1/sync/metadata", json={"project_id": "default"})
-check("POST /v1/sync/metadata (disabled)", r.status_code == 403)
-
+# ── Phase 4: 审计 ──
 r = client.get("/v1/sync/audit/default")
 check("GET /v1/sync/audit/default", r.status_code == 200)
 

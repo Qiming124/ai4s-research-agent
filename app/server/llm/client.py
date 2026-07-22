@@ -30,6 +30,7 @@ from typing import Any
 from openai import AsyncOpenAI, AuthenticationError, APIConnectionError, APIStatusError
 
 from server.config import Settings, get_settings
+from server.llm.thinking_messages import prepare_messages_for_deepseek
 from shared.schemas import StreamChunk
 
 logger = logging.getLogger(__name__)
@@ -98,7 +99,7 @@ class DeepSeekClient:
         #     max_tokens=384000       — 为 thinking max 留够输出预算
         kwargs: dict[str, Any] = {
             "model": self._settings.model,
-            "messages": messages,
+            "messages": prepare_messages_for_deepseek(messages),
             "max_tokens": max_tokens if max_tokens is not None else self._settings.max_tokens,
             "stream": stream,
             "reasoning_effort": reasoning_effort or self._settings.reasoning_effort,

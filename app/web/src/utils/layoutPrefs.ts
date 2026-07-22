@@ -3,15 +3,27 @@ export interface LayoutPrefs {
   rightWidth: number;
   sidebarProjectHeight: number;
   sidebarTaskHeight: number;
+  /** 左侧边栏是否收起；默认展开，仅存客户端 */
+  leftCollapsed: boolean;
+  /** 右侧边栏是否收起；默认展开，仅存客户端 */
+  rightCollapsed: boolean;
 }
 
 const STORAGE_KEY = "ai4s_layout_prefs";
+
+/** 收起后边缘开关条宽度（px）；中间栏会占用其余空间 */
+export const SIDEBAR_EDGE_WIDTH = 28;
+
+/** @deprecated 使用 SIDEBAR_EDGE_WIDTH */
+export const LEFT_SIDEBAR_RAIL_WIDTH = SIDEBAR_EDGE_WIDTH;
 
 export const DEFAULT_LAYOUT: LayoutPrefs = {
   leftWidth: 240,
   rightWidth: 380,
   sidebarProjectHeight: 130,
   sidebarTaskHeight: 200,
+  leftCollapsed: false,
+  rightCollapsed: false,
 };
 
 const LIMITS = {
@@ -41,6 +53,8 @@ export function loadLayoutPrefs(): LayoutPrefs {
         Number(parsed.sidebarTaskHeight) || DEFAULT_LAYOUT.sidebarTaskHeight,
         LIMITS.sidebarTaskHeight,
       ),
+      leftCollapsed: Boolean(parsed.leftCollapsed),
+      rightCollapsed: Boolean(parsed.rightCollapsed),
     };
   } catch {
     return { ...DEFAULT_LAYOUT };
@@ -67,6 +81,12 @@ export function adjustLayoutPrefs(
   }
   if (patch.sidebarTaskHeight != null) {
     next.sidebarTaskHeight = clamp(patch.sidebarTaskHeight, LIMITS.sidebarTaskHeight);
+  }
+  if (patch.leftCollapsed != null) {
+    next.leftCollapsed = Boolean(patch.leftCollapsed);
+  }
+  if (patch.rightCollapsed != null) {
+    next.rightCollapsed = Boolean(patch.rightCollapsed);
   }
   saveLayoutPrefs(next);
   return next;

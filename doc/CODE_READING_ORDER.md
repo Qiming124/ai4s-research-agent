@@ -89,7 +89,7 @@ POST /v1/chat/stream
 
 ---
 
-## 4. LangGraph / 研究流水线（第 4–5 天）
+## 4. LangGraph / 场景工作流（第 4–5 天）
 
 | 顺序 | 文件 | 说明 |
 |------|------|------|
@@ -98,26 +98,25 @@ POST /v1/chat/stream
 | 3 | `app/server/graph/streaming.py` | 子图流式 → SSE；最终 thinking 回答 |
 | 4 | `app/server/graph/router.py` / `router_llm.py` | 路由 |
 | 5 | `app/server/graph/nodes.py` / `workflow.py` | 通用图节点 |
-| 6 | `app/server/graph/research_pipeline.py` | 是否走研究流水线的判定 |
-| 7 | `app/server/graph/research_supervisor.py` | **Campaign 8 阶段 Supervisor**（收尾、门禁） |
-| 8 | `app/server/graph/theory_pipeline.py` | 理论侧流水线片段 |
+| 6 | `app/server/graph/scenes/` | **场景工作流**（`auto`）：匹配 + 执行 |
+| 7 | `app/server/graph/theory_pipeline.py` | 理论侧流水线片段 |
+| 8 | `app/server/artifacts/` | Artifact 抽取 / 清洗 / 存储 |
 
-读完应能画出：普通对话 vs `/research` Campaign 的分支。
+读完应能画出：单 Agent vs `RESEARCH_PIPELINE_MODE=auto` 场景短协作的分支。
 
 ---
 
-## 5. 课题 / Campaign / 任务（第 5–6 天）
+## 5. 课题 / 任务 / 理论工作区（第 5–6 天）
 
 | 顺序 | 文件 | 说明 |
 |------|------|------|
 | 1 | `app/server/memory/projects.py` | 课题 CRUD、工作区、**整包删除** |
-| 2 | `app/server/api/projects.py` | HTTP：含 `DELETE ?purge=true` |
-| 3 | `app/server/memory/campaigns.py` | Campaign 状态机与产物目录 |
-| 4 | `app/server/api/campaigns.py` | Campaign HTTP |
-| 5 | `app/server/memory/theory_workspace.py` | 课题理论目录解析 |
-| 6 | `app/server/api/theory.py` | 理论资产、DAG、书目只读 API |
+| 2 | `app/server/api/projects.py` | HTTP：含 `DELETE ?purge=true`、会话关联/取消关联 |
+| 3 | `app/server/memory/theory_workspace.py` | 课题理论目录解析 |
+| 4 | `app/server/api/theory.py` | 理论工作区读写、假设 DAG |
+| 5 | `app/server/api/artifacts.py` | Artifact HTTP |
 
-数据落盘：`data/projects/{id}/`、`data/campaigns/{id}/`（见 DATA.md）。
+数据落盘：`data/projects/{id}/`（见 DATA.md）。Campaign 目录与 API 已移除。
 
 ---
 
@@ -140,7 +139,7 @@ POST /v1/chat/stream
 | 13 | `api/documents.py` | 上传 / arXiv 导入 |
 
 **注意（读源码时别被文案骗到）：**  
-`memory/bibliography.py` 有表结构，但当前业务路径**很少写入**；MD/DOCX/PDF 导出也**不拼书目**，仅 LaTeX 在有 BibTeX 时注入。Web「书目库」面板已移除。
+`memory/bibliography.py` 仍供 **LaTeX 导出**内部注入 BibTeX；**书目 HTTP API 与 Web 书目库面板均已移除**。符号/假设请走工作区文件读写，不再有独立 `/v1/theory/symbols` 等速览端点。
 
 ---
 
@@ -151,9 +150,8 @@ POST /v1/chat/stream
 | 1 | `memory/verification.py` / `claim_parser.py` | 验证账本与 claim 解析 |
 | 2 | `api/verification.py` | 验证 API |
 | 3 | `experiments/verification_executor.py` | 执行验证 |
-| 4 | `experiments/runner.py` / `torch_runner.py` | 实验跑批 |
-| 5 | `experiments/campaign_experiments.py` | Campaign S5 实验 |
-| 6 | `api/experiments.py` / `jupyter.py` | HTTP |
+| 4 | `experiments/runner.py` / `torch_runner.py` | 实验跑批（可选；非主卖点） |
+| 5 | `api/experiments.py` / `jupyter.py` | HTTP；Jupyter 回传可写 DataPacket |
 
 ---
 
@@ -179,7 +177,9 @@ POST /v1/chat/stream
 | `api/agents.py` | 可用 Agent 列表 |
 | `api/stats.py` | Token 统计 |
 | `api/observability.py` | 质量 / 可观测摘要 |
-| `api/sync.py` | 可选同步 |
+| `api/sync.py` | 课题审计日志（云同步 metadata 已移除） |
+| `api/prompt.py` | 润色模板 / 案例 / optimize |
+| `api/artifacts.py` | 理论侧工件 |
 | `langchain/*` | LangChain 封装（与 graph 路径相关） |
 | `skills/bridge.py` | Skills 桥接（若启用） |
 | `app/client/cli.py` | 命令行客户端（可选） |
@@ -207,8 +207,8 @@ POST /v1/chat/stream
 | 1 | §0 文档 + §1 入口配置 |
 | 2–3 | §2 对话主路径（可画时序图） |
 | 4 | §3 MCP |
-| 5 | §4 LangGraph / Supervisor |
-| 6 | §5 课题 Campaign |
+| 5 | §4 LangGraph / 场景工作流 |
+| 6 | §5 课题与理论工作区 |
 | 7 | §6 记忆与 RAG |
 | 8 | §7–§8 验证实验导出 |
 
@@ -221,7 +221,7 @@ POST /v1/chat/stream
 1. **先搜调用方**：`grep` / IDE「Find references」，比从上往下扫更快。  
 2. **SSE 事件名**在 `shared/schemas.py` 的 `StreamChunk.type` 与 `api/chat.py` 对齐。  
 3. **两套 Agent 路径**：`legacy`（`base.py`）与 `langgraph`（`subagent` + `graph/*`），由配置与编排器选择。  
-4. **课题删除**：`DELETE /v1/projects/{id}?purge=true` → `api/projects.py` → sessions + campaigns + RAG + 磁盘。  
+4. **课题删除**：`DELETE /v1/projects/{id}?purge=true` → `api/projects.py` → sessions + RAG + 磁盘工作区。  
 5. 模块顶部的「职责 / 架构位置 / Debug」块就是为阅读准备的导航——优先读这些块。
 
 ---
@@ -229,3 +229,4 @@ POST /v1/chat/stream
 ## 修订记录
 
 - 2026-07-20：初版（后端阅读顺序；前端刻意省略）。
+- 2026-07-22：对齐 v2.2 理论侧——去掉已删除的 Campaign / Supervisor 路径，补场景工作流与 Artifact。

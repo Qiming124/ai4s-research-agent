@@ -7,7 +7,7 @@
 #     3. _load_yaml 支持 PyYAML 或简易行解析回退
 #
 # 架构位置：
-#     - 被调用：server/api/experiments.py、campaign_experiments.py
+#     - 被调用：server/api/experiments.py、experiments API
 #     - 调用：experiments/verification_executor.py、async_utils.py
 #
 # 阅读提示：
@@ -65,7 +65,7 @@ async def run_config_async(
     *,
     session_id: str | None = None,
 ) -> dict[str, Any]:
-    """异步执行实验配置（FastAPI / Campaign 主循环请 await 本函数）。"""
+    """异步执行实验配置（FastAPI 请 await 本函数）。"""
     root, cfg_path = _resolve_config_path(config_path)
     config = _load_yaml(cfg_path)
     config["name"] = config.get("name", cfg_path.stem)

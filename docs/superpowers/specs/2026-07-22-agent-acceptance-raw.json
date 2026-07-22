@@ -1,0 +1,209 @@
+{
+  "meta": {
+    "project_id": "7f4ea49e-d7a",
+    "session_id": "accept-sess-32bc8fd2",
+    "health": {
+      "status": "ok",
+      "model": "deepseek-v4-pro",
+      "reasoning_effort": "max"
+    }
+  },
+  "results": {
+    "preflight.health": {
+      "status": "Pass",
+      "note": "{\"status\": \"ok\", \"model\": \"deepseek-v4-pro\", \"reasoning_effort\": \"max\"}"
+    },
+    "preflight.mcp": {
+      "status": "Pass",
+      "note": "{\"server_enabled\":true,\"connected\":true,\"servers\":[{\"name\":\"web_search\",\"enabled\":true,\"connected\":true,\"tools\":[{\"quali"
+    },
+    "A1.create_project": {
+      "status": "Pass",
+      "note": "id=7f4ea49e-d7a"
+    },
+    "A1.link_session": {
+      "status": "Pass",
+      "note": "{\"status\":\"ok\",\"project_id\":\"7f4ea49e-d7a\",\"session_id\":\"accept-sess-32bc8fd2\"}"
+    },
+    "P1.list_sessions": {
+      "status": "Pass",
+      "note": "初测偶发 total=0；重链后 sessions 含 accept-sess-32bc8fd2（已复核）"
+    },
+    "A2.md_upload": {
+      "status": "Pass",
+      "note": "{\"document\":{\"doc_id\":\"4b0182f1-5a02-4fac-84e3-b6e5c56a009b\",\"session_id\":\"accept-sess-32bc8fd2\",\"project_id\":\"7f4ea49e-"
+    },
+    "L1.md_txt": {
+      "status": "Pass",
+      "note": "{\"document\":{\"doc_id\":\"4b0182f1-5a02-4fac-84e3-b6e5c56a009b\",\"session_id\":\"accept-sess-32bc8fd2\",\"project_id\":\"7f4ea49e-"
+    },
+    "L2.docx": {
+      "status": "Pass",
+      "note": "{\"document\":{\"doc_id\":\"c24e694f-74c2-4f92-afc0-15b612c79b3a\",\"session_id\":\"accept-sess-32bc8fd2\",\"project_id\":\"7f4ea49e-"
+    },
+    "L2.pdf": {
+      "status": "Pass",
+      "note": "{\"document\":{\"doc_id\":\"c18cc17e-a9c2-488d-aa6a-d5fef9be1010\",\"session_id\":\"accept-sess-32bc8fd2\",\"project_id\":\"7f4ea49e-"
+    },
+    "A2.arxiv": {
+      "status": "Pass",
+      "note": "200 {\"document\":{\"doc_id\":\"arxiv-1412.6980\",\"session_id\":\"accept-sess-32bc8fd2\",\"project_id\":\"7f4ea49e-d7a\",\"title\":\"arX"
+    },
+    "L3.arxiv": {
+      "status": "Pass",
+      "note": "200 {\"document\":{\"doc_id\":\"arxiv-1412.6980\",\"session_id\":\"accept-sess-32bc8fd2\",\"project_id\":\"7f4ea49e-d7a\",\"title\":\"arX"
+    },
+    "A2.list": {
+      "status": "Pass",
+      "note": "total=4"
+    },
+    "L4.rag_isolation": {
+      "status": "Pass",
+      "note": "same_project_sessB_total=4 other_project_total=0"
+    },
+    "P2.rag_share": {
+      "status": "Pass",
+      "note": "same_project_sessB_total=4 other_project_total=0"
+    },
+    "A3.literature_chat": {
+      "status": "Pass",
+      "note": "dt=65.1s reply_len=8820 refs=8 head=## 问题分析"
+    },
+    "L5.rag_refs": {
+      "status": "Pass",
+      "note": "refs=8"
+    },
+    "A4.theory_math": {
+      "status": "Pass",
+      "note": "## 假设 H1：PL 条件下局部极小等价于全局极小"
+    },
+    "T1.derivation_trace": {
+      "status": "Pass",
+      "note": "artifacts=2 has_trace=True (chat derivation=yes)"
+    },
+    "A5.theorem_create": {
+      "status": "Pass",
+      "note": "id=83"
+    },
+    "T2.theorem_crud_create": {
+      "status": "Pass",
+      "note": "id=83"
+    },
+    "T2.theorem_list": {
+      "status": "Pass",
+      "note": "n=4"
+    },
+    "T2.theorem_patch": {
+      "status": "Pass",
+      "note": "{\"id\":83,\"session_id\":\"accept-sess-32bc8fd2\",\"kind\":\"theorem\",\"title\":\"验收-PL局部极小(修订)\",\"body\":\"μ-PL ⇒ 临界点全局最优。\",\"metadata"
+    },
+    "P3.theorem_session_scope": {
+      "status": "Pass",
+      "note": "sessB_titles_sample=[] isolated=True"
+    },
+    "T3.theorem_in_context": {
+      "status": "Pass",
+      "note": "根据定理库中「验收-PL局部极小(修订)」定理——**μ-PL ⇒ 临界点全局最优**——其对实验设计的含义是："
+    },
+    "A5.theorem_cite": {
+      "status": "Pass",
+      "note": "根据定理库中「验收-PL局部极小(修订)」定理——**μ-PL ⇒ 临界点全局最优**——其对实验设计的含义是："
+    },
+    "T4.assumption_dag": {
+      "status": "Pass",
+      "note": "{\"nodes\":[{\"id\":83,\"kind\":\"theorem\",\"title\":\"验收-PL局部极小(修订)\",\"status\":\"draft\",\"assumptions\":[]},{\"id\":80,\"kind\":\"theorem\""
+    },
+    "T5.knowledge_graph": {
+      "status": "Pass",
+      "note": "probe 200 {\"nodes\":[{\"id\":83,\"session_id\":\"accept-sess-32bc8fd2\",\"kind\":\"theorem\",\"title\":\"验收-PL局部极小(修订)\",\"body\":\"μ-PL ⇒"
+    },
+    "T6.workspace": {
+      "status": "Pass",
+      "note": "probe 200 {\"files\":[{\"path\":\"assumptions.md\",\"kind\":\"file\"},{\"path\":\"review-checklist.md\",\"kind\":\"file\"},{\"path\":\"symbol"
+    },
+    "A6.experiment_plan": {
+      "status": "Pass",
+      "note": "has_artifact_plan=True reply_len=3420 head=## 问题分析"
+    },
+    "O1.experiment_plan": {
+      "status": "Pass",
+      "note": "has_artifact_plan=True reply_len=3420 head=## 问题分析"
+    },
+    "A7.upload_csv": {
+      "status": "Pass",
+      "note": "{\"run_id\":\"54333e84\",\"log_path\":\"data/experiments/logs/nb_54333e84.json\",\"status\":\"indexed\"}"
+    },
+    "O2.experiment_log": {
+      "status": "Pass",
+      "note": "{\"run_id\":\"54333e84\",\"log_path\":\"data/experiments/logs/nb_54333e84.json\",\"status\":\"indexed\"}"
+    },
+    "A7.data_to_nextstep": {
+      "status": "Pass",
+      "note": "## 问题分析"
+    },
+    "P4.experiment_reuse_weak": {
+      "status": "Partial",
+      "note": "同课题上传成功；跨会话复用未深测"
+    },
+    "A8.preview": {
+      "status": "Pass",
+      "note": "{\"entry_count\":4,\"session_structured_count\":4,\"global_structured_count\":0,\"chat_message_count\":6,\"source\":\"structured_me"
+    },
+    "A8.md": {
+      "status": "Pass",
+      "note": "bytes=3667"
+    },
+    "A8.docx": {
+      "status": "Pass",
+      "note": "bytes=12718"
+    },
+    "O3.export": {
+      "status": "Pass",
+      "note": "md=200 docx=200 pdf=200"
+    },
+    "O3.polish": {
+      "status": "Pass",
+      "note": "需字段 ai_instructions（非 instructions）；复核 200 返回润色 markdown"
+    },
+    "A9.mcp_arxiv": {
+      "status": "Pass",
+      "note": "根据网络搜索结果，以下是检索到的核心论文："
+    },
+    "C4.mcp_tools": {
+      "status": "Pass",
+      "note": "根据网络搜索结果，以下是检索到的核心论文："
+    },
+    "C1.chat_math_modes": {
+      "status": "Pass",
+      "note": "chat_len=109 math_len=191"
+    },
+    "C2.auto_route": {
+      "status": "Pass",
+      "note": "agents_lit=[] agents_th=[] (reply lengths 1059/570)"
+    },
+    "C3.manual_agent": {
+      "status": "Pass",
+      "note": "我是理论推导审稿助手，负责审查本课题中推导、定理与方法形式化的严谨性，输出审稿意见及修正建议。"
+    },
+    "C5.prompt_optimize": {
+      "status": "Pass",
+      "note": "{\"original\":\"帮我看看这个损失好不好\",\"recommended_style_id\":\"structural\",\"recommended_prompt\":\"按可复现实验诊断的流程，完成对损失函数曲线的评估。\\n\\n研究问题：该损"
+    },
+    "C6.settings_surface": {
+      "status": "Pass",
+      "note": "agents=200 mcp_reload=200"
+    },
+    "C7.model": {
+      "status": "Pass",
+      "note": "{\"status\": \"ok\", \"model\": \"deepseek-v4-pro\", \"reasoning_effort\": \"max\"}"
+    },
+    "L6.method_card": {
+      "status": "Skip",
+      "note": "按方案不测"
+    },
+    "P1.rename_project": {
+      "status": "Pass",
+      "note": "PATCH 成功 name=验收 renamed"
+    }
+  }
+}

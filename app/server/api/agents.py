@@ -28,11 +28,12 @@ from shared.schemas import AgentInfo, AgentListResponse
 router = APIRouter(tags=["agents"])
 
 _AGENT_DESCRIPTIONS: dict[str, str] = {
-    "general": "通用科研问答与总结",
-    "theory": "数学推导、定理证明与损失函数理论",
-    "experiment": "数值验证、Hessian 谱与 loss landscape 实验",
-    "literature": "文献检索、论文综述与引用整理",
+    "general": "理论侧总览问答与协调（建议实验但不代跑）",
+    "theory": "数学推导、文献方法形式化与符号辅助",
+    "experiment": "实验顾问：计划、读数、下一步与缺数诊断",
+    "literature": "文献检索、方法提炼与引用整理",
     "review": "理论推导审稿与清单检查",
+    "counterexample": "反例构造思路与最小维建议",
 }
 
 

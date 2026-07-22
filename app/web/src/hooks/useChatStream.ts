@@ -81,7 +81,6 @@ export interface ChatMessage {
   memoryWarnings?: string[];
   pipelineStages?: string[];
   pipelineGates?: string[];
-  campaignUpdates?: string[];
 }
 
 interface SseEvent {
@@ -305,16 +304,11 @@ function applyStreamEvent(
     if (ev.to_agent) {
       ctx.setActiveAgentName(ev.to_agent);
     }
-    const isWrapup =
-      ev.content === "campaign_complete_fallback" ||
-      ev.route_reason === "campaign_complete_fallback";
     const handoff: AgentHandoffEvent = {
       id: handoffId,
       fromAgent: ev.from_agent ?? "?",
       toAgent: ev.to_agent ?? "?",
-      reason: isWrapup
-        ? "课题已完成 → 收尾总结（不重跑流水线）"
-        : (ev.route_reason ?? ev.content),
+      reason: ev.route_reason ?? ev.content,
     };
     return (prev) =>
       prev.map((m) =>
@@ -326,20 +320,6 @@ function applyStreamEvent(
               timeline: [
                 ...(m.timeline ?? []),
                 { kind: "handoff", event: handoff },
-                ...(isWrapup
-                  ? [
-                      {
-                        kind: "workflow" as const,
-                        event: {
-                          id: "wrapup-running",
-                          stepKind: "synthesize" as const,
-                          status: "running" as const,
-                          title: "正在生成收尾报告",
-                          detail: "基于已完成产物综合，不会重跑 S0–S7",
-                        },
-                      },
-                    ]
-                  : []),
               ],
             }
           : m,
@@ -528,16 +508,6 @@ function applyStreamEvent(
       );
   }
 
-  if (ev.type === "campaign_update") {
-    const update = ev.content ?? "";
-    return (prev) =>
-      prev.map((m) =>
-        m.id === assistantId
-          ? { ...m, campaignUpdates: [...(m.campaignUpdates ?? []), update] }
-          : m,
-      );
-  }
-
   if (ev.type === "memory_warning") {
     const warning = ev.content ?? "";
     return (prev) =>
@@ -627,7 +597,6 @@ function processStreamEvents(
   setMessages: Dispatch<SetStateAction<ChatMessage[]>>,
   callbacks?: {
     onPipelineStage?: (stage: string) => void;
-    onCampaignUpdate?: (payload: string) => void;
     onPipelineGate?: (payload: string) => void;
   },
 ) {
@@ -636,9 +605,6 @@ function processStreamEvents(
   for (const ev of events) {
     if (ev.type === "pipeline_stage" && callbacks?.onPipelineStage) {
       callbacks.onPipelineStage(ev.content ?? ev.title ?? "stage");
-    }
-    if (ev.type === "campaign_update" && callbacks?.onCampaignUpdate) {
-      callbacks.onCampaignUpdate(ev.content ?? "{}");
     }
     if (ev.type === "pipeline_gate" && callbacks?.onPipelineGate) {
       callbacks.onPipelineGate(ev.content ?? "{}");
@@ -683,11 +649,9 @@ export function useChatStream(
   cotMode: CotMode,
   callbacks?: {
     onPipelineStage?: (stage: string) => void;
-    onCampaignUpdate?: (payload: string) => void;
     onPipelineGate?: (payload: string) => void;
   },
   projectId?: string,
-  campaignId?: string | null,
 ) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [sessionId, setSessionIdState] = useState(getSessionId);
@@ -843,15 +807,21 @@ export function useChatStream(
 
     const controller = new AbortController();
     abortRef.current = controller;
-    // 防止收尾等长请求把界面永久锁在 isStreaming（按钮一直灰）
-    const streamTimeoutMs = 180_000;
-    let abortedByTimeout = false;
-    const timeoutId = window.setTimeout(() => {
-      if (!controller.signal.aborted) {
-        abortedByTimeout = true;
-        controller.abort();
-      }
-    }, streamTimeoutMs);
+    // 不用固定「整段生成超时」：长工具链可能超过数分钟仍在正常推进。
+    // 改为空闲检测——持续一段时间收不到任何 SSE 字节才判定卡死。
+    const idleTimeoutMs = 300_000;
+    let abortedByIdle = false;
+    let idleTimerId = 0;
+    const bumpIdleWatchdog = () => {
+      window.clearTimeout(idleTimerId);
+      idleTimerId = window.setTimeout(() => {
+        if (!controller.signal.aborted) {
+          abortedByIdle = true;
+          controller.abort();
+        }
+      }, idleTimeoutMs);
+    };
+    bumpIdleWatchdog();
 
     const streamCtx = {
       setSessionIdState,
@@ -876,7 +846,6 @@ export function useChatStream(
           ...buildReasoningRequestFields(reasoningPref),
           ...buildCotModeRequestField(cotMode, chatMode),
           project_id: projectId ?? undefined,
-          campaign_id: campaignId ?? undefined,
         }),
         signal: controller.signal,
       });
@@ -898,6 +867,7 @@ export function useChatStream(
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
+        bumpIdleWatchdog();
 
         buffer += decoder.decode(value, { stream: true });
         const { events, rest } = parseSseBuffer(buffer);
@@ -933,8 +903,8 @@ export function useChatStream(
             m.id === assistantId
               ? {
                   ...m,
-                  error: abortedByTimeout
-                    ? "收尾/生成超时（已自动停止）。请再点一次「收尾总结」。"
+                  error: abortedByIdle
+                    ? "长时间未收到服务器数据（可能已中断），已自动停止。可点顶栏「停止」旁重试，或直接再发一条消息。"
                     : m.error,
                   streaming: false,
                   timeline: finalizeRunningTimeline(m.timeline),
@@ -962,7 +932,7 @@ export function useChatStream(
         ),
       );
     } finally {
-      window.clearTimeout(timeoutId);
+      window.clearTimeout(idleTimerId);
       isStreamingRef.current = false;
       setIsStreaming(false);
       setActiveAgentName(null);
@@ -973,7 +943,7 @@ export function useChatStream(
         pendingSessionIdRef.current = null;
       }
     }
-  }, [isStreaming, chatMode, historyPref, mcpPref, agentPref, reasoningPref, cotMode, finishStreaming, callbacks, projectId, campaignId]);
+  }, [isStreaming, chatMode, historyPref, mcpPref, agentPref, reasoningPref, cotMode, finishStreaming, callbacks, projectId]);
 
   const clearSession = useCallback(async () => {
     historyEpochRef.current += 1;

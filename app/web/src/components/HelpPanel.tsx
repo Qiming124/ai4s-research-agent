@@ -12,19 +12,19 @@ interface HelpSection {
 
 const HELP_SECTIONS: HelpSection[] = [
   {
-    title: "关于 Agent（v0.4）",
+    title: "关于助手（v2.2）",
     items: [
       {
-        name: "AI4S 科研助手",
-        desc: "面向「深度学习损失函数局部极小值理论」的 AI4S 智能体：多 Agent 协作、SymPy + 数值双验证、L4 知识图谱、RAG 文献库、理论工作区与 Web 科研工作台。",
+        name: "AI4S 理论侧多智能体",
+        desc: "面向「用深度学习解决科学问题」的理论侧协作：检索并阅读文献、理论推导、实验建议与下一步方向、解读用户提交的数据。损失函数局部极小等为示范子集。不代跑大规模训练、不部署模型、不以全流程科研复现为核心。",
       },
       {
         name: "Session",
         desc: "每个浏览器维护会话列表（localStorage + 服务端 SQLite）。侧栏「×」会永久删除该会话；顶栏「清空会话」仅清空当前对话内容，保留 session ID。",
       },
       {
-        name: "研究流水线",
-        desc: "服务端设置 RESEARCH_PIPELINE_MODE=auto 时，复杂问题（或 Math 模式、/research 前缀）会依次经过：文献检索 → 理论推导 → 数值实验（按需）→ 审稿。流式中会出现 pipeline_stage 事件。",
+        name: "能力闭环",
+        desc: "literature → theory →（可选 review/counterexample）→ experiment（计划/读数/下一步）。详见 doc/PRODUCT-VISION.md。",
       },
     ],
   },
@@ -37,85 +37,69 @@ const HELP_SECTIONS: HelpSection[] = [
       },
       {
         name: "general",
-        desc: "通用科研问答与总结，可使用全部 MCP 工具。",
+        desc: "理论侧总览问答；可建议实验但不代跑训练；复杂任务请切换专用 Agent。",
       },
       {
         name: "theory",
-        desc: "数学推导专用：注入理论工作区符号/假设、L4 引理记忆；调用 SymPy 与 numerical MCP；推导后自动 SymPy → 数值验证，并抽取引理写入 L4。",
+        desc: "数学推导主路径：注入符号/假设与 L4；可读文献方法并形式化；SymPy 作可选符号辅助。",
       },
       {
         name: "experiment",
-        desc: "数值验证与实验日志：读取 data/experiments/，调用 numerical MCP（Hessian 谱、loss landscape、SGD 轨迹等），输出结构化实验结论。",
+        desc: "实验顾问：实验目标与计划表、对照与记录字段；读取用户提交日志/结果并给出下一步与缺数清单。不以 numerical 实跑为核心。",
       },
       {
         name: "literature",
-        desc: "arXiv / 网络检索与文献综述；可将论文通过 API 或 from-arxiv 入库到 RAG。",
+        desc: "arXiv / 网络检索；方法提炼（假设、损失、公式骨架）；可建议将论文入库 RAG。",
       },
       {
         name: "review",
-        desc: "对照 review-checklist.md 审稿：检查符号一致性、假设完整性、证明缺口，输出是否建议写入 L4。",
+        desc: "对照 review-checklist.md 审稿：符号一致性、假设完整性、证明缺口；可建议补文献或补实验。",
       },
       {
         name: "Agent 切换指示",
-        desc: "流式过程中顶栏显示当前 Agent；agent_handoff 事件表示 Supervisor 委派；Math 模式优先路由 theory。",
+        desc: "流式过程中顶栏显示当前 Agent；agent_handoff 表示路由委派；Math 模式优先 theory。",
       },
     ],
   },
   {
-    title: "科研工作台（右侧栏）",
+    title: "工作台（右侧栏）",
     items: [
       {
-        name: "四个阶段 Tab",
-        desc: "文献（上传/RAG 引用）→ 理论（定理库、资产、假设图、关系图谱、工作区）→ 验证（验证看板、可观测性）→ 产出（实验、Jupyter、论文导出）。各分区可折叠展开。",
+        name: "三个 Tab",
+        desc: "文献（上传/RAG）→ 理论（定理库、推导迹）→ 产出（实验计划/记录与导出）。侧重读文献、推导与数据解读，非代跑实验。",
       },
       {
         name: "定理库 (L4)",
-        desc: "「理论」Tab 内展示当前会话的结构化记忆（引理/定理/假设）。Theory Agent 推导后会自动抽取 ## 引理/定理 标题块并持久化。",
+        desc: "「理论」Tab：可新建/编辑/删除条目，支持 Markdown 与 PDF 一键导入（候选确认后入库）。Theory 推导仍可自动抽取。",
       },
       {
-        name: "关系图谱",
-        desc: "「理论」Tab 内显示 L4 节点与 depends_on / cites 等依赖边。引理正文中 **依据**：引理 2 会自动建立关联。",
+        name: "推导迹",
+        desc: "「理论」Tab：Theory Agent 输出的分步推导工件（DerivationTrace）。",
       },
       {
-        name: "实验与导出",
-        desc: "「产出」Tab：实验日志、Jupyter；论文导出默认勾选 AI「论文格式」预设（摘要→引言→定理→实验→结论），可预览后导出 MD/Word/PDF。",
-      },
-      {
-        name: "理论工作区",
-        desc: "「理论」Tab 内浏览 data/theory/ 种子文件：symbols.md、assumptions.md 等，人机共用符号基线。",
+        name: "实验记录与导出",
+        desc: "「产出」Tab：实验计划与读数建议（可手工新建/编辑/删除）、实验记录回传，以及论文导出。",
       },
       {
         name: "RAG 文档",
-        desc: "「文献」Tab：支持 PDF/DOCX/Markdown 上传、arXiv 一键导入与 RAG 引用列表。",
+        desc: "「文献」Tab：支持 PDF/DOCX/Markdown 上传、arXiv 导入与 RAG 引用列表。",
       },
     ],
   },
   {
-    title: "验证与工作流",
+    title: "工作流与工具",
     items: [
       {
         name: "工作流时间线",
-        desc: "每条回答下方展示：规划 → 工具调用 → SymPy 验证 → 数值验证 → 综合回答。verify 节点显示 pass/fail/skipped。",
+        desc: "每条回答下方可展示：规划 → 工具调用 → 综合回答。遗留的 SymPy/数值验证节点若出现，视为可选核对。",
       },
       {
-        name: "SymPy 符号验证",
-        desc: "Theory 推导结束后自动求梯度与 Hessian 特征值；verification_result SSE 含 JSON 详情。",
-      },
-      {
-        name: "数值验证 fallback",
-        desc: "SymPy 跳过或失败时，自动调用 numerical__critical_point_classify；numerical_verification_result SSE 报告临界点分类。",
-      },
-      {
-        name: "Loss Landscape 可视化",
-        desc: "当 numerical__loss_landscape_2d 或 sgd_trajectory 工具返回 viz_type 数据时，消息内会嵌入简易 2D 等高线或轨迹摘要。",
+        name: "SymPy 符号辅助",
+        desc: "Theory 可对简单可符号化损失调用 SymPy；非必经大规模数值验证。",
       },
       {
         name: "记忆矛盾告警",
-        desc: "新定理与已有假设冲突时，memory_warning SSE 会在消息中显示琥珀色提示。",
-      },
-      {
-        name: "流水线阶段条",
-        desc: "多跳研究时，消息顶部显示「流水线: literature → theory → …」阶段路径（来自 pipeline_stage 事件）。",
+        desc: "新定理与已有假设冲突时，memory_warning 会在消息中显示提示。",
       },
       {
         name: "工具调用轨迹",
@@ -156,12 +140,12 @@ const HELP_SECTIONS: HelpSection[] = [
     title: "会话管理（左侧栏）",
     items: [
       {
-        name: "三个 Tab",
-        desc: "左栏分为「会话」「课题」「任务」三个 Tab，避免一屏堆叠过多面板。默认打开会话列表。",
+        name: "课题会话树",
+        desc: "左栏为课题文件夹树（含会话）。可在文件夹内新建会话；课题属性可编辑。",
       },
       {
         name: "新建会话",
-        desc: "「会话」Tab 中点击「+ 新建」创建新 session_id，自动切换并开始空白对话。",
+        desc: "点击「+ 新建」创建新 session_id，自动切换并开始空白对话。",
       },
       {
         name: "切换会话",
@@ -169,15 +153,15 @@ const HELP_SECTIONS: HelpSection[] = [
       },
       {
         name: "删除会话",
-        desc: "点击会话右侧「×」永久删除（purge=true），含服务端数据与列表项；若删的是当前会话则自动切到下一个或新建。",
+        desc: "点击会话右侧「×」永久删除（purge=true）；若删的是当前会话则自动切到下一个或新建。",
       },
       {
         name: "删除课题",
-        desc: "课题「属性」中「删除课题」：整包删除会话、Campaign 与工作区文件（需确认）。默认课题不可删。",
+        desc: "课题「属性」中「删除课题」：整包删除会话与工作区文件（需确认）。默认课题不可删。",
       },
       {
         name: "历史恢复",
-        desc: "刷新页面后自动恢复上次会话列表与消息。加载失败时顶栏下方显示琥珀色提示，可点重试或检查后端。",
+        desc: "刷新页面后自动恢复上次会话列表与消息。加载失败时顶栏下方显示提示，可点重试或检查后端。",
       },
     ],
   },
@@ -186,7 +170,7 @@ const HELP_SECTIONS: HelpSection[] = [
     items: [
       {
         name: "发送消息",
-        desc: "底部多行输入框，Enter 发送，Shift+Enter 换行。后端离线或生成中时输入禁用。科研版可在输入区选「AI润色提示词」填入导出同款体例；多跳研究仍可在消息前加 /research（需 RESEARCH_PIPELINE_MODE=auto）。",
+        desc: "底部多行输入框，Enter 发送，Shift+Enter 换行。点「优化提示词」可做 AI 多风格对比，或选用内置导出润色体例。顶栏 Token 右侧可切换 Chat / Math。推荐手动选择 theory / literature / experiment。",
       },
       {
         name: "流式占位提示",
@@ -211,11 +195,11 @@ const HELP_SECTIONS: HelpSection[] = [
       },
       {
         name: "思维链模式",
-        desc: "控制回答结构：关闭 / 标准（问题分析→推理→结论）/ 严格（强制 Markdown 三节）。Math 模式自动升为 strict；解析后显示「思维链」分步面板。",
+        desc: "控制回答结构：关闭 / 标准（问题分析→推理→结论）/ 严格（强制 Markdown 三节）。Math 模式自动升为 strict。",
       },
       {
-        name: "Theory 五阶段推导",
-        desc: "路由到 theory Agent 时，服务端使用专用推导 prompt，与工作流时间线的 plan/verify 节点配合，不限于侧栏 cot_mode。",
+        name: "Theory 分阶段推导",
+        desc: "路由到 theory Agent 时使用专用推导 prompt（形式化→局部分析→结论→可选符号辅助）。",
       },
     ],
   },
@@ -241,11 +225,11 @@ const HELP_SECTIONS: HelpSection[] = [
     ],
   },
   {
-    title: "科研工作台（右栏）",
+    title: "设置与 MCP",
     items: [
       {
         name: "打开方式",
-        desc: "顶栏「设置」按钮打开右侧浮层抽屉（非内嵌面板）：对话模式、Agent 路由、显示与思维链、L1 上下文、MCP。生成中部分控件禁用。",
+        desc: "顶栏「设置」按钮打开右侧浮层抽屉：对话模式、Agent 路由、显示与思维链、L1 上下文、MCP。生成中部分控件禁用。",
       },
       {
         name: "Chat / Math 模式",
@@ -253,23 +237,19 @@ const HELP_SECTIONS: HelpSection[] = [
       },
       {
         name: "Agent 路由",
-        desc: "可选自动路由（Supervisor）或手动指定 general/theory/experiment/literature/review；偏好存 localStorage。",
+        desc: "可选自动路由或手动指定 general/theory/experiment/literature/review；偏好存 localStorage。",
       },
       {
         name: "MCP 工具",
-        desc: "「MCP：服务端默认」勾选时跟随 .env 的 ENABLE_MCP；取消后可本地开关「启用 MCP 工具」。侧栏列出各 Server 连接状态与工具 schema，可点「刷新」。",
+        desc: "「MCP：服务端默认」勾选时跟随 .env 的 ENABLE_MCP；取消后可本地开关「启用 MCP 工具」。侧栏列出各 Server 连接状态。",
       },
       {
         name: "内置 Server",
-        desc: "web_search、arxiv、filesystem、sympy、rag、numerical。各 Agent 有独立白名单（conf/mcp_tool_whitelist.json）。",
-      },
-      {
-        name: "numerical 工具",
-        desc: "数值梯度、Hessian 谱、临界点分类、2D loss landscape、SGD 轨迹、随机 Hessian 采样——用于验证局部极小/鞍点直觉。",
+        desc: "web_search、arxiv、filesystem、sympy、rag、numerical。各 Agent 有独立白名单。numerical 为可选核对，非代跑实验主路径。",
       },
       {
         name: "面板刷新",
-        desc: "定理库、知识图谱、实验日志、工作区、RAG 文档/引用、MCP 状态均支持手动「刷新」拉取最新数据。",
+        desc: "定理库、知识图谱、实验日志、工作区、RAG 文档/引用、MCP 状态均支持手动「刷新」。",
       },
     ],
   },
@@ -286,15 +266,15 @@ const HELP_SECTIONS: HelpSection[] = [
       },
       {
         name: "L3 RAG",
-        desc: "Chroma 向量库，按 session_id 隔离。Web 可上传文本/Markdown；PDF 与 arXiv 通过 API 入库。theory/literature Agent 自动检索注入，引用见「RAG 引用」面板。",
+        desc: "Chroma 向量库，按 session_id 隔离。Web 可上传文本/Markdown；PDF 与 arXiv 通过 API 入库。theory/literature 可检索注入。",
       },
       {
         name: "L4 结构化记忆",
-        desc: "定理/引理/假设/实验结论 SQLite 存储 + 知识图谱边。theory/review Agent 自动注入；全局引理来自 data/theory/lemmas/ 同步。",
+        desc: "定理/引理等 SQLite 卡片库。支持手工 CRUD 与 PDF/Markdown 导入；theory/review 可注入。",
       },
       {
-        name: "理论工作区文件",
-        desc: "data/theory/symbols.md 与 assumptions.md 在 theory/review 推导前注入 system prompt，保证符号与假设一致。",
+        name: "理论符号/假设注入",
+        desc: "课题种子中的 symbols.md 与 assumptions.md 在 theory/review 推导前注入 system prompt（无独立工作区编辑页）。",
       },
     ],
   },
@@ -328,7 +308,7 @@ const HELP_SECTIONS: HelpSection[] = [
       },
       {
         name: "主要 API",
-        desc: "POST /v1/chat/stream（SSE）、GET /v1/memory/structured/graph、GET /v1/theory/workspace、POST /v1/documents/upload、POST /v1/export/latex。详见 doc/API.md。",
+        desc: "POST /v1/chat/stream（SSE）、GET/POST /v1/memory/structured、POST /v1/documents/upload、POST /v1/export/latex。详见 doc/API.md。",
       },
       {
         name: "Docker",
@@ -366,7 +346,7 @@ export function HelpPanel({ open, onClose }: HelpPanelProps) {
         <header className="help-header">
           <div>
             <h2 id="help-panel-title">使用帮助</h2>
-            <p className="help-subtitle">AI4S 科研助手 v0.4 — 界面、Agent、记忆与验证</p>
+            <p className="help-subtitle">AI4S 理论侧多智能体 v2.2 — 文献、推导、实验建议</p>
           </div>
           <button type="button" className="help-close" onClick={onClose} aria-label="关闭">
             ×
@@ -391,7 +371,7 @@ export function HelpPanel({ open, onClose }: HelpPanelProps) {
 
         <footer className="help-footer">
           <p>
-            偏好设置保存在浏览器 localStorage。完整文档见仓库 doc/README.md；按 Esc 关闭本面板。
+            偏好设置保存在浏览器 localStorage。完整文档见仓库 doc/README.md 与 doc/PRODUCT-VISION.md；按 Esc 关闭本面板。
           </p>
         </footer>
       </div>

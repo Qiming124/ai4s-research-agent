@@ -1,14 +1,10 @@
 import type { ChatMode, AgentChoice, CotMode, ReasoningEffort } from "../utils/preferences";
-import type { UiEdition } from "../utils/uiEdition";
-import { UI_EDITION_OPTIONS } from "../utils/uiEdition";
 import type { McpStatus } from "../hooks/useMcpStatus";
 
 interface SettingsDrawerProps {
   open: boolean;
   onClose: () => void;
   disabled?: boolean;
-  uiEdition: UiEdition;
-  onUiEditionChange: (edition: UiEdition) => void;
   chatMode: ChatMode;
   onChatModeChange: (mode: ChatMode) => void;
   agentChoice: AgentChoice;
@@ -46,8 +42,6 @@ export function SettingsDrawer({
   open,
   onClose,
   disabled,
-  uiEdition,
-  onUiEditionChange,
   chatMode,
   onChatModeChange,
   agentChoice,
@@ -84,8 +78,6 @@ export function SettingsDrawer({
 
   const serverEnabled = mcpStatus?.server_enabled ?? false;
   const mcpToggleDisabled = disabled || useServerMcp || !serverEnabled;
-  const editionHint =
-    UI_EDITION_OPTIONS.find((o) => o.id === uiEdition)?.hint ?? "";
 
   return (
     <div className="settings-overlay" role="dialog" aria-modal="true" aria-label="高级设置">
@@ -98,24 +90,6 @@ export function SettingsDrawer({
           </button>
         </header>
         <div className="settings-drawer-body">
-      <section className="settings-section">
-        <h3>界面版本</h3>
-        <div className="mode-toggle settings-mode-toggle" role="group" aria-label="界面版本">
-          {UI_EDITION_OPTIONS.map((opt) => (
-            <button
-              key={opt.id}
-              type="button"
-              className={uiEdition === opt.id ? "mode-btn active" : "mode-btn"}
-              onClick={() => onUiEditionChange(opt.id)}
-              disabled={disabled}
-              title={opt.hint}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
-        <p className="settings-hint">{editionHint}。仅影响界面入口，不限制 API。</p>
-      </section>
       <section className="settings-section">
         <h3>对话模式</h3>
         <div className="mode-toggle settings-mode-toggle" role="group">

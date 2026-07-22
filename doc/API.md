@@ -2,7 +2,7 @@
 
 Base URL 默认：`http://127.0.0.1:8000`。  
 数据模型：`app/shared/schemas.py`。  
-**完整端点矩阵（67）**：[`API-COVERAGE.md`](API-COVERAGE.md)。  
+**完整端点矩阵（71）**：[`API-COVERAGE.md`](API-COVERAGE.md)。  
 **全路径调用链路**：[`API-ROUTES.md`](API-ROUTES.md)。  
 交互式文档：`GET /docs`。
 
@@ -42,8 +42,7 @@ curl -s http://127.0.0.1:8000/health
 | `enable_thinking` | bool? | DeepSeek thinking |
 | `reasoning_effort` | `high` \| `max`? | 推理强度 |
 | `cot_mode` | `off` \| `standard` \| `strict` | 结构化思维链（Math 默认 strict） |
-| `project_id` | string? | 关联课题（Campaign / 工作台；对话编排上下文） |
-| `campaign_id` | string? | 关联 Campaign（多阶段研究） |
+| `project_id` | string? | 关联课题（工作台 / 理论工作区 / Artifact 上下文） |
 
 **SSE 事件 `type`**：
 
@@ -56,9 +55,8 @@ curl -s http://127.0.0.1:8000/health
 | `workflow_step` | 规划/工具/验证/综合 |
 | `cot_step` | 结构化思维链小节 |
 | `verification_result` / `numerical_verification_result` | 符号 / 数值验证 |
-| `pipeline_stage` | 研究流水线阶段（可驱动工作台 Tab） |
-| `campaign_update` | Campaign 阶段推进 |
-| `artifact_saved` | 产物落盘（理论稿、反例等） |
+| `pipeline_stage` | 遗留兼容名（主路径用 `workflow_step`） |
+| `artifact_saved` | Artifact 落盘（方法卡、实验计划等） |
 | `memory_warning` | L4 矛盾告警 |
 | `done` / `error` | 结束 / 错误 |
 
@@ -80,23 +78,20 @@ curl -N -X POST http://127.0.0.1:8000/v1/chat/stream \
 
 ---
 
-## 课题 / 任务 / Campaign
+## 课题 / 任务
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | GET/POST | `/v1/projects` | 列表 / 新建 |
 | GET | `/v1/projects/{id}` | 详情 |
 | PATCH | `/v1/projects/{id}` | 更新名称/简介 |
-| DELETE | `/v1/projects/{id}?purge=true` | 整包删除（会话+Campaign+工作区；`default` 不可删） |
+| DELETE | `/v1/projects/{id}?purge=true` | 整包删除（会话+工作区；`default` 不可删） |
 | GET | `/v1/projects/{id}/members` | 成员（角色） |
 | GET/POST | `/v1/projects/{id}/tasks` | 任务看板 |
 | PATCH | `/v1/projects/{id}/tasks/{tid}` | 更新任务状态 |
-| GET/POST | `/v1/projects/{id}/sessions…` | 课题-会话关联 |
-| GET/POST | `/v1/projects/{id}/campaign` | 活跃 Campaign / 创建 |
-| GET | `/v1/projects/{id}/campaigns` | Campaign 列表 |
-| GET/PATCH | `/v1/projects/{id}/campaigns/{cid}` | 详情 / 更新阶段 |
+| GET/POST/DELETE | `/v1/projects/{id}/sessions…` | 课题-会话关联 / 取消关联 |
 
-Campaign 阶段（S0–S8）：`S0_campaign` → literature → formalization → theory → counterexample → experiment → synthesis → review → `S8_archive`。
+场景工作流（`RESEARCH_PIPELINE_MODE=auto`）：`lit_to_theory` / `experiment_plan` / `data_to_nextstep`。Campaign S0–S8 已移除。
 
 ---
 
@@ -145,15 +140,18 @@ Campaign 阶段（S0–S8）：`S0_campaign` → literature → formalization �
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | GET/POST | `/v1/memory/structured` | 定理库列表 / 写入 |
+| PATCH/DELETE | `/v1/memory/structured/{id}` | 更新 / 删除条目（删边级联） |
+| POST | `/v1/memory/structured/preview-markdown` | Markdown 导入预览（不写库） |
+| POST | `/v1/memory/structured/import-preview` | PDF/DOCX/MD 导入预览（LLM 候选，不写库） |
 | GET | `/v1/memory/structured/global` | 全局引理 |
 | GET | `/v1/memory/structured/graph` | 知识图谱 |
 | GET/POST | `/v1/memory/structured/{id}/versions` | 版本 |
 | POST | `/v1/memory/structured/{id}/edges` | 依赖边 |
+| GET/POST | `/v1/artifacts` | 课题工件列表 / 手动创建 |
+| GET/PATCH/DELETE | `/v1/artifacts/{id}` | 工件详情 / 更新 / 删除 |
 | GET | `/v1/theory/workspace` | 文件列表 |
-| GET/PUT | `/v1/theory/workspace/{path}` | 读写 |
-| GET | `/v1/theory/symbols` / `assumptions` / `assumption-matrix` | 种子 Markdown |
+| GET/PUT | `/v1/theory/workspace/{path}` | 读写（含 symbols/assumptions.md） |
 | GET | `/v1/theory/assumption-dag` (+ `/impact/{id}`) | 假设 DAG |
-| GET | `/v1/bibliography` / `/export.bib` | 书目 / BibTeX |
 
 ---
 
@@ -164,12 +162,13 @@ Campaign 阶段（S0–S8）：`S0_campaign` → literature → formalization �
 | GET/POST | `/v1/experiments/runs` | 列表 / 触发 |
 | GET | `/v1/experiments/runs/{id}` | 详情 |
 | GET | `/v1/export/preview` | 预览草稿（`session_id` / `include_global` / `include_chat`；**无** `project_id`） |
-| POST | `/v1/export/polish` | LLM 润色 |
+| POST | `/v1/prompt/optimize` | AI 多风格优化提示词（RCCF/IMRaD 等） |
+| GET | `/v1/prompt/templates` | 提示词风格模板（`conf/prompt/templates.json`） |
+| GET | `/v1/prompt/test-cases` | 科研测试案例全文列表（`conf/prompt/test_cases.json`） |
 | POST | `/v1/export/{md,latex,docx,pdf}` | 导出文件 |
-| GET | `/v1/jupyter/template` | 笔记本模板 |
-| POST | `/v1/jupyter/upload-result` | 结果回传 |
-| POST | `/v1/sync/metadata` | 云端元数据同步（`ENABLE_CLOUD_SYNC=true`，否则 403） |
-| GET | `/v1/sync/audit/{project_id}` | 同步审计 |
+| POST | `/v1/jupyter/upload-result` | 结果回传（JSON body：summary + metrics） |
+| POST | `/v1/jupyter/upload-file` | 多格式文件回传（`.json` / `.csv` / `.tsv` / `.xlsx`，multipart） |
+| GET | `/v1/sync/audit/{project_id}` | 课题审计日志 |
 
 导出正文按 **session + 全局记忆** 收集（`collect_export_entries`）。`LatexExportRequest.project_id` 主要用于 **LaTeX/BibTeX 书目**；preview/md/docx/pdf **不会**按课题过滤正文。无 xelatex 时 PDF 走 HTML→reportlab 回退。全链路见 [`API-ROUTES.md`](API-ROUTES.md#8-export)。
 

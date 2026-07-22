@@ -1,25 +1,7 @@
 # =============================================================================
 # 多 Agent 编排器（Supervisor）。
 #
-# 职责：
-#     1. 解析用户意图并路由到 theory / experiment / literature 等子 Agent
-#     2. 检测 /research 关键词并委派 ResearchSupervisorPipeline（8 阶段 Campaign）
-#     3. 发出 agent_handoff SSE 事件，再流式转发 SubAgent 输出
-#     4. 提供 run / run_sync 两种入口（流式与非流式聚合）
-#
-# 架构位置：
-#     - 被调用：server/api/chat.py → get_multi_agent_orchestrator().run(...)
-#     - 调用：server/agents/subagent.py、server/graph/research_supervisor.py、
-#             server/graph/router_llm.py、server/graph/research_pipeline.py
-#
-# 阅读提示：
-#     - 新人先看 resolve_target_agent() 与 run() 的分支逻辑
-#     - 再看 _get_agent() 如何按 AgentName 实例化 SubAgent
-#
-# Debug：
-#     - 路由总走 general → 检查 ROUTER_USE_LLM 与 classify_intent_smart 日志
-#     - 未进入 Campaign → should_use_research_pipeline 条件或 RESEARCH_PIPELINE_MODE
-#     - handoff 后无输出 → 检查 SubAgent.run 与 MCP 连接状态
+# 路径：场景工作流（auto）| 单 Agent。
 # =============================================================================
 
 from __future__ import annotations
@@ -31,9 +13,8 @@ from collections.abc import AsyncIterator
 from server.agents.config import AgentName, normalize_agent_name
 from server.agents.subagent import SubAgent
 from server.config import Settings, get_settings
-from server.graph.research_pipeline import should_use_research_pipeline
-from server.graph.research_supervisor import ResearchSupervisorPipeline
 from server.graph.router_llm import classify_intent_smart
+from server.graph.scenes import SceneExecutor, match_scene
 from server.mcp.client import MCPClient
 from shared.schemas import StreamChunk
 
@@ -41,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 class MultiAgentOrchestrator:
-    """Supervisor：classify_intent → route → SubAgent ReAct 子图。"""
+    """Supervisor：场景工作流或单跳 Agent。"""
 
     def __init__(
         self,
@@ -94,37 +75,36 @@ class MultiAgentOrchestrator:
         reasoning_effort: str | None = None,
         cot_mode: str = "standard",
         project_id: str | None = None,
-        campaign_id: str | None = None,
+        artifact_ids: list[str] | None = None,
     ) -> AsyncIterator[StreamChunk]:
-        """
-        流式执行多 Agent 对话：路由 → handoff SSE → SubAgent 或 Campaign 流水线。
+        pid = project_id or "default"
+        _ = artifact_ids  # reserved for future context injection
 
-        参数:
-            message: 用户输入
-            session_id: 会话 ID（可选）
-            agent: 强制指定 Agent 名称时跳过自动路由
-            auto_route: 是否启用意图分类
-            mode: chat / research 等模式
-            project_id / campaign_id: Campaign 流水线上下文
-
-        返回:
-            StreamChunk 异步迭代器（SSE 事件源）
-        """
-        if (
-            agent is None
-            and auto_route
-            and should_use_research_pipeline(message, mode, self._settings)
-        ):
-            pipeline = ResearchSupervisorPipeline(
-                settings=self._settings,
-                mcp_client=self._mcp,
+        scene = match_scene(
+            message,
+            agent=agent,
+            mode=mode,
+            settings=self._settings,
+            project_id=pid,
+            session_id=session_id,
+        )
+        if scene is not None:
+            logger.info("Orchestrator scene=%s (%s)", scene.scene_id, scene.reason)
+            yield StreamChunk(
+                type="agent_handoff",
+                content=scene.reason,
+                from_agent="supervisor",
+                to_agent="literature" if scene.scene_id == "lit_to_theory" else "experiment",
+                route_reason=scene.reason,
+                agent_name="supervisor",
             )
-            async for chunk in pipeline.execute(
+            executor = SceneExecutor(settings=self._settings, mcp_client=self._mcp)
+            async for chunk in executor.execute(
+                scene,
                 message,
                 session_id,
+                project_id=pid,
                 mode=mode,
-                project_id=project_id,
-                campaign_id=campaign_id,
                 system_prompt_override=system_prompt_override,
                 max_history_messages=max_history_messages,
                 enable_history_summary=enable_history_summary,
@@ -175,6 +155,7 @@ class MultiAgentOrchestrator:
             reasoning_effort=reasoning_effort,
             cot_mode=cot_mode,
             a2a_task_id=a2a_task_id,
+            project_id=pid,
         ):
             yield chunk
 
@@ -194,7 +175,7 @@ class MultiAgentOrchestrator:
         reasoning_effort: str | None = None,
         cot_mode: str = "standard",
         project_id: str | None = None,
-        campaign_id: str | None = None,
+        artifact_ids: list[str] | None = None,
     ) -> tuple[str, str, str, dict | None, AgentName, str]:
         sid = session_id or ""
         content = ""
@@ -217,7 +198,7 @@ class MultiAgentOrchestrator:
             reasoning_effort=reasoning_effort,
             cot_mode=cot_mode,
             project_id=project_id,
-            campaign_id=campaign_id,
+            artifact_ids=artifact_ids,
         ):
             if chunk.type == "agent_handoff":
                 target = normalize_agent_name(chunk.to_agent) or target
