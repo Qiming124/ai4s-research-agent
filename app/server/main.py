@@ -135,8 +135,8 @@ def create_app() -> FastAPI:
             "AI4S 理论侧多智能体（v2.2）：用深度学习做科学问题的理论侧协作 — "
             "文献检索与方法提炼、理论推导、实验建议与数据解读；不代跑训练/全流程复现。"
             "损失函数局部极小等为示范子集。\n\n"
-            "Swagger `/docs` 与 `/openapi.json` 已提供中文接口说明、字段注解与样例值；"
-            "亦可用前端 API 测试实验室（`#/api-lab`）试调。蓝图见 doc/PRODUCT-VISION.md。"
+            "Swagger `/docs` 与 `/openapi.json` 已提供中文接口说明、字段注解与样例值。"
+            "蓝图见 doc/PRODUCT-VISION.md。"
         ),
         version="2.2.0",
         lifespan=lifespan,

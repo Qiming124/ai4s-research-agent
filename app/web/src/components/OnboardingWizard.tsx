@@ -26,7 +26,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
             <strong>文献</strong> — 右侧「文献」Tab：检索讨论或 PDF/DOCX/arXiv 入库；用 literature Agent 做方法提炼。
           </li>
           <li>
-            <strong>理论推导</strong> — 选 theory（或 Math 模式）对话推导；「理论」Tab 查看定理库、假设图与工作区。
+            <strong>理论推导</strong> — 选 theory（或 Math 模式）对话推导；「理论」Tab 查看定理库与推导迹。
           </li>
           <li>
             <strong>实验建议与数据</strong> — 选 experiment 获取实验计划（历史会累积保存）；将结果回传到「产出」后，可请顾问解读并生成修订计划。

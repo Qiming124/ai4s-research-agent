@@ -295,22 +295,14 @@ class ProjectStore:
         return root
 
     def seed_theory_workspace(self, project_id: str) -> Path:
-        """从全局种子目录复制缺失的理论模板到课题工作区（不覆盖已有文件）。"""
-        from shared.paths import THEORY_DIR
-
+        """确保课题 theory 目录存在；不再复制 A1–A6 / symbols 等已下线种子模板。"""
         root = self.ensure_workspace(project_id)
-        seed_names = (
-            "symbols.md",
-            "assumptions.md",
-            "review-checklist.md",
-            "assumption-matrix.md",
-        )
-        if THEORY_DIR.is_dir():
-            for name in seed_names:
-                src = THEORY_DIR / name
-                dst = root / name
-                if src.is_file() and not dst.exists():
-                    dst.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
+        keep = root / ".gitkeep"
+        if not keep.exists():
+            keep.write_text(
+                "# 理论工作区文件 HTTP 与 A1–A6 种子注入已下线；假设请写入 L4 定理库。\n",
+                encoding="utf-8",
+            )
         return root
 
     def list_members(self, project_id: str) -> list[dict[str, Any]]:

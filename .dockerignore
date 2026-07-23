@@ -12,19 +12,41 @@ __pycache__
 venv
 app/web/node_modules
 app/web/dist
+app/ai4s_research_agent.egg-info/
+
+# Secrets
+.env
+conf/.env
+
+# Runtime / local data (keep theory seeds via later allow for *.md)
 data/chroma/
 data/*.db
 data/mcp_files/*
 !data/mcp_files/.gitkeep
 data/experiments/logs/*
 !data/experiments/logs/.gitkeep
+data/projects/
+data/arxiv_refs/
+data/export_samples/
+data/export_test_lab/
+data/acceptance_fixtures/
+data/evidence_*
+data/workflow_*
+data/quant_probe/
+data/explore_outputs/
+
+# Not needed in image
+docs/
+submission/
+test-data/
+scripts/
+benchmarks
+tests
+agent-transcripts
 log
-.env
-conf/.env
+
+# Markdown: only README + doc + theory seeds
 *.md
 !README.md
 !data/theory/**/*.md
 !doc/**/*.md
-benchmarks
-tests
-agent-transcripts

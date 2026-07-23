@@ -51,3 +51,20 @@ def test_parse_experiment_file_dispatch():
     p = parse_experiment_file("a.csv", b"a,1\nb,2\n")
     assert p.format == "csv"
     assert p.metrics["a"] == 1
+
+
+def test_parse_wide_labeled_table_readable_metrics():
+    """宽表：首列指标名 + 多列模型取值 → 可读 metrics，而非仅 col_*。"""
+    raw = b",Adam,SGD\ntrain_loss,0.12,0.34\ntest_acc,0.91,0.88\n"
+    p = parse_csv_bytes(raw)
+    assert p.summary.get("shape") == "wide_labeled"
+    assert "Adam__train_loss" in p.metrics or any("train_loss" in k for k in p.metrics)
+    assert p.summary.get("readable")
+    assert p.summary.get("notable_cells")
+
+
+def test_parse_placeholder_header_has_notable_cells():
+    raw = b",,\nfoo,1,2\nbar,3,4\n"
+    p = parse_csv_bytes(raw)
+    assert p.summary.get("notable_cells")
+    assert "readable" in p.summary

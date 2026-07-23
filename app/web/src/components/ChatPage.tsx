@@ -94,6 +94,7 @@ export function ChatPage() {
     const clamped = clampWorkbenchTab("research", "literature");
     return clamped ?? "literature";
   });
+  const [artifactsRefreshToken, setArtifactsRefreshToken] = useState(0);
   const [linkStatus, setLinkStatus] = useState<string | null>(null);
   const [projectMembers, setProjectMembers] = useState<{ user_id: string; role: string }[]>([]);
 
@@ -115,6 +116,11 @@ export function ChatPage() {
         const tab = pipelineStageToTab(stage);
         if (!tab) return;
         const clamped = clampWorkbenchTab("research", tab);
+        if (clamped) setWorkbenchTab(clamped);
+      },
+      onArtifactSaved: () => {
+        setArtifactsRefreshToken((n) => n + 1);
+        const clamped = clampWorkbenchTab("research", "output");
         if (clamped) setWorkbenchTab(clamped);
       },
     }),
@@ -220,7 +226,9 @@ export function ChatPage() {
     loading: experimentLoading,
     error: experimentError,
     refresh: refreshExperiments,
-  } = useExperimentLogs(!backendOffline);
+    updateRun: updateExperimentRun,
+    deleteRun: deleteExperimentRun,
+  } = useExperimentLogs(!backendOffline, currentProjectId);
 
   const { sessions: _projectSessions, linkSession, refresh: refreshProjectSessions } =
     useProjectSessions(currentProjectId, !backendOffline);
@@ -626,9 +634,6 @@ export function ChatPage() {
           retryingBackend={retryingBackend}
         />
         <div className="header-actions">
-          <a className="btn-secondary" href="#/api-lab" title="自研 API 测试实验室">
-            API 测试
-          </a>
           <button type="button" className="btn-secondary" onClick={() => setSettingsOpen(true)}>
             设置
           </button>
@@ -885,6 +890,8 @@ export function ChatPage() {
               onRefreshExperiments={refreshExperiments}
               onJupyterUpload={handleJupyterUpload}
               onExperimentFileUpload={handleExperimentFileUpload}
+              onUpdateExperimentRun={updateExperimentRun}
+              onDeleteExperimentRun={deleteExperimentRun}
               documents={documents}
               documentsLoading={documentsLoading}
               documentsUploading={documentsUploading}
@@ -912,6 +919,7 @@ export function ChatPage() {
               observabilityLoading={observabilityLoading}
               observabilityError={observabilityError}
               onRefreshObservability={refreshObservability}
+              artifactsRefreshToken={artifactsRefreshToken}
             />
             )}
           </div>

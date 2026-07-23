@@ -94,7 +94,7 @@ flowchart TB
 3. Agent 读 L2 历史，经 L1 截断/摘要后拼消息
 4. MCP 启用时：工具循环 → stdio Server（按 Agent 白名单）
 5. RAG 启用且 Agent 在 `RAG_AGENTS`：Chroma 检索注入
-6. theory / review：注入理论种子（symbols/assumptions）+ L4；SymPy 可作符号辅助
+6. theory / review：仅注入 L4 结构化记忆（**不再**注入 symbols/assumptions 工作区文件）；SymPy 可作符号辅助
 7. `RESEARCH_PIPELINE_MODE=auto` 时匹配场景 → `graph/scenes/` 短协作
 8. 流式 `StreamChunk` → SSE；Artifact 按需落盘
 9. L4 / 课题产物按需写入
@@ -166,13 +166,13 @@ flowchart LR
 | 验证账本（可选） | `api/verification.py` + experiments | Claim 验证记录；非主卖点 |
 | 书目（内部） | `memory/bibliography.py` | 仅 LaTeX 导出注入；无 HTTP |
 
-> Theory **HTTP**（workspace / assumption-dag）与关系图谱视图已下线；符号/假设仍由磁盘种子经 `theory_workspace` 注入 prompt。
+> Theory **HTTP**（workspace / assumption-dag）与关系图谱视图已下线；**A1–A6 / symbols/assumptions 种子注入亦已下线**。假设与符号约定以 **L4 定理库** 与对话声明为准。
 
 ## Theory 主路径
 
 ```
 mode=math / theory Agent
-  → 注入 symbols.md / assumptions.md + L4
+  → 注入 L4（定理/假设/笔记）；勿引用已下线工作区文件编号
   → 分步推导；可读文献方法提炼后形式化
   → 可选 SymPy（verification_result）
   → 按需抽取 → L4 / DerivationTrace

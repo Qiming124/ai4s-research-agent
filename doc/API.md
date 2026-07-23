@@ -157,8 +157,8 @@ curl -N -X POST http://127.0.0.1:8000/v1/chat/stream \
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET/POST | `/v1/experiments/runs` | 列表 / 触发 |
-| GET | `/v1/experiments/runs/{id}` | 详情 |
+| GET/POST | `/v1/experiments/runs` | 列表（`project_id` 隔离）/ 触发 |
+| GET/PATCH/DELETE | `/v1/experiments/runs/{id}` | 详情 / 更新(name·summary·metrics·status) / 删除（须带 `project_id`） |
 | GET | `/v1/export/preview` | 预览草稿（`session_id` / `include_global` / `include_chat`；**无** `project_id`） |
 | POST | `/v1/prompt/optimize` | AI 多风格优化提示词（RCCF/IMRaD 等） |
 | GET | `/v1/prompt/templates` | 提示词风格模板（`conf/prompt/templates.json`） |

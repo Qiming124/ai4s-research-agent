@@ -1,6 +1,6 @@
 # API 覆盖清单
 
-> **65** 个业务 REST 端点（`/health` + `/v1/*`）· **15** 域 · 更新于 **v2.2**（以 `GET /openapi.json` 为准）  
+> **67** 个业务 REST 端点（`/health` + `/v1/*`）· **15** 域 · 更新于 **v2.2**（以 `GET /openapi.json` 为准）  
 > OpenAPI 另含生产静态入口 `GET /`（不计入上表）。  
 > **调用链路详解**：[`API-ROUTES.md`](API-ROUTES.md)
 
@@ -12,7 +12,7 @@
 |----|------|------|:--:|:----:|:----:|------|
 | Health | GET | `/health` | ✓ | ✓ | A | 后端存活检测 |
 | Chat | POST | `/v1/chat` | — | ✓ | H | 非流式，脚本/测试用 |
-| Chat | POST | `/v1/chat/stream` | ✓ | ✓ | A | SSE 主对话 |
+| Chat | POST | `/v1/chat/stream` | ✓ | ✓ | A | SSE 主对话；带 `project_id` 时自动 link 会话 |
 | Sessions | GET | `/v1/sessions` | ✓ | ✓ | A | 会话列表 |
 | Sessions | GET | `/v1/sessions/{id}` | ✓ | ✓ | A | 历史恢复 |
 | Sessions | DELETE | `/v1/sessions/{id}` | ✓ | ✓ | H | 清空/删除 |
@@ -57,8 +57,10 @@
 | Verification | GET | `/v1/verification/dashboard` | ✓ | ✓ | A | 验证仪表盘 |
 | Verification | GET | `/v1/verification/records` | ✓ | ✓ | A | 验证账本 |
 | Verification | POST | `/v1/verification/run` | ✓ | ✓ | H | 手动验证 |
-| Experiments | GET | `/v1/experiments/runs` | ✓ | ✓ | A | 实验列表 |
+| Experiments | GET | `/v1/experiments/runs` | ✓ | ✓ | A | 实验列表（按 project_id） |
 | Experiments | GET | `/v1/experiments/runs/{id}` | ✓ | ✓ | H | 实验详情 |
+| Experiments | PATCH | `/v1/experiments/runs/{id}` | ✓ | ✓ | H | 更新 name/summary/metrics/status |
+| Experiments | DELETE | `/v1/experiments/runs/{id}` | ✓ | ✓ | H | 删除实验记录 |
 | Experiments | POST | `/v1/experiments/runs` | ✓ | ✓ | H | 触发实验 |
 | Export | GET | `/v1/export/preview` | ✓ | ✓ | A | 导出预览 Markdown |
 | Export | POST | `/v1/export/polish` | ✓ | ✓ | H | LLM 润色草稿 |
@@ -96,9 +98,8 @@
 
 ## 测试入口
 
-- `pytest tests/api/` — 分域 API 测试
+- `pytest tests/unit/` · `pytest tests/test_*.py` — 单元与模块回归
 - `pytest tests/e2e/` — 黄金路径 workflow
-- `pytest tests/api/test_smoke_all.py` — 全量冒烟（CI）
 - `cd app/web && npx playwright test` — 浏览器 E2E（课题 / 文献 / 导出）
 
 字段与 SSE 细节见 [`API.md`](API.md)；**全路径链路**见 [`API-ROUTES.md`](API-ROUTES.md)；OpenAPI：`GET /docs`。

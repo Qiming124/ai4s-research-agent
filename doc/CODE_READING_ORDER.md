@@ -191,11 +191,9 @@ POST /v1/chat/stream
 
 | 类型 | 路径 | 用途 |
 |------|------|------|
-| API 冒烟 / 分域 | `tests/api/` | 对路由做黑盒 |
-| 单元 | `tests/unit/`、`tests/test_*.py` | 收尾、公式规范化等 |
-| 探针 | `scripts/api_quant_probe.py` | 量化延迟 |
+| 单元 | `tests/unit/`、`tests/test_*.py` | 收尾、公式规范化、路由与记忆等 |
 
-读完某域后，打开对应 `tests/api/test_*.py` 看「期望行为」。
+读完某域后，打开对应 `tests/test_*.py` / `tests/unit/` 看「期望行为」。
 
 ---
 

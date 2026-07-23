@@ -855,7 +855,7 @@ class ExperimentRunInfo(BaseModel):
     log_path: str = Field(
         default="",
         description="日志路径",
-        examples=["logs/run_20260720_001.json"],
+        examples=["projects/default/experiments/logs/run_001.json"],
     )
     created_at: str | None = Field(
         default=None,
@@ -872,6 +872,38 @@ class ExperimentRunInfo(BaseModel):
         description="指标 JSON",
         examples=[{"min_eigen": 0.01}],
     )
+    project_id: str = Field(
+        default="default",
+        description="所属课题 ID",
+        examples=["default"],
+    )
+    session_id: str | None = Field(
+        default=None,
+        description="关联会话",
+        examples=["sess_demo"],
+    )
+
+
+class ExperimentRunUpdateRequest(BaseModel):
+    """PATCH /v1/experiments/runs/{run_id}：仅允许改 name/summary/metrics/status。"""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "name": "plateau_retry",
+                    "status": "completed",
+                    "summary": {"passed": False},
+                    "metrics": {"min_loss": 0.12},
+                }
+            ]
+        }
+    )
+
+    name: str | None = Field(default=None, description="实验名称")
+    summary: dict[str, Any] | None = Field(default=None, description="摘要 JSON")
+    metrics: dict[str, Any] | None = Field(default=None, description="指标 JSON")
+    status: str | None = Field(default=None, description="状态")
 
 
 class ExperimentRunsResponse(BaseModel):

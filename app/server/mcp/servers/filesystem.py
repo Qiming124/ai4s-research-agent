@@ -1,21 +1,8 @@
 # =============================================================================
 # MCP Server：受限目录内的文件读写。
 #
-# 职责：
-#     1. read_file / write_file / list_directory 工具
-#     2. _resolve_safe() 限制在 MCP_ALLOWED_DIRS 白名单根目录内
-#     3. 默认根目录 data/mcp_files/
-#
-# 架构位置：
-#     - 被调用：MCP Client stdio 子进程
-#     - 调用：shared/paths.DATA_ROOT
-#
-# 阅读提示：
-#     - 新人先看 _allowed_roots 与 _resolve_safe
-#
-# Debug：
-#     - Permission denied → 路径越出白名单
-#     - 文件不存在 → 相对路径相对 cwd 解析错误
+# 默认允许：data/mcp_files + data/projects/*/experiments
+# 禁止：data/theory 种子、课题 theory/ 下 symbols/assumptions 等
 # =============================================================================
 
 from __future__ import annotations
@@ -27,15 +14,29 @@ from mcp.server.fastmcp import FastMCP
 
 mcp = FastMCP("filesystem")
 
-
 from shared.paths import DATA_ROOT
 
 
 def _allowed_roots() -> list[Path]:
-    raw = os.environ.get("MCP_ALLOWED_DIRS", str(DATA_ROOT / "mcp_files")).strip()
-    if not raw:
-        raw = str(DATA_ROOT / "mcp_files")
+    default = f"{DATA_ROOT / 'mcp_files'}:{DATA_ROOT / 'projects'}"
+    raw = os.environ.get("MCP_ALLOWED_DIRS", default).strip() or default
     return [Path(p).resolve() for p in raw.split(":") if p.strip()]
+
+
+def _is_blocked_theory_path(candidate: Path) -> str | None:
+    cand_s = candidate.as_posix()
+    if "/data/theory/" in cand_s or cand_s.endswith("/data/theory"):
+        return "理论种子目录 data/theory 已禁止访问"
+    banned = (
+        "assumptions.md",
+        "symbols.md",
+        "review-checklist.md",
+        "assumption-matrix.md",
+        "assumption_matrix.md",
+    )
+    if any(f"/theory/{name}" in cand_s or cand_s.endswith(f"/theory/{name}") for name in banned):
+        return "已下线的理论工作区文件禁止访问"
+    return None
 
 
 def _resolve_safe(path: str) -> Path:
@@ -48,12 +49,22 @@ def _resolve_safe(path: str) -> Path:
     else:
         candidate = candidate.resolve()
 
+    blocked = _is_blocked_theory_path(candidate)
+    if blocked:
+        raise ValueError(f"{blocked}: {path}")
+
     for root in _allowed_roots():
         try:
-            candidate.relative_to(root)
-            return candidate
+            rel = candidate.relative_to(root)
         except ValueError:
             continue
+        root_s = root.as_posix()
+        if root_s.rstrip("/").endswith("/projects"):
+            parts = rel.as_posix().split("/")
+            # projects/{project_id}/experiments/...
+            if len(parts) < 2 or parts[1] != "experiments":
+                raise ValueError(f"仅允许访问 projects/*/experiments：{path}")
+        return candidate
     raise ValueError(f"路径不在允许目录内: {path}")
 
 
@@ -81,26 +92,28 @@ def write_file(path: str, content: str) -> str:
     target = _resolve_safe(path)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(content, encoding="utf-8")
-    return f"已写入 {target}（{len(content)} 字符）"
+    return f"已写入: {target}"
 
 
 @mcp.tool()
-def list_files(directory: str = ".") -> str:
-    """列出允许目录内的文件。
+def list_directory(path: str = ".") -> str:
+    """列出允许目录内的文件与子目录。
 
     Args:
-        directory: 相对或绝对目录路径
+        path: 相对或绝对目录路径
     """
-    target = _resolve_safe(directory)
+    target = _resolve_safe(path)
     if not target.is_dir():
-        raise NotADirectoryError(f"目录不存在: {directory}")
-    entries = sorted(p.name + ("/" if p.is_dir() else "") for p in target.iterdir())
-    return "\n".join(entries) if entries else "(空目录)"
+        raise NotADirectoryError(f"不是目录: {path}")
+    entries = sorted(target.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower()))
+    lines = []
+    for entry in entries:
+        suffix = "/" if entry.is_dir() else ""
+        lines.append(f"{entry.name}{suffix}")
+    return "\n".join(lines) if lines else "(空目录)"
 
 
 def main() -> None:
-    for root in _allowed_roots():
-        root.mkdir(parents=True, exist_ok=True)
     mcp.run(transport="stdio")
 
 

@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import type { ExperimentRun } from "../hooks/useExperimentLogs";
+import type { ExperimentRun, ExperimentRunUpdate } from "../hooks/useExperimentLogs";
 import { buildExperimentCard } from "../utils/experimentDisplay";
 
 export interface NotebookUploadPayload {
@@ -23,10 +23,10 @@ interface ExperimentLogPanelProps {
   onRefresh: () => void;
   sessionId?: string;
   projectId?: string;
-  /** 调用 POST /v1/jupyter/upload-result */
   onJupyterUpload?: (payload: NotebookUploadPayload) => Promise<void>;
-  /** 调用 POST /v1/jupyter/upload-file（Excel/CSV/JSON 等） */
   onExperimentFileUpload?: (file: File, meta: ExperimentFileUploadMeta) => Promise<void>;
+  onUpdateRun?: (runId: string, patch: ExperimentRunUpdate) => Promise<void>;
+  onDeleteRun?: (runId: string) => Promise<void>;
 }
 
 const DEFAULT_SUMMARY = '{\n  "passed": true\n}';
@@ -55,6 +55,8 @@ export function ExperimentLogPanel({
   projectId = "default",
   onJupyterUpload,
   onExperimentFileUpload,
+  onUpdateRun,
+  onDeleteRun,
 }: ExperimentLogPanelProps) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [jupyterBusy, setJupyterBusy] = useState(false);
@@ -63,6 +65,13 @@ export function ExperimentLogPanel({
   const [summaryText, setSummaryText] = useState(DEFAULT_SUMMARY);
   const [metricsText, setMetricsText] = useState(DEFAULT_METRICS);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editStatus, setEditStatus] = useState("completed");
+  const [editSummary, setEditSummary] = useState("{}");
+  const [editMetrics, setEditMetrics] = useState("{}");
+  const [editError, setEditError] = useState<string | null>(null);
+  const [actionBusy, setActionBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const cards = useMemo(() => runs.map(buildExperimentCard), [runs]);
@@ -89,7 +98,6 @@ export function ExperimentLogPanel({
     if (obj.summary && typeof obj.summary === "object" && !Array.isArray(obj.summary)) {
       setSummaryText(JSON.stringify(obj.summary, null, 2));
     } else if (obj.summary === undefined && obj.metrics === undefined) {
-      // 整个文件当作 metrics
       setMetricsText(JSON.stringify(obj, null, 2));
       setUploadError(null);
       return;
@@ -168,10 +176,63 @@ export function ExperimentLogPanel({
     }
   };
 
+  const startEdit = (run: ExperimentRun) => {
+    setEditingId(run.run_id);
+    setEditName(run.name || run.run_id);
+    setEditStatus(run.status || "completed");
+    setEditSummary(JSON.stringify(run.summary || {}, null, 2));
+    setEditMetrics(JSON.stringify(run.metrics || {}, null, 2));
+    setEditError(null);
+    setExpanded(run.run_id);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!onUpdateRun || !editingId) return;
+    setEditError(null);
+    let summary: Record<string, unknown>;
+    let metrics: Record<string, unknown>;
+    try {
+      summary = parseJsonObject(editSummary, "summary");
+      metrics = parseJsonObject(editMetrics, "metrics");
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : String(err));
+      return;
+    }
+    setActionBusy(true);
+    try {
+      await onUpdateRun(editingId, {
+        name: editName.trim() || editingId,
+        status: editStatus.trim() || "completed",
+        summary,
+        metrics,
+      });
+      setEditingId(null);
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
+  const handleDelete = async (runId: string, title: string) => {
+    if (!onDeleteRun) return;
+    if (!window.confirm(`删除实验记录「${title}」？此操作不可恢复。`)) return;
+    setActionBusy(true);
+    try {
+      await onDeleteRun(runId);
+      if (expanded === runId) setExpanded(null);
+      if (editingId === runId) setEditingId(null);
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
   return (
     <div className="experiment-log-panel">
       <p className="panel-muted experiment-intro">
-        提交你在本机/Notebook 得到的指标，供实验顾问解读（DataPacket）。系统不以代跑训练为核心。
+        当前课题 <code>{projectId || "default"}</code> 的实验记录（与其他课题隔离）。提交指标供顾问解读；系统不以代跑训练为核心。
       </p>
 
       <div className="experiment-toolbar">
@@ -197,7 +258,7 @@ export function ExperimentLogPanel({
         <div className="notebook-upload-form">
           <p className="panel-muted">
             可手填 JSON，或导入 <strong>.xlsx / .csv / .tsv / .json</strong>。
-            Excel/CSV 会按表格解析（两列键值→指标；多列表格→末行数值作指标）。课题：
+            Excel/CSV 会按表格解析。课题：
             <code>{projectId || "default"}</code>
             {sessionId ? (
               <>
@@ -270,14 +331,17 @@ export function ExperimentLogPanel({
       )}
 
       {error && <p className="panel-error">{error}</p>}
+      {editError && <p className="panel-error">{editError}</p>}
       {loading && <p className="panel-muted">加载中…</p>}
       {!loading && cards.length === 0 && (
-        <p className="panel-muted">暂无记录。点「回传结果」提交第一条实验数据。</p>
+        <p className="panel-muted">本课题暂无记录。点「回传结果」提交第一条实验数据。</p>
       )}
 
       <ul className="experiment-list">
         {cards.map((card) => {
           const isOpen = expanded === card.id;
+          const run = runs.find((r) => r.run_id === card.id);
+          const isEditing = editingId === card.id;
           return (
             <li key={card.id} className={`experiment-card tone-${card.tone}`}>
               <button
@@ -296,37 +360,129 @@ export function ExperimentLogPanel({
 
               {isOpen && (
                 <div className="experiment-card-body">
-                  {card.highlights.length > 0 && (
-                    <dl className="experiment-kv">
-                      {card.highlights.map((row) => (
-                        <div key={`${card.id}-${row.label}`} className="experiment-kv-row">
-                          <dt>{row.label}</dt>
-                          <dd className={row.tone ? `tone-${row.tone}` : undefined}>{row.value}</dd>
-                        </div>
-                      ))}
-                    </dl>
-                  )}
-
-                  {card.tiers.length > 0 && (
-                    <div className="experiment-tiers">
-                      <p className="experiment-section-label">验证分层</p>
-                      <ul>
-                        {card.tiers.map((tier) => (
-                          <li key={`${card.id}-${tier.name}`} className={`experiment-tier tone-${tier.tone}`}>
-                            <span className="experiment-tier-name">{tier.name}</span>
-                            <span className="experiment-tier-status">{tier.statusLabel}</span>
-                            <span className="experiment-tier-msg">{tier.message}</span>
-                          </li>
-                        ))}
-                      </ul>
+                  {(onUpdateRun || onDeleteRun) && (
+                    <div className="notebook-upload-actions" style={{ marginBottom: 8 }}>
+                      {onUpdateRun && run && (
+                        <button
+                          type="button"
+                          className="btn-small"
+                          disabled={actionBusy}
+                          onClick={() => startEdit(run)}
+                        >
+                          编辑
+                        </button>
+                      )}
+                      {onDeleteRun && (
+                        <button
+                          type="button"
+                          className="btn-small"
+                          disabled={actionBusy}
+                          onClick={() => void handleDelete(card.id, card.title)}
+                        >
+                          删除
+                        </button>
+                      )}
                     </div>
                   )}
 
-                  {card.notes.map((note) => (
-                    <p key={note} className="panel-muted experiment-note">
-                      {note}
-                    </p>
-                  ))}
+                  {isEditing && onUpdateRun ? (
+                    <div className="notebook-upload-form">
+                      <label className="notebook-upload-field">
+                        <span>名称</span>
+                        <input
+                          type="text"
+                          value={editName}
+                          disabled={actionBusy}
+                          onChange={(e) => setEditName(e.target.value)}
+                        />
+                      </label>
+                      <label className="notebook-upload-field">
+                        <span>状态</span>
+                        <input
+                          type="text"
+                          value={editStatus}
+                          disabled={actionBusy}
+                          onChange={(e) => setEditStatus(e.target.value)}
+                          placeholder="completed / failed / …"
+                        />
+                      </label>
+                      <label className="notebook-upload-field">
+                        <span>summary（JSON）</span>
+                        <textarea
+                          rows={4}
+                          value={editSummary}
+                          disabled={actionBusy}
+                          onChange={(e) => setEditSummary(e.target.value)}
+                          spellCheck={false}
+                        />
+                      </label>
+                      <label className="notebook-upload-field">
+                        <span>metrics（JSON）</span>
+                        <textarea
+                          rows={4}
+                          value={editMetrics}
+                          disabled={actionBusy}
+                          onChange={(e) => setEditMetrics(e.target.value)}
+                          spellCheck={false}
+                        />
+                      </label>
+                      <div className="notebook-upload-actions">
+                        <button
+                          type="button"
+                          className="btn-small btn-primary"
+                          disabled={actionBusy}
+                          onClick={() => void handleSaveEdit()}
+                        >
+                          保存
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-small"
+                          disabled={actionBusy}
+                          onClick={() => setEditingId(null)}
+                        >
+                          取消
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      {card.highlights.length > 0 && (
+                        <dl className="experiment-kv">
+                          {card.highlights.map((row) => (
+                            <div key={`${card.id}-${row.label}`} className="experiment-kv-row">
+                              <dt>{row.label}</dt>
+                              <dd className={row.tone ? `tone-${row.tone}` : undefined}>{row.value}</dd>
+                            </div>
+                          ))}
+                        </dl>
+                      )}
+
+                      {card.tiers.length > 0 && (
+                        <div className="experiment-tiers">
+                          <p className="experiment-section-label">验证分层</p>
+                          <ul>
+                            {card.tiers.map((tier) => (
+                              <li
+                                key={`${card.id}-${tier.name}`}
+                                className={`experiment-tier tone-${tier.tone}`}
+                              >
+                                <span className="experiment-tier-name">{tier.name}</span>
+                                <span className="experiment-tier-status">{tier.statusLabel}</span>
+                                <span className="experiment-tier-msg">{tier.message}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {card.notes.map((note) => (
+                        <p key={note} className="panel-muted experiment-note">
+                          {note}
+                        </p>
+                      ))}
+                    </>
+                  )}
                 </div>
               )}
             </li>

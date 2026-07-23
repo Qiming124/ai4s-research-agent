@@ -134,29 +134,34 @@ def build_multiserver_connections(
     特殊处理：command 为 "python" 时替换为 sys.executable（当前 Python 解释器路径），
     确保子进程使用正确的 Python 环境。
 
-    参数:
-        configs: load_mcp_servers() 的返回值
-
-    返回:
-        {server_name: StdioConnection} 字典（filtered to enabled only）
+    始终合并父进程环境，并保证 PYTHONPATH 含仓库 app/，避免子进程
+    `No module named 'server.config'`。
     """
     connections: dict[str, StdioConnection] = {}
+    app_dir = str(Path(__file__).resolve().parents[2])  # .../app
+    parent_env = dict(os.environ)
+    existing_pp = parent_env.get("PYTHONPATH", "")
+    pp_parts = [p for p in existing_pp.split(os.pathsep) if p]
+    if app_dir not in pp_parts:
+        pp_parts.insert(0, app_dir)
+    parent_env["PYTHONPATH"] = os.pathsep.join(pp_parts)
 
     for name, cfg in configs.items():
         if not cfg.enabled:
-            continue  # 跳过已禁用的 Server
+            continue
 
-        # "python" → 当前解释器路径，确保子进程用对虚拟环境
         command = sys.executable if cfg.command == "python" else cfg.command
+        merged = dict(parent_env)
+        if cfg.env:
+            for k, v in cfg.env.items():
+                if v:
+                    merged[k] = v
         connection: StdioConnection = {
             "transport": "stdio",
             "command": command,
             "args": list(cfg.args),
+            "env": merged,
         }
-        if cfg.env:
-            filtered_env = {k: v for k, v in cfg.env.items() if v}
-            if filtered_env:
-                connection["env"] = filtered_env
         connections[name] = connection
 
     return connections

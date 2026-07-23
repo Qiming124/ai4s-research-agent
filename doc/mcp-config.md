@@ -22,7 +22,7 @@ Web 端可在 **设置 → MCP 工具** 查看 Server 连接状态与工具列�
 ```env
 ENABLE_MCP=true
 MCP_CONFIG_PATH=./conf/mcp_servers.json
-MCP_ALLOWED_DIRS=./data/mcp_files:./data/theory:./data/experiments
+MCP_ALLOWED_DIRS=./data/mcp_files:./data/projects
 MCP_MAX_TOOL_ROUNDS=10
 MCP_TOOL_WHITELIST_PATH=./conf/mcp_tool_whitelist.json
 ENABLE_NUMERICAL_MCP=true
@@ -50,14 +50,15 @@ MCP Client 已连接 N 个 Server，共 M 个工具
 |------|--------|------|
 | `ENABLE_MCP` | `false`（演示 `.env.example` 为 `true`） | 是否启用 MCP |
 | `MCP_CONFIG_PATH` | `./conf/mcp_servers.json` | MCP Server 配置 |
-| `MCP_ALLOWED_DIRS` | 代码默认仅 `mcp_files`；演示含 theory/experiments | filesystem 可读目录（`:` 分隔） |
+| `MCP_ALLOWED_DIRS` | `./data/mcp_files:./data/projects` | filesystem 可读根；`projects` 下仅 `*/experiments`；禁止 `data/theory` 与课题 theory 已下线 md |
 | `MCP_MAX_TOOL_ROUNDS` | `10` | 单轮工具循环上限 |
 | `MCP_TOOL_WHITELIST_PATH` | `./conf/mcp_tool_whitelist.json` | 按 Agent 白名单 |
 | `ENABLE_NUMERICAL_MCP` | `true` | 是否注册 `numerical` Server |
 
 完整变量见 [`ENV.md`](ENV.md)。
 
-各 Agent 默认工具白名单见 [`conf/mcp_tool_whitelist.json`](../conf/mcp_tool_whitelist.json)：`theory` 含 `sympy__*`、`numerical__*`、`rag__*`；`experiment` 含 `filesystem__*`、`numerical__*`；`review` / `counterexample` 见 JSON。
+各 Agent 默认工具白名单见 [`conf/mcp_tool_whitelist.json`](../conf/mcp_tool_whitelist.json)：`theory` 含 `sympy__*`、`rag__*`、`web_search__*`；`experiment` 含 `filesystem__*`、`rag__*`；`review` **无工具**（审稿只靠对话+L4）。  
+各角色 system prompt（`app/server/llm/prompts.py`）另有 **「可用工具（硬约束）」** 段落，与上表对齐，避免模型尝试调用无权工具（例如 experiment 调 `web_search`）。改白名单时请同步改提示词。
 
 `ChatRequest.enable_tools` 可在单次请求中覆盖全局开关（Web 侧边栏关闭「MCP：服务端默认」后生效）。
 

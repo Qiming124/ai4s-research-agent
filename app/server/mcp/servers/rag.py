@@ -1,34 +1,32 @@
 # =============================================================================
-# MCP Server：RAG 按需检索（按 session_id 隔离）。
-#
-# 职责：
-#     1. rag_retrieve 工具：检查 ENABLE_RAG 后调用 retrieve_for_query
-#     2. 要求非空 session_id，返回 JSON 片段列表
-#     3. 供 Agent 在对话中主动检索课题知识库
-#
-# 架构位置：
-#     - 被调用：MCP Client stdio 子进程
-#     - 调用：server/memory/rag/retrieval.py、server/config.py
-#
-# 阅读提示：
-#     - 新人先看 _retrieve 与 rag_retrieve 工具定义
-#
-# Debug：
-#     - error RAG 未启用 → ENABLE_RAG=false
-#     - 空 session_id → 工具参数校验拒绝
+# MCP Server：RAG 按需检索（按 session / project 隔离）。
 # =============================================================================
 
 from __future__ import annotations
 
 import json
+import sys
+from pathlib import Path
+
+# 保证 stdio 子进程可 import server.*（即使父进程未设 PYTHONPATH）
+# rag.py → servers → mcp → server → app ；须把 app/ 加入 path，勿用 parents[2]（会把 server/ 顶掉真实 mcp 包）
+_APP_DIR = Path(__file__).resolve().parents[3]
+if str(_APP_DIR) not in sys.path:
+    sys.path.insert(0, str(_APP_DIR))
 
 from mcp.server.fastmcp import FastMCP
+
+from server.config import get_settings  # noqa: E402 — fail fast if import broken
 
 mcp = FastMCP("rag")
 
 
-def _retrieve(query: str, top_k: int, session_id: str) -> str:
-    from server.config import get_settings
+def _retrieve(
+    query: str,
+    top_k: int,
+    session_id: str,
+    project_id: str = "",
+) -> str:
     from server.memory.rag.retrieval import retrieve_for_query
 
     settings = get_settings()
@@ -38,25 +36,36 @@ def _retrieve(query: str, top_k: int, session_id: str) -> str:
             ensure_ascii=False,
         )
 
-    session_id = session_id.strip()
+    session_id = (session_id or "").strip()
     if not session_id:
         return json.dumps(
             {
-                "error": "缺少 session_id。rag__retrieve 需要会话 ID 以隔离检索范围。",
+                "error": "缺少 session_id。请传入当前对话的 session_id，不要使用字面量 default。",
+            },
+            ensure_ascii=False,
+        )
+    if session_id == "default":
+        return json.dumps(
+            {
+                "error": "session_id=default 无效。请使用当前聊天会话 UUID。",
+                "hint": "从对话上下文取真实 session_id，并可选传入 project_id。",
             },
             ensure_ascii=False,
         )
 
+    pid = (project_id or "").strip() or None
     snippets = retrieve_for_query(
         query,
         settings,
         session_id=session_id,
         top_k=top_k,
+        project_id=pid,
     )
     return json.dumps(
         {
             "query": query,
             "session_id": session_id,
+            "project_id": pid,
             "count": len(snippets),
             "results": [
                 {
@@ -74,18 +83,26 @@ def _retrieve(query: str, top_k: int, session_id: str) -> str:
 
 
 @mcp.tool()
-async def retrieve(query: str, top_k: int = 4, session_id: str = "") -> str:
-    """从**当前会话** RAG 向量库检索与 query 相关的文档片段。
+async def retrieve(
+    query: str,
+    top_k: int = 4,
+    session_id: str = "",
+    project_id: str = "",
+) -> str:
+    """从当前课题/会话 RAG 向量库检索与 query 相关的文档片段。
 
     Args:
         query: 检索问题或关键词
         top_k: 返回片段数量（默认 4）
-        session_id: 会话 ID（必填，仅检索该会话上传/索引的文档）
+        session_id: 当前对话 session_id（必填，禁止传 default）
+        project_id: 可选课题 ID；省略则由会话反查
     """
-    return _retrieve(query, top_k, session_id)
+    return _retrieve(query, top_k, session_id, project_id=project_id)
 
 
 def main() -> None:
+    # 启动即验证配置可导入
+    get_settings()
     mcp.run(transport="stdio")
 
 

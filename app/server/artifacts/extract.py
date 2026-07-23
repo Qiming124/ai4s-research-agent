@@ -111,14 +111,41 @@ def _normalize_derivation_steps(value: Any) -> list[dict[str, Any]]:
         if isinstance(item, dict):
             status = item.get("status", "pending")
             if status not in ("proven", "pending", "heuristic"):
-                status = "pending"
-            out.append(
-                {
-                    "title": _as_str(item.get("title")) or f"步骤 {i + 1}",
-                    "body": _as_str(item.get("body")),
-                    "status": status,
-                }
+                status_l = str(status).lower()
+                if status_l in ("proved", "done", "ok", "verified"):
+                    status = "proven"
+                elif status_l in ("guess",):
+                    status = "heuristic"
+                else:
+                    status = "pending"
+            title = (
+                _as_str(item.get("title"))
+                or _as_str(item.get("claim"))
+                or _as_str(item.get("id"))
+                or _as_str(item.get("name"))
+                or f"步骤 {i + 1}"
             )
+            body = (
+                _as_str(item.get("body"))
+                or _as_str(item.get("proof"))
+                or _as_str(item.get("content"))
+                or _as_str(item.get("statement"))
+            )
+            if not body:
+                skip = {
+                    "title",
+                    "body",
+                    "status",
+                    "claim",
+                    "id",
+                    "name",
+                    "proof",
+                    "content",
+                    "statement",
+                }
+                rest = {k: v for k, v in item.items() if k not in skip}
+                body = _as_str(rest) if rest else ""
+            out.append({"title": title, "body": body, "status": status})
         else:
             text = _as_str(item)
             if text:
@@ -126,10 +153,148 @@ def _normalize_derivation_steps(value: Any) -> list[dict[str, Any]]:
     return out
 
 
+def _coerce_derivation_trace_from_alt_shape(data: dict[str, Any]) -> dict[str, Any]:
+    """
+    兼容模型自创结构（problem/definitions/lemmas/theorem/verification），
+    映射为 title + steps + claim_yaml，避免面板空壳。
+    """
+    out = dict(data)
+    steps = _normalize_derivation_steps(out.get("steps"))
+
+    definitions = out.get("definitions")
+    if isinstance(definitions, dict) and definitions:
+        steps.append({"title": "定义 / 符号", "body": _as_str(definitions), "status": "proven"})
+    elif isinstance(definitions, list) and definitions:
+        steps.extend(_normalize_derivation_steps(definitions))
+
+    assumptions = out.get("assumptions")
+    if assumptions:
+        if isinstance(assumptions, list):
+            body = "；".join(_as_str(a) for a in assumptions if _as_str(a))
+        else:
+            body = _as_str(assumptions)
+        if body:
+            steps.append({"title": "假设", "body": body, "status": "proven"})
+
+    lemmas = out.get("lemmas")
+    if lemmas:
+        for i, lem in enumerate(lemmas if isinstance(lemmas, list) else [lemmas]):
+            if not isinstance(lem, dict):
+                text = _as_str(lem)
+                if text:
+                    steps.append({"title": f"引理 {i + 1}", "body": text, "status": "proven"})
+                continue
+            claim = _as_str(lem.get("claim") or lem.get("statement") or lem.get("title"))
+            proof = _as_str(lem.get("proof") or lem.get("body"))
+            lid = _as_str(lem.get("id")) or f"lemma_{i + 1}"
+            title = (claim or lid)[:120]
+            if claim and proof:
+                body = f"**陈述**：{claim}\n\n**证明**：{proof}"
+            else:
+                body = proof or claim
+            steps.append({"title": title, "body": body, "status": "proven"})
+
+    theorem = out.get("theorem")
+    if isinstance(theorem, dict) and theorem:
+        stmt = _as_str(theorem.get("statement") or theorem.get("claim"))
+        proof = _as_str(theorem.get("proof") or theorem.get("body"))
+        extra = {
+            k: v
+            for k, v in theorem.items()
+            if k not in ("statement", "claim", "proof", "body")
+        }
+        body_parts: list[str] = []
+        if stmt:
+            body_parts.append(f"**陈述**：{stmt}")
+        if proof:
+            body_parts.append(f"**证明**：{proof}")
+        if extra:
+            body_parts.append(_as_str(extra))
+        steps.append(
+            {
+                "title": (stmt[:120] if stmt else "定理"),
+                "body": "\n\n".join(body_parts) or _as_str(theorem),
+                "status": "proven",
+            }
+        )
+    elif isinstance(theorem, str) and theorem.strip():
+        steps.append({"title": "定理", "body": theorem.strip(), "status": "proven"})
+
+    verification = out.get("verification")
+    if verification:
+        steps.append({"title": "核验", "body": _as_str(verification), "status": "proven"})
+
+    deduped: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+    for st in steps:
+        key = (st.get("title") or "", st.get("body") or "")
+        if key in seen or (not key[0] and not key[1]):
+            continue
+        seen.add(key)
+        deduped.append(st)
+    out["steps"] = deduped
+
+    title = out.get("title")
+    if not title or not str(title).strip():
+        th_stmt = None
+        if isinstance(theorem, dict):
+            th_stmt = theorem.get("statement")
+        for candidate in (out.get("problem"), out.get("name"), th_stmt):
+            t = _as_str(candidate).strip()
+            if t:
+                out["title"] = t[:120]
+                break
+    elif not isinstance(title, str):
+        out["title"] = _as_str(title)
+
+    claim = out.get("claim_yaml")
+    if claim is not None and not isinstance(claim, str):
+        try:
+            out["claim_yaml"] = json.dumps(claim, ensure_ascii=False, indent=2)
+        except (TypeError, ValueError):
+            out["claim_yaml"] = _as_str(claim)
+    elif not claim:
+        for key in ("verifiable", "verification"):
+            raw = out.get(key)
+            if isinstance(raw, dict) and raw:
+                blob = {"verifiable": raw} if key == "verification" else raw
+                try:
+                    out["claim_yaml"] = json.dumps(blob, ensure_ascii=False, indent=2)
+                except (TypeError, ValueError):
+                    out["claim_yaml"] = _as_str(raw)
+                break
+
+    for k in (
+        "problem",
+        "definitions",
+        "assumptions",
+        "lemmas",
+        "theorem",
+        "verification",
+        "verifiable",
+        "name",
+    ):
+        out.pop(k, None)
+    return out
+
+
 def normalize_artifact_payload(artifact_type: str, payload: dict[str, Any]) -> dict[str, Any]:
     """把 LLM 常见的类型偏差收成 schema 可接受的形状。"""
     data = dict(payload)
     if artifact_type == "DerivationTrace":
+        alt_keys = (
+            "lemmas",
+            "theorem",
+            "definitions",
+            "assumptions",
+            "verification",
+            "verifiable",
+            "problem",
+        )
+        needs_coerce = (not data.get("steps")) or any(k in data for k in alt_keys)
+        if needs_coerce:
+            data = _coerce_derivation_trace_from_alt_shape(data)
+
         if "title" in data and data["title"] is None:
             data["title"] = ""
         elif "title" in data and not isinstance(data.get("title"), str):

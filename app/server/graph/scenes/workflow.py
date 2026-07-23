@@ -26,6 +26,17 @@ SceneId = Literal["lit_to_theory", "experiment_plan", "data_to_nextstep"]
 _METHOD_HINTS = ("方法", "公式", "推导", "形式化", "证明思路", "method", "/method")
 _DATA_HINTS = ("结果", "指标", "日志", "解读", "数据", "metrics", "upload", "下一步")
 _REVIEW_HINTS = ("审稿", "审查", "checklist")
+_PERSIST_PLAN_KEYS = ("写入", "保存", "同步", "落盘", "写到", "写入到")
+
+
+def _is_persist_plan_only(message: str) -> bool:
+    """短指令：把已有计划写入 UI，而非重写全文。"""
+    text = message.strip()
+    if not text or len(text) > 240:
+        return False
+    has_plan = "实验计划" in text or "experiment plan" in text.lower()
+    has_persist = any(k in text for k in _PERSIST_PLAN_KEYS)
+    return has_plan and has_persist
 
 
 @dataclass
@@ -51,6 +62,9 @@ def match_scene(
     lower = text.lower()
     explicit = normalize_agent_name(agent)
 
+    if _is_persist_plan_only(text):
+        return SceneMatch("experiment_plan", "scene:persist_experiment_plan")
+
     if "/method" in lower or (
         explicit == "literature"
         and any(h in text or h in lower for h in _METHOD_HINTS)
@@ -60,17 +74,31 @@ def match_scene(
     if explicit == "experiment":
         store = get_artifact_store()
         has_data = bool(store.latest_datapackets(project_id, session_id=session_id, limit=1))
+        plan_intent = any(
+            k in text
+            for k in (
+                "实验计划",
+                "制定方案",
+                "可复现",
+                "假设陈述",
+                "对照基线",
+                "experiment plan",
+            )
+        )
         wants_data = any(h in text or h in lower for h in _DATA_HINTS)
-        if has_data or wants_data:
+        if has_data and wants_data and not plan_intent:
             return SceneMatch("data_to_nextstep", "scene:data_to_nextstep")
-        return SceneMatch("experiment_plan", "scene:experiment_plan")
+        if plan_intent or not (has_data and wants_data):
+            return SceneMatch("experiment_plan", "scene:experiment_plan")
+        return SceneMatch("data_to_nextstep", "scene:data_to_nextstep")
 
     return None
 
 
 _ARTIFACT_HINT = """
 
-请在回答末尾附加 JSON 工件围栏（勿省略），格式：
+【强制落盘】回答末尾必须附加可解析的 JSON 工件围栏，否则 UI「产出」面板不会出现记录。
+不要用普通 ```json / ```yaml 代替。格式：
 ```artifact:{type}
 {{...字段 JSON...}}
 ```
@@ -93,6 +121,17 @@ def _persist_from_content(
         return []
     chunks: list[StreamChunk] = []
     extracted = extract_artifacts_from_text(content)
+    if artifact_hint_type and not any(t == artifact_hint_type for t, _ in extracted):
+        chunks.append(
+            StreamChunk(
+                type="error",
+                content=(
+                    f"未检测到 ```artifact:{artifact_hint_type} 围栏，计划/备忘未写入「产出」面板。"
+                    "请在下一轮回答末尾补上合法 JSON 围栏。"
+                ),
+                agent_name=agent_name,
+            )
+        )
     for atype, payload in extracted:
         payload.setdefault("project_id", project_id)
         if session_id:
@@ -232,7 +271,7 @@ class SceneExecutor:
                 agent_name="theory",
             )
             theory_msg = (
-                f"请基于以下文献方法提炼，对照课题符号/假设做形式化推导：\n\n{lit_content[:6000]}"
+                f"请基于以下文献方法提炼做形式化推导（自行声明假设；勿引用已下线的工作区假设文件）：\n\n{lit_content[:6000]}"
                 + _ARTIFACT_HINT.replace("{type}", "DerivationTrace")
                 + "\n字段含: steps([{title,body,status}]), title, claim_yaml(可选)"
             )
@@ -289,15 +328,26 @@ class SceneExecutor:
                 status="running",
                 agent_name="experiment",
             )
-            plan_msg = (
-                clean_msg
-                + _ARTIFACT_HINT.replace("{type}", "ExperimentPlan")
-                + "\n字段含: objectives, variables, controls, hyperparams, success_criteria,"
-                " record_fields, notes, title, status(planned|active|done|superseded),"
-                " parent_plan_id(可选), revision_note(可选)"
-                "\n重要：每次给出新计划或修订计划都必须新写一条 ExperimentPlan 围栏；"
-                "不要覆盖历史计划。修订时 status=planned，并在 revision_note / parent_plan_id 注明依据。"
-            )
+            if _is_persist_plan_only(clean_msg) or scene.reason == "scene:persist_experiment_plan":
+                plan_msg = (
+                    "用户要求将对话中**已有的**实验计划写入 UI「产出 → 实验计划」。\n"
+                    "请根据历史消息中最近一份完整计划，**只输出一条**合法围栏，"
+                    "禁止重写长文 Markdown，禁止建议用户手动创建 实验计划.md 或其它本地文件。\n"
+                    + _ARTIFACT_HINT.replace("{type}", "ExperimentPlan")
+                    + "\n字段含: title, objectives, variables, controls, success_criteria,"
+                    " record_fields, notes, status=planned, claim_or_theorem_ref,"
+                    " parent_plan_id(可选), revision_note(可选)"
+                )
+            else:
+                plan_msg = (
+                    clean_msg
+                    + _ARTIFACT_HINT.replace("{type}", "ExperimentPlan")
+                    + "\n字段含: objectives, variables, controls, hyperparams, success_criteria,"
+                    " record_fields, notes, title, status(planned|active|done|superseded),"
+                    " parent_plan_id(可选), revision_note(可选)"
+                    "\n重要：每次给出新计划或修订计划都必须新写一条 ExperimentPlan 围栏；"
+                    "不要覆盖历史计划。修订时 status=planned，并在 revision_note / parent_plan_id 注明依据。"
+                )
             content = ""
             async for chunk in self._run_agent(
                 "experiment",
@@ -337,9 +387,24 @@ class SceneExecutor:
             ensure_ascii=False,
             indent=2,
         )
+        readable_bits: list[str] = []
+        for p in packets:
+            sm = getattr(p, "summary", None) or {}
+            if isinstance(sm, dict) and sm.get("readable"):
+                readable_bits.append(str(sm["readable"]))
+            elif isinstance(sm, dict):
+                readable_bits.append(json.dumps(sm, ensure_ascii=False)[:500])
+            mets = getattr(p, "metrics", None) or {}
+            if isinstance(mets, dict) and mets:
+                kv = "; ".join(f"{k}={v}" for k, v in list(mets.items())[:12])
+                readable_bits.append(f"metrics: {kv}")
+        readable_block = "\n".join(readable_bits) if readable_bits else "(无可读摘要)"
         next_msg = (
-            f"用户问题：{clean_msg}\n\n近期提交数据（DataPacket）：\n{packet_blob}\n\n"
-            "请对照理论给出判读与下一步建议。"
+            f"用户问题：{clean_msg}\n\n"
+            f"DataPacket 可读摘要：\n{readable_block}\n\n"
+            f"近期提交数据（DataPacket 原文）：\n{packet_blob}\n\n"
+            "请对照理论给出判读与下一步建议。读数以 summary.readable / metrics / notable_cells 为准；"
+            "勿臆造基线，勿引用已下线的 symbols.md/assumptions.md/A1–A6。"
             + _ARTIFACT_HINT.replace("{type}", "NextStepMemo")
             + "\n字段含: data_packet_id, verdict, missing_data, next_experiments, notes, title"
             + "\n若 next_experiments 非空，请再输出一份新的 ExperimentPlan（修订计划，追加到历史，不覆盖旧计划）："

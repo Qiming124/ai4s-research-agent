@@ -52,6 +52,22 @@ def _effective_cot_mode(request: ChatRequest) -> str:
     return request.cot_mode
 
 
+def _ensure_session_project_link(session_id: str, project_id: str | None) -> str:
+    """将会话关联到请求中的 project_id（与当前不一致时更新）。"""
+    pid = (project_id or "").strip() or "default"
+    try:
+        from server.memory.projects import get_project_store
+
+        store = get_project_store()
+        current = store.get_project_for_session(session_id)
+        if current != pid:
+            store.link_session(pid, session_id)
+        return pid
+    except Exception:
+        logger.exception("自动关联会话到课题失败 session=%s project=%s", session_id, pid)
+        return pid
+
+
 # ── 健康检查 ─────────────────────────────────────────────────
 
 @router.get("/health", response_model=HealthResponse, summary="健康检查")
@@ -92,10 +108,13 @@ async def chat(request: ChatRequest) -> ChatResponse:
     """
     try:
         if _use_multi_agent_orchestrator():
+            session_store = get_session_store()
+            sid0 = session_store.get_or_create(request.session_id)
+            _ensure_session_project_link(sid0, request.project_id)
             orchestrator = get_multi_agent_orchestrator()
             session_id, content, reasoning, usage, _, _ = await orchestrator.run_sync(
                 message=request.message,
-                session_id=request.session_id,
+                session_id=sid0,
                 agent=request.agent,
                 auto_route=request.auto_route,
                 mode=request.mode,
@@ -110,10 +129,13 @@ async def chat(request: ChatRequest) -> ChatResponse:
                 artifact_ids=request.artifact_ids,
             )
         else:
+            session_store = get_session_store()
+            sid0 = session_store.get_or_create(request.session_id)
+            _ensure_session_project_link(sid0, request.project_id)
             agent = get_general_agent(math_mode=(request.mode == "math"))
             session_id, content, reasoning, usage = await agent.run_sync(
                 message=request.message,
-                session_id=request.session_id,
+                session_id=sid0,
                 system_prompt_override=request.system_prompt,
                 max_history_messages=request.max_history_messages,
                 enable_history_summary=request.enable_history_summary,
@@ -153,6 +175,7 @@ async def _stream_generator(request: ChatRequest) -> AsyncIterator[str]:
     #     4. 每个 StreamChunk 转一条 SSE data 事件
     session_store = get_session_store()
     session_id = session_store.get_or_create(request.session_id)
+    _ensure_session_project_link(session_id, request.project_id)
 
     if _use_multi_agent_orchestrator():
         orchestrator = get_multi_agent_orchestrator()

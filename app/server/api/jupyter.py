@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
 from server.config import get_settings
 from server.experiments.data_import import parse_experiment_file
@@ -34,14 +34,15 @@ def _persist_experiment_record(
     metrics: dict[str, Any],
     source: str = "jupyter_upload",
 ) -> NotebookResultUploadResponse:
+    from server.experiments import log_store
+
     settings = get_settings()
-    root = Path(settings.experiments_path) / "notebooks" / "results"
-    root.mkdir(parents=True, exist_ok=True)
+    pid = (project_id or "default").strip() or "default"
     run_id = str(uuid.uuid4())[:8]
     record = {
         "run_id": run_id,
         "name": name,
-        "project_id": project_id,
+        "project_id": pid,
         "session_id": session_id,
         "status": "completed",
         "created_at": datetime.now(timezone.utc).isoformat(),
@@ -49,13 +50,16 @@ def _persist_experiment_record(
         "metrics": metrics,
         "source_format": source,
     }
-    path = root / f"{run_id}.json"
-    path.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
+    saved = log_store.save_run(record)
+    log_path = saved.get("log_path") or ""
 
-    logs_dir = Path(settings.experiments_path) / "logs"
-    logs_dir.mkdir(parents=True, exist_ok=True)
-    log_path = logs_dir / f"nb_{run_id}.json"
-    log_path.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
+    # 可选：保留 notebooks/results 副本便于人工翻阅（仍带 project_id）
+    root = Path(settings.experiments_path) / "notebooks" / "results"
+    root.mkdir(parents=True, exist_ok=True)
+    (root / f"{run_id}.json").write_text(
+        json.dumps(saved, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
 
     try:
         from server.artifacts.store import get_artifact_store
@@ -64,12 +68,12 @@ def _persist_experiment_record(
             get_artifact_store().save(
                 "DataPacket",
                 {
-                    "project_id": project_id or "default",
+                    "project_id": pid,
                     "session_id": session_id,
                     "source": "jupyter_upload" if source in ("json", "jupyter_upload") else "manual",
                     "metrics": metrics or {},
                     "summary": {**(summary or {}), "import_format": source},
-                    "log_path": str(log_path),
+                    "log_path": log_path,
                     "raw_ref": run_id,
                     "title": name or f"nb_{run_id}",
                 },
@@ -79,7 +83,7 @@ def _persist_experiment_record(
 
     return NotebookResultUploadResponse(
         run_id=run_id,
-        log_path=str(log_path),
+        log_path=log_path,
         status="indexed",
     )
 

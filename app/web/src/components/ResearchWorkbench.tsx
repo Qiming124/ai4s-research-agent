@@ -1,5 +1,5 @@
 import type { DocumentInfo } from "../hooks/useDocuments";
-import type { ExperimentRun } from "../hooks/useExperimentLogs";
+import type { ExperimentRun, ExperimentRunUpdate } from "../hooks/useExperimentLogs";
 import type { AgentQualityItem, ObservabilitySummary } from "../hooks/useObservability";
 import type { StructuredMemoryEntry } from "../hooks/useStructuredMemory";
 import type { VerificationDashboard } from "../hooks/useVerification";
@@ -42,6 +42,8 @@ interface ResearchWorkbenchProps {
   onRefreshExperiments: () => void;
   onJupyterUpload: (payload: NotebookUploadPayload) => Promise<void>;
   onExperimentFileUpload?: (file: File, meta: ExperimentFileUploadMeta) => Promise<void>;
+  onUpdateExperimentRun?: (runId: string, patch: ExperimentRunUpdate) => Promise<void>;
+  onDeleteExperimentRun?: (runId: string) => Promise<void>;
   documents: DocumentInfo[];
   documentsLoading: boolean;
   documentsUploading: boolean;
@@ -69,6 +71,8 @@ interface ResearchWorkbenchProps {
   observabilityLoading: boolean;
   observabilityError: string | null;
   onRefreshObservability: () => void;
+  /** SSE artifact_saved 时递增，触发 ArtifactsPanel 刷新 */
+  artifactsRefreshToken?: number;
 }
 
 const ALL_TABS: { id: WorkbenchTab; label: string; hint: string }[] = [
@@ -147,6 +151,7 @@ export function ResearchWorkbench(props: ResearchWorkbenchProps) {
                 types={["DerivationTrace"]}
                 title="推导迹"
                 emptyHint="Theory Agent 在推导时输出 artifact:DerivationTrace 围栏后会出现在此：分步证明、待验证标记、关联定理。"
+                refreshToken={props.artifactsRefreshToken}
               />
             </WorkbenchSection>
             <WorkbenchSection
@@ -203,6 +208,8 @@ export function ResearchWorkbench(props: ResearchWorkbenchProps) {
                 types={["ExperimentPlan", "NextStepMemo"]}
                 title="实验计划 / 下一步"
                 emptyHint="Experiment Agent 输出计划或下一步备忘后显示于此。"
+                mode="experiment-plans"
+                refreshToken={props.artifactsRefreshToken}
               />
             </WorkbenchSection>
             <WorkbenchSection title="实验记录" defaultOpen>
@@ -215,6 +222,8 @@ export function ResearchWorkbench(props: ResearchWorkbenchProps) {
                 onRefresh={props.onRefreshExperiments}
                 onJupyterUpload={props.onJupyterUpload}
                 onExperimentFileUpload={props.onExperimentFileUpload}
+                onUpdateRun={props.onUpdateExperimentRun}
+                onDeleteRun={props.onDeleteExperimentRun}
               />
             </WorkbenchSection>
             <WorkbenchSection title="论文导出" defaultOpen>

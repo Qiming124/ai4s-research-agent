@@ -28,7 +28,7 @@ from __future__ import annotations
 import logging
 from functools import lru_cache
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from server.llm.prompts import DEFAULT_SYSTEM_PROMPT
@@ -54,11 +54,11 @@ class Settings(BaseSettings):
     # pydantic-settings 配置：从 .env 读取，大小写不敏感，忽略未定义的额外变量
     model_config = SettingsConfigDict(**_SETTINGS_KW)
 
-    # ── DeepSeek API 参数 ────────────────────────────────────
+    # ── DeepSeek LLM ────────────────────────────────────────
 
     deepseek_api_key: str = Field(
-        ...,
-        description="DeepSeek API 密钥，从 platform.deepseek.com 获取",
+        default="",
+        description="DeepSeek API 密钥（必填）",
     )
     deepseek_base_url: str = Field(
         default="https://api.deepseek.com",
@@ -66,15 +66,15 @@ class Settings(BaseSettings):
     )
     model: str = Field(
         default="deepseek-v4-pro",
-        description="模型 ID。可选 deepseek-v4-flash（更快/更便宜）",
+        description="模型 ID：deepseek-v4-pro / deepseek-v4-flash 等",
     )
     max_tokens: int = Field(
         default=384_000,
-        description="单次请求最大输出 token 数。384000 为 V4 天花板，为 thinking max 留出预算",
+        description="单次请求最大输出 token 数（thinking max 需要较大预算）",
     )
     reasoning_effort: str = Field(
         default="max",
-        description="推理强度：high=一般推理，max=最强推理（消耗更多 token，响应更慢）",
+        description="DeepSeek 推理强度：high 或 max",
     )
 
     # ── 服务监听参数 ─────────────────────────────────────────
@@ -141,8 +141,8 @@ class Settings(BaseSettings):
         description="MCP Server 配置文件路径",
     )
     mcp_allowed_dirs: str = Field(
-        default=str(DATA_ROOT / "mcp_files"),
-        description="filesystem MCP 允许访问的目录（冒号分隔多个路径）",
+        default=f"{DATA_ROOT / 'mcp_files'}:{DATA_ROOT / 'projects'}",
+        description="filesystem MCP 允许访问的目录（冒号分隔）；不含 data/theory 种子",
     )
     mcp_max_tool_rounds: int = Field(
         default=10,
@@ -267,15 +267,8 @@ class Settings(BaseSettings):
 
     @field_validator("deepseek_api_key")
     @classmethod
-    def validate_api_key(cls, value: str) -> str:
-        # 启动时校验 API Key：不能是空字符串，不能是占位符。
-        stripped = value.strip()
-        if not stripped or stripped == "sk-your-api-key-here":
-            raise ValueError(
-                "DEEPSEEK_API_KEY 未配置或为占位符。"
-                "请复制 conf/.env.example 为 conf/.env 并填入真实密钥。"
-            )
-        return stripped
+    def strip_api_key(cls, value: str) -> str:
+        return (value or "").strip()
 
     @field_validator("reasoning_effort")
     @classmethod
@@ -285,6 +278,17 @@ class Settings(BaseSettings):
         if normalized not in ("high", "max"):
             raise ValueError(f"REASONING_EFFORT 必须是 high 或 max，当前为: {value}")
         return normalized
+
+    @model_validator(mode="after")
+    def validate_deepseek_api_key(self) -> Settings:
+        placeholder = "sk-your-api-key-here"
+        key = self.deepseek_api_key
+        if not key or key == placeholder:
+            raise ValueError(
+                "DEEPSEEK_API_KEY 未配置或为占位符。"
+                "请复制 conf/.env.example 为 conf/.env 并填入真实密钥。"
+            )
+        return self
 
     @field_validator("session_store_backend")
     @classmethod
@@ -348,7 +352,6 @@ class Settings(BaseSettings):
 
     def masked_api_key(self) -> str:
         # 返回脱敏后的 API Key（只保留后 4 位），用于启动日志打印。
-        # 示例：sk-abc...xyz9 → sk-***xyz9
         key = self.deepseek_api_key
         if len(key) <= 8:
             return "sk-***"

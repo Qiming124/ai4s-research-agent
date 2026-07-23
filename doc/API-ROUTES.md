@@ -86,7 +86,7 @@ curl -N -X POST http://127.0.0.1:8000/v1/chat/stream \
 2. `memory/session.get_session_store()` → InMemory 或 SQLite（`SESSION_STORE_BACKEND`）
 3. `DELETE` + `purge=true`：删会话；可级联清 RAG 引用与会话文档（见实现）
 
-**测试**：`tests/api/` 中 chat/sessions 相关；`tests/api/test_smoke_all.py`。
+**测试**：`tests/test_router.py`、`tests/unit/`。
 
 ---
 
@@ -182,7 +182,7 @@ curl -s -X POST http://127.0.0.1:8000/v1/experiments/runs \
   -d '{"config_path":"quadratic_minimum.yaml"}'
 ```
 
-**测试**：`tests/api/test_smoke_all.py` · `tests/test_verification_executor_async.py`。
+**测试**：`tests/test_verification_executor_async.py`。
 
 ---
 
@@ -255,7 +255,7 @@ curl -s -X POST http://127.0.0.1:8000/v1/verification/run \
   -d '{"claim":{"expression":"x0**2 + x1**2","point":"0,0","variables":"x0,x1","expected":{"classification":"local_minimum"},"tier_hint":"numerical"},"session_id":"demo-v"}'
 ```
 
-**测试**：`tests/api/test_smoke_all.py` · derivation_benchmark。
+**测试**：`tests/test_verification_executor_async.py`、`tests/unit/`。
 
 ---
 
@@ -283,8 +283,7 @@ curl -s -X POST http://127.0.0.1:8000/v1/verification/run \
 
 | 套件 | 用途 |
 |------|------|
-| `pytest tests/api/` | 分域 API |
-| `pytest tests/api/test_smoke_all.py` | 全量冒烟 |
+| `pytest tests/unit/` · `pytest tests/test_*.py` | 单元与模块回归 |
 | `pytest tests/e2e/` | 黄金路径 |
 | `cd app/web && npx playwright test` | 浏览器 E2E |
 

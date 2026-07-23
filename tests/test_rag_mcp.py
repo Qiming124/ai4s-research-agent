@@ -16,7 +16,7 @@ async def test_rag_retrieve_disabled(monkeypatch: pytest.MonkeyPatch):
         deepseek_api_key="sk-test",
         enable_rag=False,
     )
-    monkeypatch.setattr("server.config.get_settings", lambda: settings)
+    monkeypatch.setattr(rag_server, "get_settings", lambda: settings)
 
     result = await rag_server.retrieve("theta 符号", top_k=2, session_id="sess-test")
     data = json.loads(result)
@@ -33,9 +33,24 @@ async def test_rag_retrieve_requires_session_when_enabled(monkeypatch: pytest.Mo
             rag_chroma_path=str(Path(tmp) / "chroma"),
             enable_rag=True,
         )
-        monkeypatch.setattr("server.config.get_settings", lambda: settings)
+        monkeypatch.setattr(rag_server, "get_settings", lambda: settings)
 
         result = await rag_server.retrieve("query", top_k=2, session_id="")
         data = json.loads(result)
         assert "error" in data
         assert "session_id" in data["error"]
+
+
+@pytest.mark.asyncio
+async def test_rag_retrieve_rejects_literal_default_session(monkeypatch: pytest.MonkeyPatch):
+    settings = Settings(
+        deepseek_api_key="sk-test",
+        enable_rag=True,
+        rag_embedding_provider="test",
+    )
+    monkeypatch.setattr(rag_server, "get_settings", lambda: settings)
+
+    result = await rag_server.retrieve("query", top_k=2, session_id="default")
+    data = json.loads(result)
+    assert "error" in data
+    assert "default" in data["error"].lower() or "无效" in data["error"]

@@ -7,7 +7,7 @@
 
 **当前版本**：**v2.2**（分支 `v2.2`）  
 **产品愿景（下期蓝图）**：[`doc/PRODUCT-VISION.md`](doc/PRODUCT-VISION.md)  
-**文档索引**：[`doc/README.md`](doc/README.md) · **源码阅读顺序** [`doc/CODE_READING_ORDER.md`](doc/CODE_READING_ORDER.md) · **API 测试实验室** [`doc/API-LAB.md`](doc/API-LAB.md) · API 清单 [`doc/API-COVERAGE.md`](doc/API-COVERAGE.md)（**65** 端点）· 全路径 [`doc/API-ROUTES.md`](doc/API-ROUTES.md) · 量化 [`doc/API-QUANT-TEST-RESULTS.md`](doc/API-QUANT-TEST-RESULTS.md) · **功能验收** [`doc/acceptance/ACCEPTANCE-TEST-PLAN.md`](doc/acceptance/ACCEPTANCE-TEST-PLAN.md) / [报告](doc/acceptance/ACCEPTANCE-REPORT.md) · 数据约定 [`doc/DATA.md`](doc/DATA.md) · 已知问题 [`doc/KNOWN_ISSUES.md`](doc/KNOWN_ISSUES.md)
+**文档索引**：[`doc/README.md`](doc/README.md) · **源码阅读顺序** [`doc/CODE_READING_ORDER.md`](doc/CODE_READING_ORDER.md) · API 清单 [`doc/API-COVERAGE.md`](doc/API-COVERAGE.md) · 全路径 [`doc/API-ROUTES.md`](doc/API-ROUTES.md) · 数据约定 [`doc/DATA.md`](doc/DATA.md) · 已知问题 [`doc/KNOWN_ISSUES.md`](doc/KNOWN_ISSUES.md)
 
 ### 能力边界（v2.2）
 
@@ -26,7 +26,7 @@
 | 多 Agent | general / theory / **experiment（实验顾问）** / literature / review / counterexample |
 | MCP | web_search / arxiv / filesystem / sympy / rag（numerical 为可选辅助，非代跑实验主路径） |
 | 课题工作台 | Project、会话联动；Tabs：文献 / 理论（定理库·推导迹）/ 产出；对话版 / 科研版；左右侧栏可用 « / » 收起 |
-| 记忆 | L1–L4；定理库 CRUD/导入；符号与假设经种子注入模型（无工作区/DAG HTTP） |
+| 记忆 | L1–L4；定理库 CRUD/导入；假设以 L4 为准（工作区 A1–A6 种子注入已下线） |
 | 文献 | 检索 + 方法提炼；手动入库 + RAG |
 | 导出 | preview / polish / md / latex / docx / pdf；「AI润色提示词」（模板/案例见 `conf/prompt/*.json`） |
 | 可观测 | Token、`/v1/observability/*`、Agent 质量面板 |
@@ -100,7 +100,7 @@ agent/
 | `app/server/llm/` | DeepSeek 客户端与 prompt |
 | `app/server/memory/` | 会话、RAG、L4、课题 |
 | `app/server/agents/` · `graph/` | 理论侧 Agent 与 LangGraph 路由 |
-| `app/server/api/` | HTTP 路由与 SSE（65 端点） |
+| `app/server/api/` | HTTP 路由与 SSE（67 端点） |
 | `app/server/main.py` | FastAPI 入口 |
 | `app/client/cli.py` | 终端 CLI |
 | `app/web/` | React 理论侧工作台 |
@@ -201,7 +201,7 @@ cd app/web && npm install && npm run dev   # http://localhost:5173
 
 ## API 参考
 
-[`doc/API-COVERAGE.md`](doc/API-COVERAGE.md)（65 端点）· [`doc/API-ROUTES.md`](doc/API-ROUTES.md)（全路径链路）· [`doc/API.md`](doc/API.md) · `GET /docs`（Swagger：中文接口说明、字段注解与样例值）· 前端 `#/api-lab` 同步读取 `/openapi.json`
+[`doc/API-COVERAGE.md`](doc/API-COVERAGE.md) · [`doc/API-ROUTES.md`](doc/API-ROUTES.md)（全路径链路）· [`doc/API.md`](doc/API.md) · `GET /docs`（Swagger：中文接口说明、字段注解与样例值）
 
 ```bash
 curl http://127.0.0.1:8000/health
@@ -223,7 +223,7 @@ SSE：`meta` → `workflow_step` → `tool_call_*` → `reasoning` → `content`
 | `ValidationError` | 配置 `conf/.env` |
 | Connection refused | 先启动 uvicorn |
 | 重启丢会话 | `SESSION_STORE_BACKEND=sqlite` |
-| 公式异常 / 橙色原文乱码 | 优先 `cd app/web && npm run test:math`；见 `doc/web.md`。导出 PDF 公式/`→p` 乱码：跑 `scripts/export_test_lab.py`，看 `data/export_test_lab/reports/` |
+| 公式异常 / 橙色原文乱码 | 优先 `cd app/web && npm run test:math`；见 `doc/web.md`。导出公式相关单测：`tests/test_math_normalize.py`、`tests/test_docx_math_prep.py` |
 | 找不到 `web/` | 路径为 `app/web`，后端加 `--app-dir app` |
 | Docker 无理论 md | KNOWN_ISSUES C1（`.dockerignore`） |
 | 实验 API 报 event loop / 整站卡死 | 须 `await run_config_async`；禁止在 async 路由里 `new_event_loop` 调 MCP |

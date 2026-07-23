@@ -27,6 +27,57 @@ def test_normalize_experiment_plan_coerces_llm_shapes():
     assert out["status"] == "planned"
 
 
+def test_normalize_derivation_trace_from_lemmas_theorem():
+    """模型常用 lemmas/theorem 结构 → 应收成非空 steps + title。"""
+    raw = {
+        "id": "d1",
+        "problem": "quadratic_loss_strict_local_minimum",
+        "definitions": {"L": "0.5 * theta^T A theta", "hessian": "A"},
+        "assumptions": ["A symmetric", "A positive definite"],
+        "lemmas": [
+            {
+                "id": "lemma_1",
+                "claim": "gradient = A*theta",
+                "proof": "component-wise differentiation",
+            }
+        ],
+        "theorem": {
+            "statement": "theta*=0 is strict local minimum",
+            "proof": "Rayleigh quotient",
+            "key_inequality": "theta^T A theta >= lambda_min ||theta||^2",
+        },
+        "verification": {"method": "sympy", "result": "local_minimum"},
+    }
+    out = normalize_artifact_payload("DerivationTrace", raw)
+    assert out["title"]
+    assert "quadratic" in out["title"] or "minimum" in out["title"].lower()
+    assert isinstance(out["steps"], list) and len(out["steps"]) >= 3
+    titles = " ".join(s["title"] for s in out["steps"])
+    assert "假设" in titles or "lemma" in titles.lower() or "gradient" in titles.lower()
+    assert out.get("claim_yaml")
+    assert "lemmas" not in out
+    assert "theorem" not in out
+
+
+def test_store_saves_coerced_derivation_trace(tmp_path, monkeypatch):
+    from server.artifacts import store as store_mod
+
+    st = store_mod.ArtifactStore(root=tmp_path)
+    monkeypatch.setattr(store_mod, "_store", st)
+    saved = st.save(
+        "DerivationTrace",
+        {
+            "project_id": "p1",
+            "problem": "demo-problem",
+            "lemmas": [{"claim": "c1", "proof": "p1"}],
+            "theorem": {"statement": "结论成立", "proof": "略"},
+        },
+    )
+    assert saved["title"]
+    assert len(saved["steps"]) >= 2
+    assert (tmp_path / "p1" / "artifacts" / "DerivationTrace" / f"{saved['id']}.json").is_file()
+
+
 def test_store_saves_coerced_experiment_plan(tmp_path, monkeypatch):
     from server.artifacts import store as store_mod
 

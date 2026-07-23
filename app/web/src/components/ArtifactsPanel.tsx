@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useArtifacts, type ArtifactSummary } from "../hooks/useArtifacts";
+import { MarkdownContent } from "./MarkdownContent";
 
 interface ArtifactsPanelProps {
   projectId: string;
@@ -9,6 +10,8 @@ interface ArtifactsPanelProps {
   emptyHint?: string;
   /** experiment-plans：按时间线展示历史实验计划 + 读数建议 */
   mode?: "default" | "experiment-plans";
+  /** 递增时强制刷新列表（如 SSE artifact_saved） */
+  refreshToken?: number;
 }
 
 const TYPE_LABEL: Record<string, string> = {
@@ -49,6 +52,7 @@ export function ArtifactsPanel({
   title,
   emptyHint,
   mode = "default",
+  refreshToken = 0,
 }: ArtifactsPanelProps) {
   const { artifacts, loading, error, refresh, create, update, remove } = useArtifacts(
     projectId,
@@ -67,6 +71,10 @@ export function ArtifactsPanel({
   const [form, setForm] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (refreshToken > 0) void refresh();
+  }, [refreshToken, refresh]);
 
   const loadDetail = useCallback(
     async (id: string) => {
@@ -617,7 +625,12 @@ function ArtifactDetailBody({
                     {stepStatus[st] ?? st}
                   </span>
                 </div>
-                {step.body ? <p>{String(step.body)}</p> : null}
+                {step.body ? (
+                  <MarkdownContent
+                    content={String(step.body)}
+                    className="panel-markdown derivation-step-body"
+                  />
+                ) : null}
               </li>
             );
           })}

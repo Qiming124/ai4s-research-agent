@@ -78,7 +78,7 @@ const HELP_SECTIONS: HelpSection[] = [
       },
       {
         name: "实验记录与导出",
-        desc: "「产出」Tab：实验计划与读数建议（可手工新建/编辑/删除）、实验记录回传，以及论文导出。",
+        desc: "「产出」Tab：实验计划与读数建议（可手工新建/编辑/删除）、本课题实验记录 CRUD（与其他课题隔离），以及论文导出。",
       },
       {
         name: "RAG 文档",
@@ -249,7 +249,7 @@ const HELP_SECTIONS: HelpSection[] = [
       },
       {
         name: "面板刷新",
-        desc: "定理库、知识图谱、实验日志、工作区、RAG 文档/引用、MCP 状态均支持手动「刷新」。",
+        desc: "定理库、实验日志、RAG 文档/引用、MCP 状态均支持手动「刷新」。",
       },
     ],
   },
@@ -274,7 +274,7 @@ const HELP_SECTIONS: HelpSection[] = [
       },
       {
         name: "理论符号/假设注入",
-        desc: "课题种子中的 symbols.md 与 assumptions.md 在 theory/review 推导前注入 system prompt（无独立工作区编辑页）。",
+        desc: "假设与符号以对话及 L4 定理库为准；已下线的 symbols/assumptions 种子文件不再注入 prompt。",
       },
     ],
   },

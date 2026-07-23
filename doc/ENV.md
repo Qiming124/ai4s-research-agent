@@ -10,14 +10,14 @@
 
 | 变量 | 说明 |
 |------|------|
-| `DEEPSEEK_API_KEY` | DeepSeek API 密钥，不可为占位符 `sk-your-api-key-here` |
+| `DEEPSEEK_API_KEY` | DeepSeek API 密钥，不可为占位符 |
 
 ## LLM
 
 | 变量 | 代码默认 | 说明 |
 |------|----------|------|
-| `DEEPSEEK_BASE_URL` | `https://api.deepseek.com` | API 基础 URL |
-| `MODEL` | `deepseek-v4-pro` | 模型 ID |
+| `DEEPSEEK_BASE_URL` | `https://api.deepseek.com` | DeepSeek API 基础 URL |
+| `MODEL` | `deepseek-v4-pro` | 模型 ID（如 `deepseek-v4-pro` / `deepseek-v4-flash`） |
 | `MAX_TOKENS` | `384000` | 单次最大输出 token |
 | `REASONING_EFFORT` | `max` | `high` 或 `max` |
 
@@ -52,7 +52,7 @@
 |------|----------|------|
 | `ENABLE_MCP` | `false` | 是否启用 MCP（演示请设 `true`） |
 | `MCP_CONFIG_PATH` | `./conf/mcp_servers.json` | Server 配置 |
-| `MCP_ALLOWED_DIRS` | `./data/mcp_files` | filesystem 可读目录（冒号分隔）；演示建议追加 `theory`/`experiments` |
+| `MCP_ALLOWED_DIRS` | `./data/mcp_files:./data/projects` | filesystem 可读根；`projects` 下仅 `*/experiments`；禁止 `data/theory` |
 | `MCP_MAX_TOOL_ROUNDS` | `10` | 单轮最大工具循环 |
 | `MCP_TOOL_RESULT_MAX_CHARS` | `8000` | 工具结果截断长度 |
 | `MCP_TOOL_WHITELIST` | 空 | 全局 glob 白名单；空=不额外限制 |
@@ -105,7 +105,7 @@
 Compose 会覆盖为 `/repo/...`（详见 [`docker.md`](docker.md)）：
 
 - `SESSION_DB_PATH=/repo/data/sessions.db`
-- `MCP_ALLOWED_DIRS=/repo/data/mcp_files:/repo/data/theory:/repo/data/experiments`
+- `MCP_ALLOWED_DIRS=/repo/data/mcp_files:/repo/data/projects`
 - `THEORY_WORKSPACE_PATH=/repo/data/theory`
 - `EXPERIMENTS_PATH=/repo/data/experiments`
 - `RAG_CHROMA_PATH=/repo/data/chroma`

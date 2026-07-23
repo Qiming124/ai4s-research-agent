@@ -8,7 +8,7 @@
 
 | 路径 | 说明 |
 |------|------|
-| `data/theory/symbols.md` 等 | 符号表、假设、矩阵、审稿清单（**只读种子**；运行时复制到课题工作区） |
+| `data/theory/symbols.md` 等 | **历史参考**种子（符号表、假设、矩阵、审稿清单）；**不再**自动复制到新课题，**不再**注入 system prompt |
 | `data/theory/campaigns/pl-critical-points.md` | 局部极小 / PL 课题示范剧本（历史文件名保留） |
 | `data/theory/counterexamples/relu_saddle.md` | 反例种子 |
 | `data/theory/demo-quadratic-minimum.md` | 二次损失演示文稿 |
@@ -19,13 +19,17 @@
 
 ```
 data/projects/{project_id}/
-  theory/          # 该课题理论工作区（symbols / assumptions / lemmas…）
-  experiments/     # 课题级实验产物（可选）
+  theory/          # 空目录占位（.gitkeep）；假设请写入 L4，勿依赖 A1–A6 模板
+  experiments/     # 课题级实验产物（日志 / 上传表）；filesystem MCP 仅允许此子树
+  experiments/logs/
 ```
 
 RAG 向量仍在 `data/chroma/`，元数据带 `project_id`（课题共享语料）；`session_rag_refs` 仍按会话记录引用轨迹。  
+聊天请求若带 `project_id`，服务端会自动 `link_session`，避免会话落在 `default` 导致 RAG/工件串题。  
 策展文献语料见 [`../data/arxiv_refs/LIBRARY.md`](../data/arxiv_refs/LIBRARY.md)（会话 `ai4s-library` · 课题 `default`）。  
 理论侧 Artifact 默认落在会话/课题相关存储（见 `server/artifacts/`），**不以** `data/campaigns/` 为路径。
+
+**MCP filesystem**：默认允许 `data/mcp_files` 与 `data/projects/*/experiments`；禁止 `data/theory` 与课题 `theory/` 下已下线 md。
 
 ## 可随时删除的运行时数据（勿提交）
 
@@ -36,7 +40,7 @@ RAG 向量仍在 `data/chroma/`，元数据带 `project_id`（课题共享语料
 | `data/explore_outputs/*` | SkillsBridge / 探索输出 |
 | `data/experiments/logs/*` | 实验运行日志 |
 | `data/experiments/notebooks/results/` | Jupyter 回传结果 |
-| `data/quant_probe/` | API 量化探针 JSONL/汇总（live RTT；勿提交） |
+| `data/quant_probe/` | 本地探针输出占位（探针脚本已移除；目录可空） |
 | `data/projects/*` | 课题运行时工作区 |
 | `data/theory/smoke_test_file.md`、`*-problem.md` | 冒烟/流水线临时稿 |
 | `data/theory/counterexamples/*`（除 `relu_saddle.md`） | 自动生成的反例 |

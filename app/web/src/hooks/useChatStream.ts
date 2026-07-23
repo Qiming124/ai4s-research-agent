@@ -598,6 +598,7 @@ function processStreamEvents(
   callbacks?: {
     onPipelineStage?: (stage: string) => void;
     onPipelineGate?: (payload: string) => void;
+    onArtifactSaved?: (payload: { type?: string; id?: string; title?: string }) => void;
   },
 ) {
   const updaters: Array<(prev: ChatMessage[]) => ChatMessage[]> = [];
@@ -608,6 +609,18 @@ function processStreamEvents(
     }
     if (ev.type === "pipeline_gate" && callbacks?.onPipelineGate) {
       callbacks.onPipelineGate(ev.content ?? "{}");
+    }
+    if (ev.type === "artifact_saved" && callbacks?.onArtifactSaved) {
+      try {
+        const parsed = JSON.parse(ev.content || "{}") as {
+          type?: string;
+          id?: string;
+          title?: string;
+        };
+        callbacks.onArtifactSaved(parsed);
+      } catch {
+        callbacks.onArtifactSaved({ title: ev.title ?? ev.content });
+      }
     }
     try {
       const updater = applyStreamEvent(ev, assistantId, ctx);
@@ -650,6 +663,7 @@ export function useChatStream(
   callbacks?: {
     onPipelineStage?: (stage: string) => void;
     onPipelineGate?: (payload: string) => void;
+    onArtifactSaved?: (payload: { type?: string; id?: string; title?: string }) => void;
   },
   projectId?: string,
 ) {

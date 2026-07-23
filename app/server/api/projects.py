@@ -157,6 +157,12 @@ async def delete_project(
     except Exception:
         logger.exception("清除课题 RAG 文档失败 project_id=%s", project_id)
 
+    try:
+        from server.experiments.log_store import purge_project_experiments
+
+        purge_project_experiments(project_id)
+    except Exception:
+        logger.exception("清除课题实验记录失败 project_id=%s", project_id)
 
     try:
         result = store.delete_project(project_id)

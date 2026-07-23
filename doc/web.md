@@ -23,9 +23,7 @@ Vite 将 `/v1`、`/health` 代理到 8000；SSE 已设 `X-Accel-Buffering: no`�
 | 左栏 | `ProjectSessionTree` | 课题文件夹树（含会话） |
 | 中栏 | `ChatPage` + `MessageBubble` + 时间线 | SSE 对话、CoT、工具轨迹 |
 | 右栏 | `ResearchWorkbench` | Tabs：文献（读与入库）/ 理论（推导资产）/ 产出（实验建议相关记录 + 导出） |
-| 顶栏 | `TopStatusBar` / `HelpPanel` / `ObservabilityPanel` | Agent、MCP、Token、帮助、质量；「API 测试」进 `#/api-lab` |
-
-自研接口测试页见 [`API-LAB.md`](API-LAB.md)（`#/api-lab`，从 OpenAPI 拉全量路由；非 Swagger 嵌入）。
+| 顶栏 | `TopStatusBar` / `HelpPanel` / `ObservabilityPanel` | Agent、MCP、Token、帮助、质量 |
 
 ## 界面版本
 
@@ -42,9 +40,9 @@ Vite 将 `/v1`、`/health` 代理到 8000；SSE 已设 `X-Accel-Buffering: no`�
 
 | 材料 | 范围 |
 |------|------|
-| RAG 文献语料、理论工作区 | **课题**（`data/projects/{id}/`） |
-| 聊天消息、RAG 引用轨迹 | **会话** |
-| `data/theory/` | 只读种子模板，新建课题时复制进课题工作区 |
+| RAG 文献语料、课题实验产物 | **课题**（`data/projects/{id}/`） |
+| 聊天消息、RAG 引用轨迹 | **会话**（发消息时带 `project_id` 会自动挂靠课题） |
+| `data/theory/` | 历史参考种子；**不再**复制进新课题，**不再**注入 prompt |
 
 ## 工作台与关键组件
 

@@ -59,7 +59,7 @@ _AGENT_DEFAULT_WHITELIST: dict[AgentName, list[str]] = {
     "theory": ["sympy__*", "rag__*", "web_search__*"],
     "experiment": ["filesystem__*", "rag__*"],
     "literature": ["arxiv__*", "web_search__*"],
-    "review": ["filesystem__*"],
+    "review": [],
     "counterexample": ["sympy__*"],
 }
 
