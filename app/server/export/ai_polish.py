@@ -1,4 +1,4 @@
-# 导出前 AI 润色：按 arXiv / 会议论文体例改写会话草稿。
+# 导出前 AI 整理：把会话/定理草稿整理为课题工作笔记（非代写论文）。
 
 from __future__ import annotations
 
@@ -10,35 +10,27 @@ from server.llm.client import get_deepseek_client
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# 版式参考（抽样 arXiv：1608.04636 Karimi PL、1406.2572 Dauphin 鞍点、
-# 2003.00307 Liu PL*）：标题居中约 14–17pt；摘要略小于正文；正文约 10–11pt；
-# 一级节名加粗；定理用 “Theorem k.” + 斜体陈述。前端预设与下列常量同步。
+# 产品定位：导出 = 带走推导要点 / 定理清单 / 实验对照备忘，便于继续科研。
+# 不是代写可投稿论文。前端预设与下列常量同步。
 # ---------------------------------------------------------------------------
 
-PRESET_ARXIV_THEORY = """参照 arXiv 理论短文体例（如 Karimi et al. 1608.04636、Liu et al. 2003.00307）重写为中文 Markdown 论文。
+PRESET_RESEARCH_NOTES = """将草稿整理为「课题工作笔记」Markdown，供自己或协作方继续推进理论/实验。
 
-固定结构（仅输出实际有内容的节；草稿完全缺失的节整节省略，不要写「（草稿未提供）」占位节）：
+硬性定位：本系统是言晖科研助手（理论侧顾问），**不是**写论文工具。禁止改写成可投稿论文、会议短文或 arXiv 投稿体例；不要虚构 Abstract/引言贡献列表/参考文献凑数。
+
+固定结构（仅保留草稿里确有内容的节；空节整节省略）：
 # 标题
-## Abstract（或 ## 摘要）
-  - 一段 180–280 字：问题、方法、主结论；勿分点。
-## 1 引言
-  - 动机与背景 1–2 段；贡献用编号列表 3–5 条。
-## 2 问题设定与符号
-  - 模型、损失、假设编号（A1…）；符号与草稿一致。
-## 3 主要结果
-  - 用三级标题：### 引理 k / ### 定理 k；每条含：
-    - *陈述*（一两句）
-    - **证明要点**（压缩草稿证明，保留关键等式）
-  - 不要写成「## 定理：引理 1」这种混标题。
-## 4 反例与边界（仅当草稿含反例时）
-## 5 实验与数值验证（仅当草稿含实验/数值时）
-## 6 结论
-## 参考文献
-  - 仅列草稿中出现的文献/arXiv；没有则整节省略。
+## 课题目标与当前主张
+## 关键假设与符号（简表）
+## 已整理的推导要点
+  - 用条目列出定义 / 引理 / 定理要点；证明保留关键步骤即可
+## 开放问题与待验证项
+## 实验与数据对照（仅当草稿含实验/回传数据时）
+## 下一步建议
 
-文风：学术书面语、可投稿；公式 $...$ / $$...$$；禁止编造草稿没有的定理、数值、文献。"""
+文风：清晰、可执行的工作笔记；公式 $...$ / $$...$$；禁止编造草稿没有的定理、数值、文献。"""
 
-PRESET_THEOREM_CATALOG = """将草稿整理为「定理—引理汇编」Markdown（便于审稿核对），不要写成完整论文。
+PRESET_THEOREM_CATALOG = """将草稿整理为「定理—引理汇编」Markdown（便于核对主张），**不要**写成论文。
 
 结构：
 # 标题
@@ -55,48 +47,56 @@ PRESET_THEOREM_CATALOG = """将草稿整理为「定理—引理汇编」Markdow
 
 禁止编造；草稿没有的字段写「未标注」。公式保留 LaTeX。"""
 
-PRESET_ABSTRACT_BRIEF = """只输出极简投稿前页，便于快速审阅：
+PRESET_THEORY_BRIEF = """输出「理论要点速览」工作页（便于快速对齐，非投稿摘要）：
 
 # 标题
-## 摘要（220–320 字，一段）
-## 主要贡献（3–6 条 bullet）
-## 关键结论一览（表格或短列表：定理/引理名称 → 一句话结论 → 状态）
-## 开放问题（若有，否则省略）
+## 一句话主张
+## 关键结论一览（表格或短列表：名称 → 一句话 → 状态）
+## 关键假设（列表）
+## 开放问题 / 下一步（若有，否则省略）
 
-不要展开完整证明；不要编造草稿没有的结果。"""
+不要展开完整证明；不要编造草稿没有的结果；不要写成 Abstract + 贡献列表的投稿前页。"""
 
-PRESET_EXPERIMENT_REPORT = """整理为「理论—实验对照」技术报告（偏实验节）：
+PRESET_EXPERIMENT_MEMO = """整理为「理论—实验对照备忘」（实验顾问笔记，非实验论文）：
 
 # 标题
-## 摘要
-## 理论预测（从草稿抽取：待验证命题 / 期望分类）
-## 实验设置（网络、数据、优化器、指标；缺失则省略该小节）
-## 结果与图表解读（用小节列表；数值必须来自草稿）
-## 与理论对照（相符 / 部分相符 / 未覆盖）
-## 局限与下一步
-## 结论
+## 待检验的理论主张
+## 已有数据摘要（数值必须来自草稿）
+## 与理论对照（支持 / 反驳 / 不确定）
+## 缺数清单
+## 下一步实验建议
 
-无实验内容时明确写「草稿未含实验，以下仅保留理论预测」并缩短全文。禁止编造指标。"""
+无实验内容时明确写「草稿未含实验数据」并缩短全文。禁止编造指标；不要写成可投稿实验报告体例。"""
 
-# 默认 = arXiv 理论短文
-PAPER_FORMAT_INSTRUCTIONS = PRESET_ARXIV_THEORY
+# 兼容旧前端/脚本仍传 arxiv_theory 等 id
+PRESET_ARXIV_THEORY = PRESET_RESEARCH_NOTES
+PRESET_ABSTRACT_BRIEF = PRESET_THEORY_BRIEF
+PRESET_EXPERIMENT_REPORT = PRESET_EXPERIMENT_MEMO
+
+# 默认 = 课题工作笔记
+PAPER_FORMAT_INSTRUCTIONS = PRESET_RESEARCH_NOTES
 
 EXPORT_PRESETS: dict[str, str] = {
-    "arxiv_theory": PRESET_ARXIV_THEORY,
+    "research_notes": PRESET_RESEARCH_NOTES,
     "theorem_catalog": PRESET_THEOREM_CATALOG,
-    "abstract_brief": PRESET_ABSTRACT_BRIEF,
-    "experiment_report": PRESET_EXPERIMENT_REPORT,
+    "theory_brief": PRESET_THEORY_BRIEF,
+    "experiment_memo": PRESET_EXPERIMENT_MEMO,
+    # 旧 id → 新文案
+    "arxiv_theory": PRESET_RESEARCH_NOTES,
+    "abstract_brief": PRESET_THEORY_BRIEF,
+    "experiment_report": PRESET_EXPERIMENT_MEMO,
 }
 
-_SYSTEM_PROMPT = """你是机器学习优化 / 深度学习理论方向的学术编辑。参考 arXiv 会议论文常见体例（标题居中、摘要独立成段、正文分节编号、定理陈述简洁、证明可压缩为要点），把用户草稿改写成**可直接导出 Word/PDF 的 Markdown**。
+_SYSTEM_PROMPT = """你是言晖科研助手的「笔记整理员」。把用户草稿整理成**清晰可执行的课题工作笔记**（Markdown），方便继续推导、审稿核对或设计实验。
 
 硬性规则：
-1. 只输出 Markdown 正文（以 `#` 标题开头）；不要用 ``` 围栏包全文；不要附「改动说明」。
-2. 严格按用户「润色要求」的结构输出；**无内容的节整节删除**，不要保留空壳标题。
-3. 忠实草稿：不捏造定理、证明步骤、实验数字或文献；术语统一（如 PL / PL*、Hessian、saddle）。
-4. 中文为主；公式一律 LaTeX（`$...$` / `$$...$$`），避免 Unicode 数学符号。
-5. 将「## 定理：引理 1」类混乱标题规范为「### 引理 1：…」或用户要求的编号形式。
-6. 压缩对话口语与重复工具输出，保留数学实质。"""
+1. **不是写论文**：禁止改写成可投稿论文 / 会议短文 / arXiv 投稿体例；不要虚构 Abstract、贡献列表、参考文献凑数。
+2. 只输出 Markdown 正文（以 `#` 标题开头）；不要用 ``` 围栏包全文；不要附「改动说明」。
+3. 严格按用户「整理要求」的结构输出；**无内容的节整节删除**，不要保留空壳标题。
+4. 忠实草稿：不捏造定理、证明步骤、实验数字或文献。
+5. 中文为主；公式一律 LaTeX（`$...$` / `$$...$$`），避免 Unicode 数学符号。
+6. 将混乱标题规范为清晰的「### 引理 1：…」等形式。
+7. 压缩对话口语与重复工具输出，保留数学与实验实质。"""
 
 
 def _strip_code_fence(text: str) -> str:
@@ -117,14 +117,14 @@ async def polish_export_markdown(
     markdown: str,
     instructions: str,
 ) -> tuple[str, bool]:
-    """按用户要求调用 LLM 润色导出 Markdown。返回 (结果, 是否已应用 AI)。"""
+    """按用户要求调用 LLM 整理导出 Markdown。返回 (结果, 是否已应用 AI)。"""
     instructions = (instructions or "").strip()
     if not instructions:
         return markdown, False
 
     user_prompt = (
-        f"论文标题：{title or '研究报告'}\n\n"
-        f"润色要求：\n{instructions}\n\n"
+        f"笔记标题：{title or '课题笔记'}\n\n"
+        f"整理要求：\n{instructions}\n\n"
         f"草稿 Markdown：\n{markdown}"
     )
 
@@ -142,8 +142,8 @@ async def polish_export_markdown(
         polished = _strip_code_fence((content or "").strip())
         if _looks_like_markdown(polished):
             return polished, True
-        logger.warning("AI 润色输出不像 Markdown，回退原稿")
+        logger.warning("AI 整理输出不像 Markdown，回退原稿")
     except Exception as exc:
-        logger.warning("导出 AI 润色失败，回退原稿: %s", exc)
+        logger.warning("导出 AI 整理失败，回退原稿: %s", exc)
 
     return markdown, False

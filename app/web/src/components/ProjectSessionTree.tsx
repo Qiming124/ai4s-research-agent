@@ -37,7 +37,6 @@ export function ProjectSessionTree({
   const [expanded, setExpanded] = useState<Record<string, boolean>>(() => ({
     [currentProjectId]: true,
   }));
-  const [focusProjectId, setFocusProjectId] = useState(currentProjectId);
   const [showNewProject, setShowNewProject] = useState(false);
   const [newName, setNewName] = useState("");
   const [newDesc, setNewDesc] = useState("");
@@ -66,7 +65,6 @@ export function ProjectSessionTree({
 
   const toggle = (pid: string) => {
     setExpanded((prev) => ({ ...prev, [pid]: !prev[pid] }));
-    setFocusProjectId(pid);
   };
 
   const startEditProject = (p: ProjectInfo) => {
@@ -86,7 +84,7 @@ export function ProjectSessionTree({
   return (
     <div className="project-session-tree" aria-label="课题与会话">
       <div className="session-sidebar-head">
-        <h2>会话</h2>
+        <h2>课题与会话</h2>
         <div className="tree-head-actions">
           <button
             type="button"
@@ -98,15 +96,6 @@ export function ProjectSessionTree({
             }}
           >
             {showNewProject ? "取消" : "+ 课题"}
-          </button>
-          <button
-            type="button"
-            className="btn-new-session"
-            disabled={disabled || busy}
-            onClick={() => onNewSession(focusProjectId || currentProjectId)}
-            title="在当前课题下新建会话"
-          >
-            + 会话
           </button>
         </div>
       </div>
@@ -177,12 +166,23 @@ export function ProjectSessionTree({
                   type="button"
                   className="project-tree-name"
                   onClick={() => {
-                    setFocusProjectId(project.id);
                     setExpanded((prev) => ({ ...prev, [project.id]: true }));
                   }}
                 >
                   <span className="project-folder-label">{project.name}</span>
                   <span className="project-folder-count">{kids.length}</span>
+                </button>
+                <button
+                  type="button"
+                  className="btn-new-session btn-new-session--inline"
+                  disabled={disabled || busy}
+                  onClick={() => {
+                    setExpanded((prev) => ({ ...prev, [project.id]: true }));
+                    onNewSession(project.id);
+                  }}
+                  title={`在课题「${project.name}」下新建会话`}
+                >
+                  + 会话
                 </button>
                 <button
                   type="button"

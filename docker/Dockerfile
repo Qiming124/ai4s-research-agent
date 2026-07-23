@@ -78,13 +78,20 @@ RUN python -c "from chromadb.utils.embedding_functions import DefaultEmbeddingFu
 
 COPY --from=web-build /web/dist ./app/web/dist
 
-RUN mkdir -p /repo/data/mcp_files /repo/data/chroma /repo/data/theory /repo/data/experiments/logs /repo/data/experiments/notebooks /repo/log
+RUN mkdir -p /repo/data/mcp_files /repo/data/chroma /repo/data/theory /repo/data/experiments/logs /repo/data/experiments/notebooks /repo/log /opt/seed/theory /opt/seed/experiments/configs
+COPY data/theory/ /opt/seed/theory/
+COPY data/experiments/configs/ /opt/seed/experiments/configs/
+# Also place seeds in image filesystem (used when no volume overlays /repo/data)
 COPY data/theory/ ./data/theory/
 COPY data/experiments/configs/ ./data/experiments/configs/
+
+COPY docker/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
     CMD curl -f http://127.0.0.1:8000/health || exit 1
 
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["uvicorn", "server.main:app", "--host", "0.0.0.0", "--port", "8000", "--app-dir", "app"]

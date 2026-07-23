@@ -66,7 +66,7 @@ export function PromptOptimizerPanel({
 }: PromptOptimizerPanelProps) {
   const [text, setText] = useState(initialText);
   const [context, setContext] = useState("");
-  const [goal, setGoal] = useState("更专业、结构清晰、可验证、适合科研助手");
+  const [goal, setGoal] = useState("更清晰可执行，但必须保持与原问同一主题，禁止编造未提及设定");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<PromptOptimizeResult | null>(null);
@@ -167,7 +167,7 @@ export function PromptOptimizerPanel({
           <div>
             <h2 id="prompt-optimizer-title">优化提示词</h2>
             <p className="panel-muted">
-              AI 多风格对比（RCCF / IMRaD / 方法论 / PBTM），或选用内置「导出润色体例」
+              在<strong>不换题、不编造背景</strong>的前提下做多风格结构化改写；不合格结果会自动回退。
             </p>
           </div>
           <button type="button" className="btn-small" onClick={onClose}>
@@ -178,7 +178,7 @@ export function PromptOptimizerPanel({
         <div className="prompt-optimizer-body">
           <div className="prompt-optimizer-row">
             <label className="settings-label" htmlFor="prompt-builtin-polish">
-              内置选项：导出润色体例
+              内置选项：笔记整理体例
             </label>
             <div className="prompt-case-row">
               <select
@@ -264,7 +264,7 @@ export function PromptOptimizerPanel({
             rows={2}
             value={context}
             onChange={(e) => setContext(e.target.value)}
-            placeholder="课题背景、已有假设、目标 Agent 等"
+            placeholder="课题背景、已有假设（仅限真实信息；勿写会诱导编造的空泛故事）"
           />
 
           <label className="settings-label" htmlFor="prompt-goal">

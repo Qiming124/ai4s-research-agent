@@ -28,7 +28,7 @@ from shared.schemas import AgentInfo, AgentListResponse
 router = APIRouter(tags=["agents"])
 
 _AGENT_DESCRIPTIONS: dict[str, str] = {
-    "general": "理论侧总览问答与协调（建议实验但不代跑）",
+    "general": "言晖科研助手总览问答与协调（建议实验但不代跑）",
     "theory": "数学推导、文献方法形式化与符号辅助",
     "experiment": "实验顾问：计划、读数、下一步与缺数诊断",
     "literature": "文献检索、方法提炼与引用整理",

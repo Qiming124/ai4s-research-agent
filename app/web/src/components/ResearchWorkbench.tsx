@@ -226,7 +226,7 @@ export function ResearchWorkbench(props: ResearchWorkbenchProps) {
                 onDeleteRun={props.onDeleteExperimentRun}
               />
             </WorkbenchSection>
-            <WorkbenchSection title="论文导出" defaultOpen>
+            <WorkbenchSection title="课题笔记导出" defaultOpen>
               <ExportPanel sessionId={sessionId} projectId={projectId} />
             </WorkbenchSection>
           </>

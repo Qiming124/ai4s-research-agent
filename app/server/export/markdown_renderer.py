@@ -89,7 +89,7 @@ def render_markdown_to_html(markdown: str, *, title: str | None = None) -> str:
         parts.append(f"<p>{_inline(' '.join(para_lines))}</p>")
 
     body = "\n".join(parts) if parts else "<p>（空文档）</p>"
-    heading = escape(doc_title or title or "研究报告")
+    heading = escape(doc_title or title or "课题笔记")
     return (
         "<!DOCTYPE html><html><head><meta charset='utf-8'/>"
         f"<title>{heading}</title></head><body>{body}</body></html>"

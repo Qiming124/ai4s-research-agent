@@ -13,9 +13,9 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
   return (
     <div className="onboarding-overlay" role="dialog" aria-label="首次使用向导">
       <div className="onboarding-card">
-        <h2>欢迎使用 AI4S 理论侧多智能体 v2.2</h2>
+        <h2>欢迎使用言晖科研助手</h2>
         <p className="onboarding-edition-note">
-          用深度学习做科学问题的理论侧协作：读文献、推导、实验建议与数据解读（不代跑训练）。
+          协助读文献、做推导、给实验建议并解读数据（不代跑训练）。
           损失函数局部极小等为示范课题。界面为科研工作台（文献 / 理论 / 产出）。
         </p>
         <ol className="onboarding-steps">

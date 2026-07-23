@@ -183,6 +183,13 @@ body {
   cursor: not-allowed;
 }
 
+.btn-new-session--inline {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  font-size: 0.7rem;
+  border-radius: 4px;
+}
+
 .session-list {
   list-style: none;
   margin: 0;
@@ -1122,6 +1129,27 @@ body {
   overflow: hidden;
 }
 
+.help-panel--compact {
+  max-width: 480px;
+  max-height: min(80vh, 640px);
+}
+
+.help-steps {
+  margin: 0;
+  padding: 0 0 0 1.2rem;
+  font-size: 0.85rem;
+  line-height: 1.55;
+  color: #475569;
+}
+
+.help-steps li {
+  margin-bottom: 8px;
+}
+
+.help-steps li:last-child {
+  margin-bottom: 0;
+}
+
 .help-header {
   display: flex;
   justify-content: space-between;
@@ -1534,6 +1562,182 @@ body {
   background: #fff;
 }
 
+.settings-agent-current {
+  margin: 6px 0 0;
+}
+
+.settings-guide {
+  margin-top: 10px;
+  border: 1px solid #e8ecf1;
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 0;
+}
+
+.settings-guide > summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 8px 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #334155;
+  user-select: none;
+}
+
+.settings-guide > summary::-webkit-details-marker {
+  display: none;
+}
+
+.settings-guide > summary::before {
+  content: "▸ ";
+  color: #64748b;
+}
+
+.settings-guide[open] > summary::before {
+  content: "▾ ";
+}
+
+.settings-guide-lead {
+  margin: 0;
+  padding: 0 12px 8px;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: #64748b;
+}
+
+.settings-guide-list {
+  list-style: none;
+  margin: 0;
+  padding: 0 12px 10px;
+}
+
+.settings-guide-list li {
+  padding: 6px 0;
+  border-top: 1px solid #e8ecf1;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: #475569;
+}
+
+.settings-guide-list li strong {
+  display: block;
+  color: #1e293b;
+  font-size: 0.75rem;
+  margin-bottom: 2px;
+}
+
+.settings-guide-list li span {
+  display: block;
+}
+
+.mcp-server-list--status {
+  margin-bottom: 8px;
+}
+
+/* ===== 情境帮助小抽屉（设置 / 导出内） ===== */
+.ctx-help-trigger {
+  font-size: 0.75rem !important;
+}
+
+.ctx-help-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  justify-content: flex-end;
+  pointer-events: none;
+}
+
+.ctx-help-backdrop {
+  position: absolute;
+  inset: 0;
+  border: none;
+  background: rgba(15, 23, 42, 0.25);
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.ctx-help-drawer {
+  position: relative;
+  width: min(100%, 320px);
+  height: 100%;
+  background: #fff;
+  border-left: 1px solid #e2e8f0;
+  box-shadow: -8px 0 24px rgba(15, 23, 42, 0.08);
+  display: flex;
+  flex-direction: column;
+  pointer-events: auto;
+  animation: ctx-help-in 0.18s ease-out;
+}
+
+@keyframes ctx-help-in {
+  from {
+    transform: translateX(12px);
+    opacity: 0.6;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.ctx-help-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid #e8ecf1;
+  flex-shrink: 0;
+}
+
+.ctx-help-head h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.ctx-help-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 14px 16px;
+}
+
+.ctx-help-block {
+  margin-bottom: 12px;
+}
+
+.ctx-help-block:last-child {
+  margin-bottom: 0;
+}
+
+.ctx-help-block h4 {
+  margin: 0 0 4px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.ctx-help-block p {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: #475569;
+}
+
+.ctx-help-footer {
+  padding: 8px 14px 12px;
+  border-top: 1px solid #e8ecf1;
+  font-size: 0.7rem;
+  color: #94a3b8;
+}
+
+.settings-drawer-panel,
+.export-panel {
+  position: relative;
+}
+
 .rag-refs-list {
   list-style: none;
   margin: 8px 0 0;
@@ -1561,6 +1765,11 @@ body {
 }
 
 .panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -2176,6 +2385,12 @@ body {
   flex-wrap: wrap;
   gap: 6px;
   margin: 8px 0 6px;
+}
+
+.export-purpose-hint {
+  margin: 0 0 10px;
+  font-size: 0.8rem;
+  line-height: 1.4;
 }
 
 .export-preset-hint {

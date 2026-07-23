@@ -73,8 +73,8 @@ def _xelatex_available() -> bool:
 def _title_from_markdown(markdown: str) -> str:
     for line in markdown.splitlines():
         if line.startswith("# "):
-            return line[2:].strip() or "研究报告"
-    return "研究报告"
+            return line[2:].strip() or "课题笔记"
+    return "课题笔记"
 
 
 def _entries_from_markdown(markdown: str) -> list[dict[str, Any]]:
@@ -146,7 +146,7 @@ def _unicode_text_pdf(*, title: str, entries: list[dict]) -> bytes:
 
     pdf.add_font(_CJK_FONT_FAMILY, "", str(font_path))
     pdf.set_font(_CJK_FONT_FAMILY, size=16)
-    pdf.multi_cell(w, 9, title or "研究报告")
+    pdf.multi_cell(w, 9, title or "课题笔记")
     pdf.ln(3)
     pdf.set_font(_CJK_FONT_FAMILY, size=10.5)
 

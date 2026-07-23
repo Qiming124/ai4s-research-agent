@@ -4,13 +4,15 @@
 #   cp conf/.env.example conf/.env   # 填入 DEEPSEEK_API_KEY
 #   docker compose -f docker/docker-compose.yml up -d --build
 #
+# 说明：默认使用命名卷持久化 data/log，避免 WSL↔Docker Desktop
+# 绑定挂载依赖 distro-services socket（部分环境会报 ubuntu.sock 缺失）。
+# 若本机绑定挂载正常，可改回 ../data:/repo/data 等路径。
+#
 # 可选构建参数（默认全关，避免 apt 卡死数小时）：
 #   INSTALL_RAG_EXTRA=1  — sentence-transformers / torch
 #   INSTALL_PANDOC=1     — 系统 pandoc（否则用内置 Markdown 渲染）
 #   INSTALL_TEXLIVE=1    — texlive-xetex + fonts-noto-cjk
 #   APT_MIRROR=deb.debian.org  — 海外改回官方源
-# 示例：
-#   INSTALL_PANDOC=1 docker compose -f docker/docker-compose.yml build
 
 services:
   app:
@@ -33,7 +35,7 @@ services:
       PORT: "8000"
       LOG_FORMAT: json
       SESSION_DB_PATH: /repo/data/sessions.db
-      MCP_ALLOWED_DIRS: /repo/data/mcp_files:/repo/data/theory:/repo/data/experiments
+      MCP_ALLOWED_DIRS: /repo/data/mcp_files:/repo/data/projects
       RAG_CHROMA_PATH: /repo/data/chroma
       THEORY_WORKSPACE_PATH: /repo/data/theory
       EXPERIMENTS_PATH: /repo/data/experiments
@@ -43,10 +45,12 @@ services:
       PDF_INGEST_ENABLED: "true"
       MCP_CONFIG_PATH: /repo/conf/mcp_servers.json
       MCP_TOOL_WHITELIST_PATH: /repo/conf/mcp_tool_whitelist.json
+      ENABLE_MCP: "true"
+      ENABLE_RAG: "true"
+      ORCHESTRATION_BACKEND: langgraph
     volumes:
-      - ../data:/repo/data
-      - ../log:/repo/log
-      - ../conf:/repo/conf:ro
+      - ai4s-data:/repo/data
+      - ai4s-log:/repo/log
     healthcheck:
       test: ["CMD", "curl", "-f", "http://127.0.0.1:8000/health"]
       interval: 30s
@@ -54,3 +58,7 @@ services:
       retries: 3
       start_period: 90s
     restart: unless-stopped
+
+volumes:
+  ai4s-data:
+  ai4s-log:

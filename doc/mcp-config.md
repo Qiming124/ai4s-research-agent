@@ -1,6 +1,6 @@
 # MCP 配置指南
 
-本文说明如何在 AI4S Agent 服务端配置、启用与扩展 MCP（Model Context Protocol）工具。
+本文说明如何在言晖科研助手服务端配置、启用与扩展 MCP（Model Context Protocol）工具。
 
 ---
 

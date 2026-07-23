@@ -3,12 +3,17 @@ import { MarkdownContent } from "./MarkdownContent";
 import {
   EXPORT_PRESET_EVENT,
   POLISH_PRESETS,
-  PRESET_ARXIV_THEORY,
+  PRESET_RESEARCH_NOTES,
 } from "../utils/exportPresets";
+import { EXPORT_HELP_BLOCKS, EXPORT_HELP_TITLE } from "../utils/contextHelpContent";
+import { ContextHelpDrawer, ContextHelpTrigger } from "./ContextHelpDrawer";
 
 export {
-  PRESET_ARXIV_THEORY,
+  PRESET_RESEARCH_NOTES,
   PRESET_THEOREM_CATALOG,
+  PRESET_THEORY_BRIEF,
+  PRESET_EXPERIMENT_MEMO,
+  PRESET_ARXIV_THEORY,
   PRESET_ABSTRACT_BRIEF,
   PRESET_EXPERIMENT_REPORT,
   PAPER_FORMAT_PRESET,
@@ -50,11 +55,12 @@ export function ExportPanel({ sessionId, projectId }: ExportPanelProps) {
   const [result, setResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<ExportPreview | null>(null);
-  const [title, setTitle] = useState("研究报告");
+  const [title, setTitle] = useState("课题笔记");
   const [useAi, setUseAi] = useState(true);
-  const [aiInstructions, setAiInstructions] = useState(PRESET_ARXIV_THEORY);
-  const [activePreset, setActivePreset] = useState<string>("arxiv_theory");
+  const [aiInstructions, setAiInstructions] = useState(PRESET_RESEARCH_NOTES);
+  const [activePreset, setActivePreset] = useState<string>("research_notes");
   const [polishPreview, setPolishPreview] = useState<string | null>(null);
+  const [exportHelpOpen, setExportHelpOpen] = useState(false);
 
   const applyPreset = (id: string, text: string) => {
     setActivePreset(id);
@@ -95,7 +101,7 @@ export function ExportPanel({ sessionId, projectId }: ExportPanelProps) {
 
   const buildPayload = () => ({
     session_id: sessionId,
-    title: title.trim() || "研究报告",
+    title: title.trim() || "课题笔记",
     include_global: true,
     include_chat: true,
     project_id: projectId || "default",
@@ -131,9 +137,9 @@ export function ExportPanel({ sessionId, projectId }: ExportPanelProps) {
       }
       const data = (await res.json()) as { markdown: string; ai_applied: boolean; message: string };
       setPolishPreview(data.markdown);
-      setResult(data.message || (data.ai_applied ? "AI 润色预览已生成" : "已显示原稿预览"));
+      setResult(data.message || (data.ai_applied ? "AI 整理预览已生成" : "已显示原稿预览"));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "AI 润色失败");
+      setError(err instanceof Error ? err.message : "AI 整理失败");
     } finally {
       setLoading(null);
     }
@@ -149,7 +155,7 @@ export function ExportPanel({ sessionId, projectId }: ExportPanelProps) {
       return;
     }
     if (useAi && aiInstructions.trim() && format === "latex") {
-      setError("LaTeX 导出暂不走 AI 润色，请使用 Markdown / Word / PDF");
+      setError("LaTeX 导出暂不走 AI 整理，请使用 Markdown / Word / PDF");
       return;
     }
     setLoading(format);
@@ -190,7 +196,7 @@ export function ExportPanel({ sessionId, projectId }: ExportPanelProps) {
       };
       const filename = parseFilename(res, fallbackMap[format as Exclude<ExportFormat, "latex">]);
       await downloadBlob(blob, filename);
-      const aiNote = payload.use_ai ? "（已 AI 润色）" : "";
+      const aiNote = payload.use_ai ? "（已 AI 整理）" : "";
       setResult(`已下载 ${filename}${aiNote}`);
       await refreshPreview();
     } catch (err) {
@@ -205,17 +211,21 @@ export function ExportPanel({ sessionId, projectId }: ExportPanelProps) {
   return (
     <div className="export-panel">
       <div className="panel-header">
-        <h4>论文导出</h4>
+        <h4>课题笔记导出</h4>
+        <ContextHelpTrigger onClick={() => setExportHelpOpen(true)} />
       </div>
+      <p className="panel-muted export-purpose-hint">
+        带走推导与实验对照备忘。不代写论文——点「帮助」看用法。
+      </p>
 
       <label className="settings-label">
-        论文标题
+        笔记标题
         <input
           type="text"
           className="settings-input"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder="研究报告"
+          placeholder="课题笔记"
         />
       </label>
 
@@ -226,9 +236,9 @@ export function ExportPanel({ sessionId, projectId }: ExportPanelProps) {
             checked={useAi}
             onChange={(e) => setUseAi(e.target.checked)}
           />
-          导出前 AI 润色（字号已按 arXiv 短文近似：标题 16pt / 正文 10.5pt）
+          导出前 AI 整理（整理为工作笔记，非论文体例）
         </label>
-        <div className="export-preset-row" role="group" aria-label="润色预设">
+        <div className="export-preset-row" role="group" aria-label="整理预设">
           {POLISH_PRESETS.map((p) => (
             <button
               key={p.id}
@@ -248,7 +258,7 @@ export function ExportPanel({ sessionId, projectId }: ExportPanelProps) {
         </div>
         {activeHint && useAi && <p className="panel-muted export-preset-hint">{activeHint}</p>}
         <label className="settings-label">
-          AI 润色要求
+          AI 整理要求
           <textarea
             className="settings-input export-ai-input"
             rows={7}
@@ -268,14 +278,14 @@ export function ExportPanel({ sessionId, projectId }: ExportPanelProps) {
             onClick={() => void handlePolishPreview()}
             disabled={loading !== null || !preview?.entry_count || !aiInstructions.trim()}
           >
-            {loading === "polish" ? "润色中…" : "预览 AI 润色"}
+            {loading === "polish" ? "整理中…" : "预览 AI 整理"}
           </button>
         )}
       </div>
 
       {polishPreview && useAi && (
         <div className="export-polish-preview">
-          <p className="experiment-section-label">AI 润色预览</p>
+          <p className="experiment-section-label">AI 整理预览</p>
           <MarkdownContent content={polishPreview} className="panel-markdown export-polish-md" />
         </div>
       )}
@@ -308,7 +318,7 @@ export function ExportPanel({ sessionId, projectId }: ExportPanelProps) {
           onClick={() => handleExport("md")}
           disabled={loading !== null || !preview?.entry_count}
         >
-          {loading === "md" ? "导出中…" : useAi && aiInstructions.trim() ? "AI 润色并导出 MD" : "导出 Markdown (.md)"}
+          {loading === "md" ? "导出中…" : useAi && aiInstructions.trim() ? "AI 整理并导出 MD" : "导出 Markdown (.md)"}
         </button>
         <button
           type="button"
@@ -324,7 +334,7 @@ export function ExportPanel({ sessionId, projectId }: ExportPanelProps) {
           onClick={() => handleExport("docx")}
           disabled={loading !== null || !preview?.entry_count}
         >
-          {loading === "docx" ? "导出中…" : useAi && aiInstructions.trim() ? "AI 润色并导出 Word" : "导出 Word (.docx)"}
+          {loading === "docx" ? "导出中…" : useAi && aiInstructions.trim() ? "AI 整理并导出 Word" : "导出 Word (.docx)"}
         </button>
         <button
           type="button"
@@ -332,27 +342,18 @@ export function ExportPanel({ sessionId, projectId }: ExportPanelProps) {
           onClick={() => handleExport("pdf")}
           disabled={loading !== null || !preview?.entry_count}
         >
-          {loading === "pdf" ? "导出中…" : useAi && aiInstructions.trim() ? "AI 润色并导出 PDF" : "导出 PDF"}
+          {loading === "pdf" ? "导出中…" : useAi && aiInstructions.trim() ? "AI 整理并导出 PDF" : "导出 PDF"}
         </button>
       </div>
       {result && <p className="panel-success">{result}</p>}
       {error && <p className="panel-error">{error}</p>}
 
-      <details className="export-help">
-        <summary>如何使用导出？</summary>
-        <ol className="export-help-list">
-          <li>
-            <strong>推荐</strong>：选「arXiv 理论短文」→ 预览 → 导出 Word/PDF（版式按 arXiv 短文近似字号）。
-          </li>
-          <li>
-            <strong>内容来源</strong>：优先定理库；无则回退本会话 AI 回答。
-          </li>
-          <li>
-            <strong>参考论文</strong>：本地已缓存{" "}
-            <code>data/arxiv_refs/1608.04636.pdf</code>（Karimi PL）等作为结构参考。
-          </li>
-        </ol>
-      </details>
+      <ContextHelpDrawer
+        open={exportHelpOpen}
+        title={EXPORT_HELP_TITLE}
+        blocks={EXPORT_HELP_BLOCKS}
+        onClose={() => setExportHelpOpen(false)}
+      />
     </div>
   );
 }

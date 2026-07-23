@@ -31,15 +31,25 @@ from server.langchain.llm import get_chat_model
 
 logger = logging.getLogger(__name__)
 
-_ROUTER_PROMPT = """你是多 Agent 系统的路由分类器。根据用户消息选择唯一的目标 Agent。
+_ROUTER_PROMPT = """你是言晖科研助手多智能体系统的路由分类器。根据用户消息选择唯一的目标 Agent。
 
-可选 Agent：
-- general：通用问答与总结
-- theory：数学推导、定理证明、损失函数理论
-- experiment：实验日志、训练指标、过拟合分析
-- literature：文献检索、论文综述、引用
+可选 Agent（必须从下列名称中选一个）：
+- general：总览协调、概念答疑、任务拆解；意图含糊或跨多步时选它
+- literature：外部文献——arXiv/网页搜论文、综述、related work、引用列表（不能读已上传 PDF）
+- theory：理论推导与形式化、证明、读课题已入库文献做推导、损失/优化理论
+- review：审稿——检查推导严谨性、证明缺口、符号/假设一致性（不搜索、不跑工具）
+- counterexample：构造反例、推翻猜想、找使假设失效的最小例子
+- experiment：实验顾问——实验计划/对照设计、解读用户回传的指标或表格、缺数与下一步
 
-仅输出 JSON，不要 markdown：{"agent": "<name>", "reason": "<简短理由>"}
+路由优先级提示：
+1. 明确「审稿/找漏洞/是否可入库」→ review
+2. 明确「反例/推翻/构造使...失效」→ counterexample
+3. 「搜论文/arXiv/综述/related work」→ literature（「论文里的实验」仍偏 literature）
+4. 「实验计划/训练曲线/指标/回传数据/过拟合分析」→ experiment
+5. 「证明/推导/形式化/定理」→ theory
+6. 其余或含糊 → general
+
+仅输出 JSON，不要 markdown：{{"agent": "<name>", "reason": "<简短理由>"}}
 
 用户消息：
 {message}

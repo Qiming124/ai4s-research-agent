@@ -48,22 +48,23 @@ docker compose -f docker/docker-compose.yml up --build
 
 打开 http://localhost:8000 — 服务端提供 `app/web/dist` 静态资源与 API 路由。
 
-镜像会复制 `data/theory/**/*.md` 种子（`.dockerignore` 已放行）。运行时会话/Chroma/Campaign 产物落在挂载的 `data/` 卷，清理约定见 [`DATA.md`](DATA.md)。`compose` 的 `environment:` 会覆盖 env_file 中的同名路径变量。
+镜像会打包 `data/theory` / 实验配置种子；`entrypoint` 在首次启动时写入命名卷。  
+默认 compose 使用命名卷 `ai4s-data` / `ai4s-log`（避免部分 WSL + Docker Desktop 环境绑定挂载报 `ubuntu.sock` 缺失）。`compose` 的 `environment:` 会覆盖 env_file 中的同名路径变量。
 
 ## 配置说明
 
 | 机制 | 用途 |
 |------|------|
 | `env_file: ../conf/.env` | 从 conf 目录加载密钥与环境变量 |
-| compose 中的 `environment:` | 容器内数据卷路径 |
-| `../data:/repo/data` | 持久化 sessions.db、MCP 文件、Chroma |
-| `../log:/repo/log` | 应用日志 app.log |
-| `../conf:/repo/conf:ro` | MCP JSON 配置 |
+| compose 中的 `environment:` | 容器内数据路径与能力开关 |
+| 命名卷 `ai4s-data` | 持久化 sessions.db、Chroma、projects、theory 运行时 |
+| 命名卷 `ai4s-log` | 应用日志 |
+| 镜像内 `conf/` | MCP JSON（构建时 COPY；不再默认绑定挂载宿主机 conf） |
 
 推荐的容器内路径（compose 中自动设置）：
 
 - `SESSION_DB_PATH=/repo/data/sessions.db`
-- `MCP_ALLOWED_DIRS=/repo/data/mcp_files:/repo/data/theory:/repo/data/experiments`
+- `MCP_ALLOWED_DIRS=/repo/data/mcp_files:/repo/data/projects`
 - `THEORY_WORKSPACE_PATH=/repo/data/theory`
 - `EXPERIMENTS_PATH=/repo/data/experiments`
 - `RAG_CHROMA_PATH=/repo/data/chroma`
@@ -71,7 +72,7 @@ docker compose -f docker/docker-compose.yml up --build
 - `RAG_AGENTS=literature,theory,experiment,general`
 - `LOG_FORMAT=json` — 结构化日志
 
-镜像构建时会将 `data/theory/` 种子文件与 `data/experiments/configs/` 打入镜像；运行时 `../data` 卷挂载可覆盖或持久化会话/Chroma。
+若本机 WSL 绑定挂载正常，可将 volumes 改回 `../data:/repo/data`、`../log:/repo/log`、`../conf:/repo/conf:ro`。
 
 详见 `conf/docker.env.example`。
 

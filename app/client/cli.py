@@ -56,7 +56,7 @@ def parse_args() -> argparse.Namespace:
         argparse.Namespace: server、session、mode、agent、历史策略等字段
     """
     parser = argparse.ArgumentParser(
-        description="AI4S 科研助手 CLI — 与 DeepSeek Agent Server 对话",
+        description="言晖科研助手 CLI — 与 DeepSeek Agent Server 对话",
     )
     parser.add_argument("--server", default=DEFAULT_SERVER, help=f"Server 地址 (默认: {DEFAULT_SERVER})")
     parser.add_argument("--session", default=None, help="会话 ID；不指定则自动生成 UUID")
@@ -342,7 +342,7 @@ async def run_cli(args: argparse.Namespace) -> None:
     base_url = args.server.rstrip("/")
 
     console.print(Panel.fit(
-        "[bold]AI4S 科研助手 CLI[/bold]\n"
+        "[bold]言晖科研助手 CLI[/bold]\n"
         f"Server: {base_url}\n"
         f"Session: {session_id}\n"
         f"Mode: {args.mode}\n"

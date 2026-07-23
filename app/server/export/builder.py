@@ -66,7 +66,7 @@ def collect_export_entries(
 
 def build_markdown_document(*, title: str, entries: list[dict[str, Any]]) -> str:
     """将导出条目渲染为 Markdown（DOCX/PDF 的统一中间格式）。"""
-    lines = [f"# {title or '研究报告'}", ""]
+    lines = [f"# {title or '课题笔记'}", ""]
     if not entries:
         lines.append("（暂无定理/引理条目）")
         return "\n".join(lines)

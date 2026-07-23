@@ -2,7 +2,7 @@
 
 Vite + React + TypeScript。源码在 **`app/web/`**；生产产物 `app/web/dist` 由 `app/server/main.py` 托管。
 
-产品定位：AI4S 理论侧工作台（文献 · 推导 · 实验建议/数据解读 · 产出），见 [`PRODUCT-VISION.md`](PRODUCT-VISION.md)。
+产品定位：言晖科研助手工作台（文献 · 推导 · 实验建议/数据解读 · 产出），见 [`PRODUCT-VISION.md`](PRODUCT-VISION.md)。
 
 ## 环境与启动
 

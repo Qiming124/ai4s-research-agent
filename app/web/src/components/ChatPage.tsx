@@ -123,6 +123,10 @@ export function ChatPage() {
         const clamped = clampWorkbenchTab("research", "output");
         if (clamped) setWorkbenchTab(clamped);
       },
+      onSessionActivity: () => {
+        // localStorage 已由 sendMessage 更新 updatedAt；立刻重排侧栏
+        setSessions(getSessionList());
+      },
     }),
     [],
   );
@@ -506,6 +510,7 @@ export function ChatPage() {
   const handleSelectSession = async (id: string, projectId?: string) => {
     if (projectId) {
       selectProject(projectId);
+      // 仅同步课题归属，不刷新 updatedAt（避免点击就置顶）
       updateSessionMeta(id, { projectId });
     }
     await switchSession(id);
@@ -616,8 +621,7 @@ export function ChatPage() {
     <div className="chat-app">
       <header className="chat-header">
         <div className="chat-header-brand">
-          <h1>AI4S 科研助手</h1>
-          <p className="subtitle">多 Agent · MCP · RAG</p>
+          <h1>言晖科研助手</h1>
         </div>
         <TopStatusBar
           sessionId={sessionId}

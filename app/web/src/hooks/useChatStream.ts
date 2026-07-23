@@ -599,6 +599,7 @@ function processStreamEvents(
     onPipelineStage?: (stage: string) => void;
     onPipelineGate?: (payload: string) => void;
     onArtifactSaved?: (payload: { type?: string; id?: string; title?: string }) => void;
+    onSessionActivity?: (sessionId: string) => void;
   },
 ) {
   const updaters: Array<(prev: ChatMessage[]) => ChatMessage[]> = [];
@@ -664,6 +665,8 @@ export function useChatStream(
     onPipelineStage?: (stage: string) => void;
     onPipelineGate?: (payload: string) => void;
     onArtifactSaved?: (payload: { type?: string; id?: string; title?: string }) => void;
+    /** 用户发消息等真实活动后回调，用于侧栏会话置顶 */
+    onSessionActivity?: (sessionId: string) => void;
   },
   projectId?: string,
 ) {
@@ -793,6 +796,8 @@ export function useChatStream(
     } else {
       updateSessionMeta(sid, { updatedAt: Date.now() });
     }
+    // 通知外层刷新侧栏排序（仅对话活动置顶）
+    callbacks?.onSessionActivity?.(sid);
 
     const userMsg: ChatMessage = {
       id: randomUUID(),
@@ -966,7 +971,6 @@ export function useChatStream(
     setMessages([]);
     setHistoryError(null);
     setBackendOffline(false);
-    updateSessionMeta(sid, { updatedAt: Date.now() });
   }, []);
 
   const switchSession = useCallback(

@@ -59,7 +59,7 @@ def build_reportlab_pdf_bytes(*, title: str, entries: list[dict[str, Any]]) -> b
         rightMargin=48,
         topMargin=48,
         bottomMargin=48,
-        title=title or "研究报告",
+        title=title or "课题笔记",
     )
 
     title_style = ParagraphStyle(
@@ -86,7 +86,7 @@ def build_reportlab_pdf_bytes(*, title: str, entries: list[dict[str, Any]]) -> b
         spaceAfter=4,
     )
 
-    story: list[Any] = [Paragraph(_para(title or "研究报告"), title_style), Spacer(1, 8)]
+    story: list[Any] = [Paragraph(_para(title or "课题笔记"), title_style), Spacer(1, 8)]
 
     if not entries:
         story.append(Paragraph(_para("（暂无定理/引理条目）"), body_style))

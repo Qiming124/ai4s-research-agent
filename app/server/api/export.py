@@ -1,10 +1,11 @@
 # =============================================================================
-# 论文导出 HTTP API（LaTeX / Markdown / DOCX / PDF）。
+# 课题笔记导出 HTTP API（LaTeX / Markdown / DOCX / PDF）。
+# 定位：带走推导要点与实验对照备忘；非代写论文。
 #
 # 职责：
 #     1. 预览与导出结构化记忆、参考文献、工作区内容
 #     2. 调用 builder 聚合条目，再经 docx_exporter / pdf_exporter 生成二进制
-#     3. 可选 AI 润色导出 Markdown
+#     3. 可选 AI 整理导出 Markdown（工作笔记体例，非代写论文）
 #
 # 架构位置：
 #     - 被调用：server/main.py include_router
@@ -95,19 +96,19 @@ async def export_preview(
 @router.post(
     "/v1/export/polish",
     response_model=ExportPolishResponse,
-    summary="AI 润色导出草稿",
+    summary="AI 整理导出草稿（课题笔记）",
 )
 async def export_polish_preview(request: LatexExportRequest) -> ExportPolishResponse:
-    """预览 AI 润色后的 Markdown（不下载文件）。须填写 ai_instructions。"""
+    """预览 AI 整理后的 Markdown 工作笔记（不下载文件）。须填写 ai_instructions。"""
     if not (request.ai_instructions or "").strip():
-        raise HTTPException(status_code=400, detail="请填写 AI 润色要求")
+        raise HTTPException(status_code=400, detail="请填写 AI 整理要求")
     _, markdown, ai_applied = await _resolve_export_payload(
         request.model_copy(update={"use_ai": True}),
     )
     return ExportPolishResponse(
         markdown=markdown,
         ai_applied=ai_applied,
-        message="AI 润色已应用" if ai_applied else "AI 润色未生效，已返回原稿",
+        message="AI 整理已应用" if ai_applied else "AI 整理未生效，已返回原稿",
     )
 
 

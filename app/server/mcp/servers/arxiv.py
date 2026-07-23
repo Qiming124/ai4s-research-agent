@@ -30,7 +30,7 @@ from mcp.server.fastmcp import FastMCP
 mcp = FastMCP("arxiv")
 _ARXIV_API = "https://export.arxiv.org/api/query"
 _ARXIV_NS = {"atom": "http://www.w3.org/2005/Atom"}
-_HTTP_HEADERS = {"User-Agent": "AI4S-Research-Agent/1.0 (mailto:support@example.com)"}
+_HTTP_HEADERS = {"User-Agent": "YanHui-Research-Assistant/1.0 (mailto:support@example.com)"}
 
 
 async def _fetch_arxiv(params: dict[str, str | int]) -> ET.Element:

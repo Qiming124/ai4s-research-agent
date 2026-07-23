@@ -1,38 +1,38 @@
 [
   {
+    "id": "clarify",
+    "name": "Clarify Same Question",
+    "name_zh": "原题澄清",
+    "description": "在不改变题目的前提下，把用户原话写清楚：补全任务动作、输出格式与边界；禁止换题或编造背景。",
+    "reference": "言晖科研助手 prompt fidelity",
+    "skeleton": "任务：【用用户原话复述要做什么，可略作语法润色】\n范围与约束：\n- 仅围绕【用户已给出的对象/数值/文献】\n- 不要引入用户未提及的算法、定理编号或实验设定\n输出：【列表/分步/短段落——选一种适合该题的格式】",
+    "best_for": ["模糊短问", "概念澄清", "通用"]
+  },
+  {
     "id": "rccf",
     "name": "Role-Context-Constraint-Format",
     "name_zh": "角色-语境-约束-格式",
-    "description": "明确角色、受众、排除项与输出格式，适合通用科研问答与写作辅助。",
-    "reference": "2025 academic prompt strategy; pan-indexical teaching models",
-    "skeleton": "你是一位【角色，如：深度学习优化理论研究员】。\n背景：【研究场景/已有假设】\n任务：【具体要完成的工作】\n约束：\n- 仅讨论【范围】，不要【排除项】\n- 引用已有编号（引理/定理）时保持一致\n输出格式：【段落/列表/表格/Markdown 分节】",
-    "best_for": ["通用提问", "文献解读", "概念澄清"]
-  },
-  {
-    "id": "imrad",
-    "name": "IMRaD Section Writer",
-    "name_zh": "IMRaD 分节写作",
-    "description": "按 Introduction-Methods-Results-Discussion 结构组织，含数据占位与时态规则。",
-    "reference": "From Data to Paper IMRaD prompt library",
-    "skeleton": "撰写论文【Introduction/Methods/Results/Discussion/Abstract】部分。\n主题：【Topic】\n核心数据/方法：【Data/Method summary】\n主要观察：【Main observation with numbers if any】\n规则：\n- Results 用过去时，只报告事实，不解释\n- Discussion 才解释与局限\n- 80–150 词/段，保留可验证细节",
-    "best_for": ["论文分节起草", "实验结果描述", "摘要撰写"]
+    "description": "用角色/任务/约束/格式包装同一问题；语境只能来自用户原文或补充语境字段，禁止虚构课题故事。",
+    "reference": "RCCF with fidelity hard-rules",
+    "skeleton": "你是一位【与用户题目匹配的科研助手角色，勿编造细分子领域】。\n任务：【完整保留用户原问题的对象与诉求】\n约束：\n- 仅讨论用户已提及的内容\n- 缺信息时先说明缺什么，不要编造\n输出格式：【简明分节或列表】",
+    "best_for": ["通用提问", "文献检索", "读数分析"]
   },
   {
     "id": "structural",
-    "name": "Structural Mandate",
-    "name_zh": "方法论约束",
-    "description": "强制遵循特定科研流程（如 PRISMA、可复现清单、定理-证明结构）。",
-    "reference": "Gatsbi scholarly prompt patterns; PRISMA/TRIZ-style constraints",
-    "skeleton": "按【PRISMA 系统综述 / 可复现实验 / 定理-引理-证明】流程完成任务。\n研究问题：【RQ】\n检索范围：【年份/数据库/关键词】\n必须包含：【筛选步骤/对照基线/符号定义】\n禁止：捏造文献、虚构实验数据、跳过验证步骤\n输出：【逐步清单 + 正文】",
-    "best_for": ["系统综述", "实验设计", "理论推导"]
+    "name": "Structured Steps",
+    "name_zh": "分步可验证",
+    "description": "把同一研究问题拆成可检查步骤（证明步骤 / 检索步骤 / 读数步骤），不改写科学内容。",
+    "reference": "verifiable checklist without topic drift",
+    "skeleton": "研究问题（保持原意）：【原问题】\n请按步骤完成：\n1. 【澄清假设/符号——仅用用户已给信息】\n2. 【核心工作】\n3. 【自检：对照用户原问是否答全】\n禁止：捏造文献、数值、定理编号、未提及的算法名",
+    "best_for": ["理论推导", "实验解读", "检索规划"]
   },
   {
     "id": "pbtm",
     "name": "PBTM Iterative Research",
     "name_zh": "PBTM 迭代研究",
-    "description": "百科知识+语境信息+批判性评估+迭代优化，适合复杂多步研究任务。",
-    "reference": "Pan-indexical prompt-based teaching model (LASS 2025)",
-    "skeleton": "【第 1 步：问题界定】用一句话说明核心未知量。\n【第 2 步：语境注入】列出已知假设、符号、相关文献要点。\n【第 3 步：批判性要求】指出需要验证的论断与可能反例。\n【第 4 步：迭代产出】分步给出推导/分析，每步标注依据类型（代数/引理/文献）。\n最终按 ## 引理 / ## 定理 分节（若适用）。",
-    "best_for": ["理论推导", "多步证明", "Math 模式"]
+    "description": "问题界定→已知信息→待验证点→分步产出；已知信息不得超出用户原文/补充语境。",
+    "reference": "PBTM with no invented context",
+    "skeleton": "【问题界定】一句话复述用户原问。\n【已知信息】只列用户原文/补充语境中出现的事实。\n【待验证/待检索】列出缺口，勿填假答案。\n【分步产出】按题型给出推导/检索/读数步骤。\n禁止编造背景故事。",
+    "best_for": ["多步证明", "复杂任务", "Math 模式"]
   }
 ]

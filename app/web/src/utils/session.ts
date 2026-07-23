@@ -77,13 +77,24 @@ export function updateSessionMeta(
     list.unshift({
       id,
       title: patch.title ?? `会话 ${shortSessionId(id)}`,
+      // 新建条目才给时间戳；仅改标题/课题时不因缺省而「置顶」
       updatedAt: patch.updatedAt ?? Date.now(),
       projectId: patch.projectId ?? "default",
     });
   } else {
-    list[idx] = { ...list[idx], ...patch, updatedAt: patch.updatedAt ?? Date.now() };
+    const next = { ...list[idx], ...patch };
+    // 只有显式传入 updatedAt 才刷新排序时间（例如发消息对话后）
+    if (!Object.prototype.hasOwnProperty.call(patch, "updatedAt")) {
+      next.updatedAt = list[idx].updatedAt;
+    }
+    list[idx] = next;
   }
   writeSessionList(list);
+}
+
+/** 对话等真实活动后调用：把会话排到列表顶部 */
+export function touchSessionActivity(id: string): void {
+  updateSessionMeta(id, { updatedAt: Date.now() });
 }
 
 export function removeSessionFromList(id: string): void {
