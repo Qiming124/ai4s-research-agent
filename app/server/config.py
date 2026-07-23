@@ -222,14 +222,14 @@ class Settings(BaseSettings):
         description="启动时是否索引 MCP_ALLOWED_DIRS 下的 markdown/text 文件",
     )
 
-    # ── L4 结构化记忆注入（v0.3） ─────────────────────────────
+    # ── L4 结构化记忆注入 ─────────────────────────────────────
 
     structured_memory_agents: str = Field(
         default="theory,experiment,review",
         description="启用 L4 结构化记忆注入的 Agent 列表（逗号分隔）",
     )
 
-    # ── 理论工作区与研究流水线（v0.4） ─────────────────────────
+    # ── 理论工作区与研究流水线 ─────────────────────────────────
 
     theory_workspace_path: str = Field(
         default=str(DATA_ROOT / "theory"),

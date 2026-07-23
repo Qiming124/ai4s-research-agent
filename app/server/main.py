@@ -132,13 +132,13 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="言晖科研助手",
         description=(
-            "言晖科研助手（v2.2）：用深度学习做科学问题的理论侧协作 — "
+            "言晖科研助手：用深度学习做科学问题的理论侧协作 — "
             "文献检索与方法提炼、理论推导、实验建议与数据解读；不代跑训练/全流程复现。"
             "损失函数局部极小等为示范子集。\n\n"
             "Swagger `/docs` 与 `/openapi.json` 已提供中文接口说明、字段注解与样例值。"
             "蓝图见 doc/PRODUCT-VISION.md。"
         ),
-        version="2.2.0",
+        version="1.0.0",
         lifespan=lifespan,
         openapi_tags=[
             {"name": "chat", "description": "对话与会话：健康检查、非流式/SSE 对话、会话 CRUD"},

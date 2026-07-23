@@ -226,4 +226,4 @@ POST /v1/chat/stream
 ## 修订记录
 
 - 2026-07-20：初版（后端阅读顺序；前端刻意省略）。
-- 2026-07-22：对齐 v2.2 理论侧——去掉已删除的 Campaign / Supervisor 路径，补场景工作流与 Artifact。
+- 2026-07-22：对齐理论侧终版——去掉已删除的 Campaign / Supervisor 路径，补场景工作流与 Artifact。

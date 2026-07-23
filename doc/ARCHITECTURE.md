@@ -1,4 +1,4 @@
-# 架构说明（v2.2）
+# 架构说明
 
 端点清单见 [`API-COVERAGE.md`](API-COVERAGE.md)。产品定位与边界见 [`PRODUCT-VISION.md`](PRODUCT-VISION.md)。
 

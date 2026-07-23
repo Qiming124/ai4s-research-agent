@@ -1,4 +1,4 @@
-# Web 前端（v2.2）
+# Web 前端
 
 Vite + React + TypeScript。源码在 **`app/web/`**；生产产物 `app/web/dist` 由 `app/server/main.py` 托管。
 

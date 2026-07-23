@@ -1,4 +1,4 @@
-# API 参考（v2.2）
+# API 参考
 
 Base URL 默认：`http://127.0.0.1:8000`。  
 数据模型：`app/shared/schemas.py`。  

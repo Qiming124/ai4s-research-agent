@@ -1,6 +1,6 @@
 # API 覆盖清单
 
-> **67** 个业务 REST 端点（`/health` + `/v1/*`）· **15** 域 · 更新于 **v2.2**（以 `GET /openapi.json` 为准）  
+> **67** 个业务 REST 端点（`/health` + `/v1/*`）· **15** 域 · 以 `GET /openapi.json` 为准  
 > OpenAPI 另含生产静态入口 `GET /`（不计入上表）。  
 > **调用链路详解**：[`API-ROUTES.md`](API-ROUTES.md)
 

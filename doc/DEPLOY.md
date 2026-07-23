@@ -65,7 +65,7 @@ mkdir -p ~/ai4s-research-agent/data/mcp_files ~/ai4s-research-agent/data/chroma
 
 ```bash
 docker login --username=<用户名> crpi-xxx.cn-shenzhen.personal.cr.aliyuncs.com
-docker pull crpi-xxx.cn-shenzhen.personal.cr.aliyuncs.com/<命名空间>/research-agent:v2.2
+docker pull crpi-xxx.cn-shenzhen.personal.cr.aliyuncs.com/<命名空间>/research-agent:latest
 ```
 
 ### 3. 启动
@@ -85,7 +85,7 @@ docker run -d \
   -e THEORY_WORKSPACE_PATH=/repo/data/theory \
   -e EXPERIMENTS_PATH=/repo/data/experiments \
   -e LOG_FORMAT=json \
-  crpi-xxx.cn-shenzhen.personal.cr.aliyuncs.com/<命名空间>/research-agent:v2.2
+  crpi-xxx.cn-shenzhen.personal.cr.aliyuncs.com/<命名空间>/research-agent:latest
 ```
 
 > 镜像 `WORKDIR` 为 `/repo`（见 `docker/Dockerfile`）。优先使用 Compose：`docker compose -f docker/docker-compose.yml up -d`。

@@ -1,4 +1,4 @@
-# 环境变量说明（v2.2）
+# 环境变量说明
 
 配置文件：`conf/.env`（从 `conf/.env.example` 复制）。  
 加载逻辑：`app/server/config.py` 中的 `Settings`，大小写不敏感。

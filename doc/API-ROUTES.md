@@ -1,4 +1,4 @@
-# API 全路径与调用链路（v2.2）
+# API 全路径与调用链路
 
 Base URL 默认：`http://127.0.0.1:8000`。  
 **覆盖矩阵（65）**：[`API-COVERAGE.md`](API-COVERAGE.md) · **速查**：[`API.md`](API.md) · **OpenAPI**：`GET /docs` · **Schema**：`app/shared/schemas.py`。
